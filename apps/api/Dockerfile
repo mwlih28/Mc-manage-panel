@@ -2,7 +2,7 @@ FROM node:20-alpine AS base
 WORKDIR /app
 RUN apk add --no-cache openssl
 
-# Build stage — full deps for tsc + prisma generate
+# Build stage
 FROM base AS builder
 COPY package*.json ./
 COPY prisma ./prisma/
@@ -11,7 +11,7 @@ COPY . .
 RUN npx prisma generate
 RUN npm run build
 
-# Production stage — only prod deps
+# Production stage
 FROM base AS runner
 ENV NODE_ENV=production
 
@@ -21,7 +21,6 @@ COPY package*.json ./
 COPY prisma ./prisma/
 RUN npm ci --omit=dev && npm cache clean --force
 
-# Copy built output and prisma client from builder
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 

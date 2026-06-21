@@ -1,8 +1,8 @@
 [build]
-builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile"
+builder = "NIXPACKS"
 
 [deploy]
+startCommand = "npx serve -s dist -l $PORT"
 healthcheckPath = "/"
 healthcheckTimeout = 60
 restartPolicyType = "ON_FAILURE"
