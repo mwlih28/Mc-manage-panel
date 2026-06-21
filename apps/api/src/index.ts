@@ -1,0 +1,71 @@
+import 'dotenv/config';
+import express from 'express';
+import http from 'http';
+import cors from 'cors';
+import helmet from 'helmet';
+import morgan from 'morgan';
+import cookieParser from 'cookie-parser';
+
+import { logger } from './utils/logger';
+import { errorHandler, notFound } from './middleware/errorHandler';
+import { initSocketServer } from './services/socketService';
+
+import authRoutes from './routes/auth';
+import userRoutes from './routes/users';
+import serverRoutes from './routes/servers';
+import nodeRoutes from './routes/nodes';
+import eggRoutes from './routes/eggs';
+import backupRoutes from './routes/backups';
+import statsRoutes from './routes/stats';
+
+const app = express();
+const httpServer = http.createServer(app);
+
+const PORT = parseInt(process.env.PORT || '3001', 10);
+const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
+
+// Security & middleware
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(cors({
+  origin: CORS_ORIGIN,
+  credentials: true,
+  methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+}));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
+app.use(morgan('dev', { stream: { write: (msg) => logger.http(msg.trim()) } }));
+
+// Health check
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok', version: process.env.PANEL_VERSION || '1.0.0', timestamp: new Date().toISOString() });
+});
+
+// API routes
+const api = express.Router();
+api.use('/auth', authRoutes);
+api.use('/users', userRoutes);
+api.use('/servers', serverRoutes);
+api.use('/servers/:serverId/backups', backupRoutes);
+api.use('/nodes', nodeRoutes);
+api.use('/eggs', eggRoutes);
+api.use('/stats', statsRoutes);
+
+app.use('/api/v1', api);
+
+// Socket.io
+const io = initSocketServer(httpServer, CORS_ORIGIN);
+app.set('io', io);
+
+// Error handling
+app.use(notFound);
+app.use(errorHandler);
+
+// Start server
+httpServer.listen(PORT, '0.0.0.0', () => {
+  logger.info(`MC Manage Panel API running on port ${PORT}`);
+  logger.info(`Environment: ${process.env.NODE_ENV}`);
+  logger.info(`CORS Origin: ${CORS_ORIGIN}`);
+});
+
+export { app, io };

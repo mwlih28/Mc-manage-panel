@@ -1,0 +1,17 @@
+{
+  "name": "mc-manage-panel",
+  "version": "1.0.0",
+  "description": "A comprehensive game server management panel",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace=apps/api\" \"npm run dev --workspace=apps/web\"",
+    "build": "npm run build --workspace=apps/api && npm run build --workspace=apps/web",
+    "start": "npm run start --workspace=apps/api"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

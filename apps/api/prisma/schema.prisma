@@ -1,0 +1,245 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  username     String    @unique
+  password     String
+  firstName    String
+  lastName     String
+  role         String    @default("USER")
+  rootAdmin    Boolean   @default(false)
+  language     String    @default("en")
+  twoFactor    Boolean   @default(false)
+  avatarUrl    String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  lastLogin    DateTime?
+
+  servers      Server[]
+  apiKeys      ApiKey[]
+  activities   Activity[]
+}
+
+model Node {
+  id                  String    @id @default(uuid())
+  name                String    @unique
+  description         String?
+  fqdn                String
+  scheme              String    @default("https")
+  port                Int       @default(8080)
+  daemonPort          Int       @default(2022)
+  memory              Int
+  memoryOverallocate  Int       @default(0)
+  disk                Int
+  diskOverallocate    Int       @default(0)
+  cpu                 Int       @default(0)
+  uploadSize          Int       @default(100)
+  daemonSftp          Int       @default(2022)
+  daemonBase          String    @default("/var/lib/pterodactyl/volumes")
+  behindProxy         Boolean   @default(false)
+  maintenanceMode     Boolean   @default(false)
+  token               String    @unique
+  status              String    @default("OFFLINE")
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  allocations  Allocation[]
+  servers      Server[]
+}
+
+model Allocation {
+  id         String   @id @default(uuid())
+  nodeId     String
+  ip         String
+  ipAlias    String?
+  port       Int
+  notes      String?
+  assigned   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  node       Node     @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  server     Server?  @relation("ServerAllocation")
+}
+
+model Egg {
+  id              String   @id @default(uuid())
+  nestId          String
+  uuid            String   @unique @default(uuid())
+  author          String
+  name            String
+  description     String?
+  dockerImage     String
+  configFiles     String   @default("[]")
+  configStartup   String   @default("{}")
+  configStop      String   @default("^C")
+  configLogs      String   @default("{}")
+  startup         String
+  scriptInstall   String?
+  scriptEntry     String   @default("bash")
+  scriptContainer String   @default("alpine:3.4")
+  copyScriptFrom  String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  nest        Nest     @relation(fields: [nestId], references: [id])
+  variables   EggVariable[]
+  servers     Server[]
+}
+
+model Nest {
+  id          String   @id @default(uuid())
+  uuid        String   @unique @default(uuid())
+  author      String
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  eggs        Egg[]
+}
+
+model EggVariable {
+  id           String   @id @default(uuid())
+  eggId        String
+  name         String
+  description  String?
+  envVariable  String
+  defaultValue String   @default("")
+  userViewable Boolean  @default(true)
+  userEditable Boolean  @default(true)
+  rules        String   @default("")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  egg          Egg      @relation(fields: [eggId], references: [id], onDelete: Cascade)
+}
+
+model Server {
+  id              String   @id @default(uuid())
+  externalId      String?  @unique
+  uuid            String   @unique @default(uuid())
+  uuidShort       String   @unique
+  userId          String
+  nodeId          String
+  eggId           String
+  allocationId    String?  @unique
+  name            String
+  description     String?
+  status          String   @default("INSTALLING")
+  skipScripts     Boolean  @default(false)
+  suspended       Boolean  @default(false)
+  memory          Int
+  swap            Int      @default(0)
+  disk            Int
+  io              Int      @default(500)
+  cpu             Int      @default(0)
+  threads         String?
+  oomDisabled     Boolean  @default(false)
+  startup         String
+  image           String
+  env             String   @default("{}")
+  databaseLimit   Int      @default(0)
+  allocationLimit Int      @default(0)
+  backupLimit     Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user       User       @relation(fields: [userId], references: [id])
+  node       Node       @relation(fields: [nodeId], references: [id])
+  egg        Egg        @relation(fields: [eggId], references: [id])
+  allocation Allocation? @relation("ServerAllocation", fields: [allocationId], references: [id])
+  backups    Backup[]
+  databases  Database[]
+  activities Activity[]
+}
+
+model Backup {
+  id           String    @id @default(uuid())
+  serverId     String
+  uuid         String    @unique @default(uuid())
+  uploadId     String?
+  isSuccessful Boolean   @default(false)
+  isLocked     Boolean   @default(false)
+  name         String
+  ignoredFiles String    @default("[]")
+  disk         String    @default("local")
+  checksum     String?
+  bytes        Int       @default(0)
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  server       Server    @relation(fields: [serverId], references: [id], onDelete: Cascade)
+}
+
+model Database {
+  id             String   @id @default(uuid())
+  serverId       String
+  databaseHostId String
+  databaseName   String
+  username       String
+  remote         String   @default("%")
+  password       String
+  maxConnections Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  server         Server       @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  host           DatabaseHost @relation(fields: [databaseHostId], references: [id])
+}
+
+model DatabaseHost {
+  id           String   @id @default(uuid())
+  name         String
+  host         String
+  port         Int      @default(3306)
+  username     String
+  password     String
+  maxDatabases Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  databases    Database[]
+}
+
+model ApiKey {
+  id         String    @id @default(uuid())
+  userId     String
+  identifier String    @unique
+  token      String
+  memo       String?
+  allowedIps String    @default("[]")
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Activity {
+  id         String   @id @default(uuid())
+  userId     String?
+  serverId   String?
+  event      String
+  properties String   @default("{}")
+  ip         String?
+  timestamp  DateTime @default(now())
+
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  server     Server?  @relation(fields: [serverId], references: [id], onDelete: SetNull)
+}
+
+model Setting {
+  id    String @id @default(uuid())
+  key   String @unique
+  value String
+}
