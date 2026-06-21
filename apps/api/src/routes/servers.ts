@@ -4,6 +4,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { prisma } from '../utils/prisma';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import { AuthRequest } from '../types';
+import { sendPowerAction, sendCommand as wingsSendCommand, createServerOnNode, getServerResources } from '../services/wingsClient';
+import { logger } from '../utils/logger';
 
 const router = Router();
 
@@ -228,7 +230,7 @@ router.delete('/:id', authenticate, requireAdmin, async (req: AuthRequest, res: 
   return res.status(204).send();
 });
 
-// POST /servers/:id/power - Power actions
+// POST /servers/:id/power - Power actions (real Wings integration)
 router.post('/:id/power', authenticate, async (req: AuthRequest, res: Response) => {
   const isAdmin = req.user!.role === 'ADMIN';
   const server = await prisma.server.findFirst({
@@ -236,6 +238,7 @@ router.post('/:id/power', authenticate, async (req: AuthRequest, res: Response) 
       id: req.params.id,
       ...(isAdmin ? {} : { userId: req.user!.id }),
     },
+    include: { node: true },
   });
 
   if (!server) return res.status(404).json({ message: 'Server not found' });
@@ -252,10 +255,19 @@ router.post('/:id/power', authenticate, async (req: AuthRequest, res: Response) 
     kill: 'OFFLINE',
   };
 
+  // Update status optimistically
   await prisma.server.update({
     where: { id: server.id },
     data: { status: statusMap[action] as 'STARTING' | 'STOPPING' | 'OFFLINE' },
   });
+
+  // Send to Wings daemon (non-blocking)
+  if (server.node?.status === 'ONLINE') {
+    sendPowerAction(server as Parameters<typeof sendPowerAction>[0], action as 'start' | 'stop' | 'restart' | 'kill')
+      .catch(err => logger.warn(`Wings power action failed for ${server.uuid}: ${err.message}`));
+  } else {
+    logger.warn(`Node is offline, power action queued for ${server.uuid}`);
+  }
 
   await prisma.activity.create({
     data: {
@@ -267,6 +279,52 @@ router.post('/:id/power', authenticate, async (req: AuthRequest, res: Response) 
   });
 
   return res.json({ message: `Server ${action} command sent` });
+});
+
+// POST /servers/:id/command - Send console command
+router.post('/:id/command', authenticate, async (req: AuthRequest, res: Response) => {
+  const isAdmin = req.user!.role === 'ADMIN';
+  const server = await prisma.server.findFirst({
+    where: {
+      id: req.params.id,
+      ...(isAdmin ? {} : { userId: req.user!.id }),
+    },
+    include: { node: true },
+  });
+
+  if (!server) return res.status(404).json({ message: 'Server not found' });
+  const { command } = req.body;
+  if (!command) return res.status(422).json({ message: 'Command required' });
+
+  if (server.node?.status === 'ONLINE') {
+    await wingsSendCommand(server as Parameters<typeof wingsSendCommand>[0], command)
+      .catch(err => logger.warn(`Wings command failed: ${err.message}`));
+  }
+
+  return res.json({ message: 'Command sent' });
+});
+
+// GET /servers/:id/resources - Real resource data from Wings
+router.get('/:id/resources', authenticate, async (req: AuthRequest, res: Response) => {
+  const isAdmin = req.user!.role === 'ADMIN';
+  const server = await prisma.server.findFirst({
+    where: {
+      id: req.params.id,
+      ...(isAdmin ? {} : { userId: req.user!.id }),
+    },
+    include: { node: true },
+  });
+
+  if (!server) return res.status(404).json({ message: 'Server not found' });
+
+  if (!server.node || server.node.status !== 'ONLINE') {
+    return res.json({ resources: { state: 'offline', cpu_absolute: 0, memory_bytes: 0, disk_bytes: 0 } });
+  }
+
+  const resources = await getServerResources(server as Parameters<typeof getServerResources>[0])
+    .catch(() => ({ state: 'offline', cpu_absolute: 0, memory_bytes: 0, disk_bytes: 0 }));
+
+  return res.json({ resources });
 });
 
 // GET /servers/:id/activity

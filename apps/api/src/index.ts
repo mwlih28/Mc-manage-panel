@@ -17,6 +17,7 @@ import nodeRoutes from './routes/nodes';
 import eggRoutes from './routes/eggs';
 import backupRoutes from './routes/backups';
 import statsRoutes from './routes/stats';
+import wingsRoutes from './routes/wings';
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -50,6 +51,7 @@ api.use('/servers/:serverId/backups', backupRoutes);
 api.use('/nodes', nodeRoutes);
 api.use('/eggs', eggRoutes);
 api.use('/stats', statsRoutes);
+api.use('/wings', wingsRoutes);
 
 app.use('/api/v1', api);
 
