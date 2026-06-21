@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: mcpanel-db-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mcpanel
+      POSTGRES_PASSWORD: mcpanel
+      POSTGRES_DB: mcpanel
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mcpanel"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_dev_data:

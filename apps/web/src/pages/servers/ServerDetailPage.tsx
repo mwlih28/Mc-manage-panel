@@ -56,9 +56,11 @@ export function ServerDetailPage() {
   useEffect(() => {
     if (!id || !accessToken) return;
 
-    const socket = ioClient('/', {
+    const socketUrl = import.meta.env.VITE_API_URL || window.location.origin;
+    const socket = ioClient(socketUrl, {
       auth: { token: accessToken },
       transports: ['websocket', 'polling'],
+      path: '/socket.io',
     });
 
     socketRef.current = socket;
