@@ -27,7 +27,7 @@ DATA_DIR="/var/lib/mc-wings"
 LOG_DIR="/var/log/mc-wings"
 NODE_VERSION="20"
 REPO_URL="https://github.com/mwlih28/mc-manage-panel"
-BRANCH="main"
+BRANCH="claude/pterodactyl-panel-builder-8uy3tp"
 
 # ────────────────────────────── Banner ──────────────────────────────
 echo -e "\n${BOLD}"

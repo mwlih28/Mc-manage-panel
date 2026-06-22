@@ -22,7 +22,7 @@ PANEL_DIR="/var/www/mc-panel"
 PANEL_USER="mcpanel"
 NODE_VERSION="20"
 REPO_URL="https://github.com/mwlih28/mc-manage-panel"
-BRANCH="main"
+BRANCH="claude/pterodactyl-panel-builder-8uy3tp"
 
 # ────────────────────────────── Banner ──────────────────────────────
 echo -e "\n${BOLD}"
