@@ -117,7 +117,7 @@ router.post(
     const [user, node, egg] = await Promise.all([
       prisma.user.findUnique({ where: { id: userId } }),
       prisma.node.findUnique({ where: { id: nodeId } }),
-      prisma.egg.findUnique({ where: { id: eggId } }),
+      prisma.egg.findUnique({ where: { id: eggId }, include: { variables: true } }),
     ]);
 
     if (!user) return res.status(422).json({ message: 'User not found' });
@@ -147,7 +147,7 @@ router.post(
         cpu: parseInt(cpu) || 0,
         startup: startup || egg.startup,
         image: image || egg.dockerImage,
-        env: JSON.stringify(env || {}),
+        env: JSON.stringify({ ...Object.fromEntries((egg.variables || []).map(v => [v.envVariable, v.defaultValue])), ...(env || {}) }),
         databaseLimit: parseInt(databaseLimit) || 0,
         allocationLimit: parseInt(allocationLimit) || 0,
         backupLimit: parseInt(backupLimit) || 0,
