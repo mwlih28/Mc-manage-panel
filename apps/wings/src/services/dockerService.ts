@@ -116,11 +116,11 @@ export async function createContainer(
       Binds: [`${dataPath}:/home/container`],
       Memory: memBytes,
       MemorySwap: swapBytes,
-      MemoryOomKillDisable: limits.oomDisabled,
+      OomKillDisable: limits.oomDisabled,
       CpuQuota: cpuQuota,
       CpuPeriod: 100000,
       BlkioWeight: limits.io,
-      PidLimit: cfg.docker.container_pid_limit,
+      PidsLimit: cfg.docker.container_pid_limit,
       NetworkMode: cfg.docker.network || 'mc-wings',
       RestartPolicy: { Name: 'no' },
       LogConfig: {
@@ -137,7 +137,7 @@ export async function createContainer(
     },
   });
 
-  return container;
+  return container as unknown as Docker.Container;
 }
 
 export async function getContainerStats(containerId: string): Promise<{
@@ -151,7 +151,7 @@ export async function getContainerStats(containerId: string): Promise<{
   const container = d.getContainer(containerId);
 
   return new Promise((resolve, reject) => {
-    container.stats({ stream: false }, (err: Error | null, data: Docker.ContainerStats) => {
+    container.stats({ stream: false }, (err: Error | null, data: Docker.ContainerStats | undefined) => {
       if (err) return reject(err);
       if (!data) return resolve({ cpu: 0, memoryBytes: 0, memoryLimitBytes: 0, networkRx: 0, networkTx: 0 });
 
