@@ -189,6 +189,7 @@ function NodeDetailModal({ node, onClose, onSuccess }: { node: Node; onClose: ()
     disk: String(node.disk),
     memoryOverallocate: String(node.memoryOverallocate ?? 0),
     diskOverallocate: String(node.diskOverallocate ?? 0),
+    gameSubdomain: (node as typeof node & { gameSubdomain?: string }).gameSubdomain || '',
   });
   const [isLoading, setIsLoading] = useState(false);
 
@@ -398,6 +399,13 @@ function NodeDetailModal({ node, onClose, onSuccess }: { node: Node; onClose: ()
             <div className="col-span-2">
               <label className="label">FQDN / IP Address</label>
               <input className="input" value={form.fqdn} onChange={f('fqdn')} required />
+            </div>
+            <div className="col-span-2">
+              <label className="label">Game Subdomain <span className="text-slate-500 font-normal">(optional)</span></label>
+              <input className="input" placeholder="mc.hksg.qzz.io" value={form.gameSubdomain} onChange={f('gameSubdomain')} />
+              <p className="text-xs text-slate-500 mt-1">
+                Set up a wildcard DNS record: <code className="text-panel-400">*.mc.hksg.qzz.io → {node.fqdn}</code>. Servers will show as <code className="text-panel-400">{`{uuid}.mc.hksg.qzz.io`}</code>.
+              </p>
             </div>
             <div>
               <label className="label">Scheme</label>

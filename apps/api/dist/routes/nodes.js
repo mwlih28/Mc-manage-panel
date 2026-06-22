@@ -72,7 +72,7 @@ router.post('/', auth_1.authenticate, auth_1.requireAdmin, [
 });
 // PATCH /nodes/:id
 router.patch('/:id', auth_1.authenticate, auth_1.requireAdmin, async (req, res) => {
-    const { name, description, fqdn, scheme, port, daemonPort, daemonSftp, memory, memoryOverallocate, disk, diskOverallocate, maintenanceMode, } = req.body;
+    const { name, description, fqdn, scheme, port, daemonPort, daemonSftp, memory, memoryOverallocate, disk, diskOverallocate, maintenanceMode, gameSubdomain, } = req.body;
     const node = await prisma_1.prisma.node.update({
         where: { id: req.params.id },
         data: {
@@ -88,6 +88,7 @@ router.patch('/:id', auth_1.authenticate, auth_1.requireAdmin, async (req, res) 
             ...(disk && { disk: parseInt(disk) }),
             ...(diskOverallocate !== undefined && { diskOverallocate: parseInt(diskOverallocate) }),
             ...(typeof maintenanceMode === 'boolean' && { maintenanceMode }),
+            ...(gameSubdomain !== undefined && { gameSubdomain: gameSubdomain || null }),
         },
     });
     return res.json({ data: node });

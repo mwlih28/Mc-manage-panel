@@ -101,7 +101,11 @@ export function DashboardPage() {
                 </span>
                 <div className="hidden sm:flex items-center gap-4 text-xs text-slate-500">
                   {server.allocation && (
-                    <span className="font-mono">{server.allocation.ip}:{server.allocation.port}</span>
+                    <span className="font-mono">
+                      {(server.node as typeof server.node & { gameSubdomain?: string })?.gameSubdomain
+                        ? `${server.uuidShort}.${(server.node as typeof server.node & { gameSubdomain?: string }).gameSubdomain}:${server.allocation.port}`
+                        : `${server.allocation.ip}:${server.allocation.port}`}
+                    </span>
                   )}
                   <span>{formatBytes(server.memory * 1048576)} RAM</span>
                   <span>{formatBytes(server.disk * 1048576)} Disk</span>

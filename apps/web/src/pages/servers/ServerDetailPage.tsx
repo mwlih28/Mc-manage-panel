@@ -493,7 +493,15 @@ export function ServerDetailPage() {
               <InfoRow label="Node" value={data.node?.name || '-'} />
               <InfoRow label="Egg" value={data.egg?.name || '-'} />
               <InfoRow label="Docker Image" value={data.image} mono />
-              <InfoRow label="Allocation" value={data.allocation ? `${data.allocation.ip}:${data.allocation.port}` : '-'} />
+              <InfoRow
+                label="Connection"
+                value={data.allocation
+                  ? ((data.node as typeof data.node & { gameSubdomain?: string })?.gameSubdomain
+                      ? `${data.uuidShort}.${(data.node as typeof data.node & { gameSubdomain?: string }).gameSubdomain}:${data.allocation.port}`
+                      : `${data.allocation.ip}:${data.allocation.port}`)
+                  : '-'}
+                mono
+              />
               <InfoRow label="UUID" value={data.uuid} mono small />
             </dl>
           </div>

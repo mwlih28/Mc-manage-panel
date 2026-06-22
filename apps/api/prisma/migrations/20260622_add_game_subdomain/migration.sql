@@ -1,0 +1,1 @@
+ALTER TABLE "Node" ADD COLUMN IF NOT EXISTS "gameSubdomain" TEXT;

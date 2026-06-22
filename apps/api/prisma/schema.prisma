@@ -47,6 +47,7 @@ model Node {
   behindProxy         Boolean   @default(false)
   maintenanceMode     Boolean   @default(false)
   token               String    @unique
+  gameSubdomain       String?
   status              String    @default("OFFLINE")
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt

@@ -92,7 +92,7 @@ router.post(
 router.patch('/:id', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
   const {
     name, description, fqdn, scheme, port, daemonPort, daemonSftp,
-    memory, memoryOverallocate, disk, diskOverallocate, maintenanceMode,
+    memory, memoryOverallocate, disk, diskOverallocate, maintenanceMode, gameSubdomain,
   } = req.body;
 
   const node = await prisma.node.update({
@@ -110,6 +110,7 @@ router.patch('/:id', authenticate, requireAdmin, async (req: AuthRequest, res: R
       ...(disk && { disk: parseInt(disk) }),
       ...(diskOverallocate !== undefined && { diskOverallocate: parseInt(diskOverallocate) }),
       ...(typeof maintenanceMode === 'boolean' && { maintenanceMode }),
+      ...(gameSubdomain !== undefined && { gameSubdomain: gameSubdomain || null }),
     },
   });
 
