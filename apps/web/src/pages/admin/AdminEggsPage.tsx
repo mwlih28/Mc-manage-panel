@@ -1,33 +1,90 @@
-import { useQuery } from '@tanstack/react-query';
-import { Package } from 'lucide-react';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Package, Plus, Trash2, Zap } from 'lucide-react';
 import api from '@/lib/axios';
 import { Egg } from '@/types';
 import { Spinner } from '@/components/ui/Spinner';
+import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import toast from 'react-hot-toast';
+
+const MINECRAFT_PAPER_TEMPLATE = {
+  nestName: 'Minecraft',
+  name: 'Paper',
+  description: 'High performance Minecraft server with plugin support.',
+  dockerImage: 'ghcr.io/pterodactyl/yolks:java_17',
+  startup: 'java -Xms128M -XX:MaxRAMPercentage=95.0 -Dterminal.jline=false -Dterminal.ansi=true -jar {{SERVER_JARFILE}} --nogui',
+  configStop: 'stop',
+  scriptInstall: `#!/bin/bash
+cd /mnt/server
+PAPER_VERSION=\${MC_VERSION:-latest}
+if [ "\$PAPER_VERSION" = "latest" ]; then
+  PAPER_VERSION=$(curl -s https://api.papermc.io/v2/projects/paper | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['versions'][-1])")
+fi
+BUILD=$(curl -s "https://api.papermc.io/v2/projects/paper/versions/\${PAPER_VERSION}/builds" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['builds'][-1]['build'])")
+JAR="paper-\${PAPER_VERSION}-\${BUILD}.jar"
+curl -o \${SERVER_JARFILE:-server.jar} "https://api.papermc.io/v2/projects/paper/versions/\${PAPER_VERSION}/builds/\${BUILD}/downloads/\${JAR}"`,
+  variables: [
+    { name: 'Server Jar File', envVariable: 'SERVER_JARFILE', defaultValue: 'server.jar', description: 'The jar file to run', userViewable: true, userEditable: false },
+    { name: 'Minecraft Version', envVariable: 'MC_VERSION', defaultValue: 'latest', description: 'Paper version to install', userViewable: true, userEditable: true },
+  ],
+};
 
 export function AdminEggsPage() {
+  const [showCreate, setShowCreate] = useState(false);
+  const [deleteEgg, setDeleteEgg] = useState<Egg | null>(null);
+  const queryClient = useQueryClient();
+
   const { data, isLoading } = useQuery({
     queryKey: ['admin-eggs'],
     queryFn: () => api.get('/eggs').then((r) => r.data.data),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/eggs/${id}`),
+    onSuccess: () => {
+      toast.success('Egg deleted');
+      queryClient.invalidateQueries({ queryKey: ['admin-eggs'] });
+      setDeleteEgg(null);
+    },
+    onError: (err: unknown) => {
+      const e = err as { response?: { data?: { message?: string } } };
+      toast.error(e.response?.data?.message || 'Failed to delete egg');
+    },
   });
 
   const eggs: Egg[] = data || [];
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-100">Eggs</h1>
-        <p className="text-slate-400 text-sm mt-1">Server configuration templates</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-100">Eggs</h1>
+          <p className="text-slate-400 text-sm mt-1">Server configuration templates</p>
+        </div>
+        <button className="btn-primary" onClick={() => setShowCreate(true)}>
+          <Plus size={16} /> New Egg
+        </button>
       </div>
 
       {isLoading ? (
         <div className="flex justify-center py-12"><Spinner size="lg" /></div>
+      ) : eggs.length === 0 ? (
+        <div className="card p-12 text-center">
+          <Package size={48} className="mx-auto text-slate-600 mb-4" />
+          <p className="text-slate-300 font-medium">No eggs configured</p>
+          <p className="text-slate-500 text-sm mt-2">Add a Minecraft Paper egg to get started</p>
+          <button className="btn-primary mt-4 mx-auto" onClick={() => setShowCreate(true)}>
+            <Plus size={16} /> Create First Egg
+          </button>
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {eggs.map((egg) => (
             <div key={egg.id} className="card p-5">
               <div className="flex items-start gap-3 mb-3">
-                <div className="p-2.5 rounded-lg bg-panel-500/20">
-                  <Package size={18} className="text-panel-400" />
+                <div className="p-2.5 rounded-lg bg-brand-500/20">
+                  <Package size={18} className="text-brand-400" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-slate-100">{egg.name}</p>
@@ -42,7 +99,7 @@ export function AdminEggsPage() {
                 <p className="text-xs text-slate-400 mb-3">{egg.description}</p>
               )}
 
-              <div className="space-y-1">
+              <div className="space-y-1 mb-3">
                 <p className="text-xs text-slate-500 font-medium">Docker Image</p>
                 <p className="text-xs font-mono text-slate-400 bg-dark-950/60 px-2 py-1 rounded break-all">
                   {egg.dockerImage}
@@ -50,7 +107,7 @@ export function AdminEggsPage() {
               </div>
 
               {egg.variables && egg.variables.length > 0 && (
-                <div className="mt-3 pt-3 border-t border-dark-800">
+                <div className="pt-2 border-t border-dark-800 mb-3">
                   <p className="text-xs text-slate-500 mb-2">{egg.variables.length} variables</p>
                   <div className="flex flex-wrap gap-1">
                     {egg.variables.slice(0, 3).map((v) => (
@@ -64,10 +121,151 @@ export function AdminEggsPage() {
                   </div>
                 </div>
               )}
+
+              <button
+                className="btn-danger btn-sm w-full"
+                onClick={() => setDeleteEgg(egg)}
+                disabled={(egg._count?.servers || 0) > 0}
+                title={(egg._count?.servers || 0) > 0 ? 'Cannot delete egg with active servers' : 'Delete egg'}
+              >
+                <Trash2 size={13} /> Delete
+              </button>
             </div>
           ))}
         </div>
       )}
+
+      {showCreate && (
+        <CreateEggModal
+          onClose={() => setShowCreate(false)}
+          onSuccess={() => {
+            setShowCreate(false);
+            queryClient.invalidateQueries({ queryKey: ['admin-eggs'] });
+          }}
+        />
+      )}
+
+      <ConfirmDialog
+        isOpen={!!deleteEgg}
+        onClose={() => setDeleteEgg(null)}
+        onConfirm={() => deleteEgg && deleteMutation.mutate(deleteEgg.id)}
+        title="Delete Egg"
+        message={`Delete egg "${deleteEgg?.name}"? This cannot be undone.`}
+        confirmLabel="Delete Egg"
+        isLoading={deleteMutation.isPending}
+      />
     </div>
+  );
+}
+
+function CreateEggModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const [form, setForm] = useState({
+    nestName: '',
+    name: '',
+    description: '',
+    dockerImage: '',
+    startup: '',
+    configStop: '^C',
+    scriptInstall: '',
+  });
+  const [isLoading, setIsLoading] = useState(false);
+
+  const applyTemplate = () => {
+    setForm({
+      nestName: MINECRAFT_PAPER_TEMPLATE.nestName,
+      name: MINECRAFT_PAPER_TEMPLATE.name,
+      description: MINECRAFT_PAPER_TEMPLATE.description,
+      dockerImage: MINECRAFT_PAPER_TEMPLATE.dockerImage,
+      startup: MINECRAFT_PAPER_TEMPLATE.startup,
+      configStop: MINECRAFT_PAPER_TEMPLATE.configStop,
+      scriptInstall: MINECRAFT_PAPER_TEMPLATE.scriptInstall,
+    });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    try {
+      const isMinecraft = form.nestName === 'Minecraft' && form.name === 'Paper';
+      await api.post('/eggs', {
+        ...form,
+        variables: isMinecraft ? MINECRAFT_PAPER_TEMPLATE.variables : [],
+      });
+      toast.success('Egg created');
+      onSuccess();
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      toast.error(e.response?.data?.message || 'Failed to create egg');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const f = (key: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setForm({ ...form, [key]: e.target.value });
+
+  return (
+    <Modal isOpen onClose={onClose} title="Create Egg" size="lg">
+      <div className="mb-4">
+        <button
+          type="button"
+          onClick={applyTemplate}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg border border-green-500/30 bg-green-500/10 text-green-300 hover:bg-green-500/20 transition-colors text-sm font-medium"
+        >
+          <Zap size={15} />
+          Use Minecraft Paper Template
+        </button>
+      </div>
+
+      <div className="relative flex items-center mb-4">
+        <div className="flex-1 border-t border-slate-700/50" />
+        <span className="mx-3 text-xs text-slate-500">or fill manually</span>
+        <div className="flex-1 border-t border-slate-700/50" />
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="label">Nest (Category)</label>
+            <input className="input" placeholder="Minecraft" value={form.nestName} onChange={f('nestName')} required />
+          </div>
+          <div>
+            <label className="label">Egg Name</label>
+            <input className="input" placeholder="Paper" value={form.name} onChange={f('name')} required />
+          </div>
+        </div>
+        <div>
+          <label className="label">Description</label>
+          <input className="input" placeholder="Optional description" value={form.description} onChange={f('description')} />
+        </div>
+        <div>
+          <label className="label">Docker Image</label>
+          <input className="input font-mono" placeholder="ghcr.io/pterodactyl/yolks:java_17" value={form.dockerImage} onChange={f('dockerImage')} required />
+        </div>
+        <div>
+          <label className="label">Startup Command</label>
+          <input className="input font-mono text-sm" placeholder="java -jar {{SERVER_JARFILE}} --nogui" value={form.startup} onChange={f('startup')} required />
+        </div>
+        <div>
+          <label className="label">Stop Command</label>
+          <input className="input font-mono" placeholder="^C" value={form.configStop} onChange={f('configStop')} />
+        </div>
+        <div>
+          <label className="label">Install Script <span className="text-slate-500 font-normal">(optional)</span></label>
+          <textarea
+            className="input font-mono text-xs min-h-[80px] resize-y"
+            placeholder="#!/bin/bash&#10;# download server files..."
+            value={form.scriptInstall}
+            onChange={f('scriptInstall')}
+          />
+        </div>
+        <div className="flex gap-3 pt-2">
+          <button type="button" className="btn-secondary flex-1" onClick={onClose}>Cancel</button>
+          <button type="submit" className="btn-primary flex-1" disabled={isLoading}>
+            {isLoading ? <Spinner size="sm" /> : 'Create Egg'}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
