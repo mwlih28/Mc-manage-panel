@@ -39,6 +39,8 @@ export interface ServerConfig {
   environment: Record<string, string>;
   invocation: string;
   image: string;
+  installScript?: string;
+  scriptContainer?: string;
   build: {
     memory_limit: number;
     swap: number;

@@ -89,10 +89,30 @@ class ServerManager extends EventEmitter {
     try {
       const { config } = server;
 
+      // Substitute {{VAR}} placeholders in invocation with environment values
+      const invocation = config.invocation.replace(/\{\{([^}]+)\}\}/g, (_, key) => {
+        return config.environment[key.trim()] ?? '';
+      });
+
       // Pull image if needed
       if (!await imageExists(config.image)) {
         this.sendConsole(uuid, `[Wings] Pulling image ${config.image}...`);
         await pullImage(config.image);
+      }
+
+      // Run install script on first start (when server jar doesn't exist)
+      const jarFile = config.environment['SERVER_JARFILE'] || 'server.jar';
+      const isFirstStart = !fs.existsSync(path.join(dataPath, jarFile));
+      if (isFirstStart && config.installScript) {
+        this.sendConsole(uuid, '[Wings] Running install script...');
+        try {
+          await this.runInstallScript(uuid, config, dataPath);
+          this.sendConsole(uuid, '[Wings] Install complete.');
+        } catch (err) {
+          this.sendConsole(uuid, `[Wings] Install failed: ${(err as Error).message}`);
+          this.setStatus(uuid, 'offline');
+          throw err;
+        }
       }
 
       // Remove old container if exists
@@ -108,7 +128,7 @@ class ServerManager extends EventEmitter {
       const container = await createContainer(
         uuid,
         config.image,
-        config.invocation,
+        invocation,
         config.environment,
         {
           memory: config.build.memory_limit,
@@ -255,6 +275,72 @@ class ServerManager extends EventEmitter {
       uptime,
       state: server.status,
     };
+  }
+
+  private async runInstallScript(uuid: string, config: ServerConfig, dataPath: string): Promise<void> {
+    const d = getDocker();
+    const installName = `mc_install_${uuid}`;
+
+    // Use server image (has curl/python3); pull if needed
+    if (!await imageExists(config.image)) {
+      this.sendConsole(uuid, `[Wings] Pulling image ${config.image}...`);
+      await pullImage(config.image);
+    }
+
+    // Remove stale install container
+    try {
+      const existing = await d.listContainers({ all: true, filters: { name: [installName] } });
+      if (existing.length > 0) await d.getContainer(existing[0].Id).remove({ force: true });
+    } catch { /* ignore */ }
+
+    // Write install script to data dir
+    const scriptFile = path.join(dataPath, '.wings_install.sh');
+    fs.writeFileSync(scriptFile, config.installScript!, 'utf8');
+
+    const envArray = Object.entries(config.environment).map(([k, v]) => `${k}=${v}`);
+
+    const container = await d.createContainer({
+      name: installName,
+      Image: config.image,
+      Cmd: ['/bin/bash', '/mnt/server/.wings_install.sh'],
+      Env: envArray,
+      WorkingDir: '/mnt/server',
+      AttachStdout: true,
+      AttachStderr: true,
+      HostConfig: {
+        Binds: [`${dataPath}:/mnt/server`],
+        NetworkMode: 'bridge',
+        AutoRemove: false,
+      },
+    });
+
+    await container.start();
+
+    // Stream install output to console
+    await new Promise<void>((resolve) => {
+      container.logs({ stdout: true, stderr: true, follow: true, timestamps: false, tail: 0 },
+        (err: Error | null, stream?: NodeJS.ReadableStream) => {
+          if (err || !stream) { resolve(); return; }
+          let buf = '';
+          stream.on('data', (chunk: Buffer) => {
+            const data = chunk.length > 8 ? chunk.slice(8).toString('utf8') : chunk.toString('utf8');
+            buf += data;
+            const lines = buf.split('\n');
+            buf = lines.pop() || '';
+            lines.forEach(line => { if (line.trim()) this.sendConsole(uuid, `[Install] ${line}`); });
+          });
+          stream.on('end', resolve);
+          stream.on('error', () => resolve());
+        });
+    });
+
+    const result = await (container as unknown as { wait(): Promise<{ StatusCode: number }> }).wait();
+    await container.remove({ force: true }).catch(() => {});
+    try { fs.unlinkSync(scriptFile); } catch { /* ignore */ }
+
+    if (result.StatusCode !== 0) {
+      throw new Error(`Install script exited with code ${result.StatusCode}`);
+    }
   }
 
   private setStatus(uuid: string, status: ServerStatus) {

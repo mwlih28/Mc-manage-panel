@@ -9,6 +9,8 @@ interface WingsServerConfig {
   environment: Record<string, string>;
   invocation: string;
   image: string;
+  installScript?: string;
+  scriptContainer?: string;
   build: {
     memory_limit: number;
     swap: number;
@@ -156,7 +158,7 @@ export async function getNodeServers(nodeId: string): Promise<WingsServerConfig[
   const servers = await prisma.server.findMany({
     where: { nodeId },
     include: {
-      egg: { select: { startup: true, dockerImage: true } },
+      egg: { select: { startup: true, dockerImage: true, scriptInstall: true, scriptContainer: true } },
     },
   });
 
@@ -170,6 +172,8 @@ export async function getNodeServers(nodeId: string): Promise<WingsServerConfig[
       environment: env,
       invocation: server.startup,
       image: server.image,
+      installScript: server.egg.scriptInstall ?? undefined,
+      scriptContainer: server.egg.scriptContainer ?? undefined,
       build: {
         memory_limit: server.memory,
         swap: server.swap,
