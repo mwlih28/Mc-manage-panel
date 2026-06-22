@@ -294,9 +294,10 @@ class ServerManager extends EventEmitter {
       if (existing.length > 0) await d.getContainer(existing[0].Id).remove({ force: true });
     } catch { /* ignore */ }
 
-    // Write install script to data dir
+    // Write install script to data dir, append chown so main container (uid 1000) can write
     const scriptFile = path.join(dataPath, '.wings_install.sh');
-    fs.writeFileSync(scriptFile, config.installScript!, 'utf8');
+    const scriptContent = config.installScript! + '\nchown -R 1000:1000 /mnt/server 2>/dev/null || true\n';
+    fs.writeFileSync(scriptFile, scriptContent, 'utf8');
 
     const envArray = Object.entries(config.environment).map(([k, v]) => `${k}=${v}`);
 
