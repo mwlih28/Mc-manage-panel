@@ -181,41 +181,46 @@ ENV
 chmod 600 "${PANEL_DIR}/apps/api/.env"
 success ".env written"
 
-# ────────────────────────────── Build API ──────────────────────────────
-step "Installing and building API"
-cd "${PANEL_DIR}/apps/api"
-# Remove the Railway-generated lock file so npm resolves packages fresh on this system
-rm -f package-lock.json
-info "npm install..."
+# ────────────────────────────── Install all workspace deps from root ──────────────────────────────
+step "Installing dependencies"
+# This is an npm workspaces monorepo — always install from the repo root so that
+# all packages (prisma, tsc, vite, etc.) land in /var/www/mc-panel/node_modules.
+cd "${PANEL_DIR}"
+# Remove any stale lock files generated in Docker/Railway context
+rm -f package-lock.json apps/api/package-lock.json apps/web/package-lock.json
 npm install --no-fund --no-audit
-# Verify prisma binary exists
-[[ -x ./node_modules/.bin/prisma ]] \
-  || error "Prisma binary not found after npm install. Check npm output above."
+PRISMA_BIN="${PANEL_DIR}/node_modules/.bin/prisma"
+[[ -x "$PRISMA_BIN" ]] || error "Prisma binary not found after npm install. Check output above."
+success "Dependencies installed (workspace root)"
+
+# ────────────────────────────── Build API ──────────────────────────────
+step "Building API"
 info "Generating Prisma client..."
-./node_modules/.bin/prisma generate
+cd "${PANEL_DIR}/apps/api"
+"$PRISMA_BIN" generate
 info "Compiling TypeScript..."
-npm run build
+# Add workspace root bin to PATH so tsc/ts-node are found
+PATH="${PANEL_DIR}/node_modules/.bin:$PATH" npm run build
 success "API built → ${PANEL_DIR}/apps/api/dist"
 
 # ────────────────────────────── Build Web ──────────────────────────────
-step "Installing and building Web"
-cd "${PANEL_DIR}/apps/web"
-rm -f package-lock.json
-info "npm install..."
-npm install --no-fund --no-audit
+step "Building Web"
 info "Building frontend (VITE_API_URL=https://${PANEL_DOMAIN})..."
-VITE_API_URL="https://${PANEL_DOMAIN}" npm run build
+cd "${PANEL_DIR}/apps/web"
+PATH="${PANEL_DIR}/node_modules/.bin:$PATH" VITE_API_URL="https://${PANEL_DOMAIN}" npm run build
 success "Web built → ${PANEL_DIR}/apps/web/dist"
 
 # ────────────────────────────── Database schema ──────────────────────────────
 step "Applying database schema"
 cd "${PANEL_DIR}/apps/api"
-./node_modules/.bin/prisma db push --accept-data-loss
+"$PRISMA_BIN" db push --accept-data-loss
 success "Schema applied"
 
 # ────────────────────────────── Create admin account ──────────────────────────────
 step "Creating admin account"
-# Pass credentials via env vars to avoid shell-quoting issues with special chars
+# Run from the workspace root so Node finds @prisma/client in the workspace node_modules.
+# Pass credentials via env vars to avoid shell-quoting issues with special chars.
+cd "${PANEL_DIR}"
 SEED_EMAIL="$ADMIN_EMAIL" \
 SEED_USERNAME="$ADMIN_USERNAME" \
 SEED_PASSWORD="$ADMIN_PASSWORD" \
