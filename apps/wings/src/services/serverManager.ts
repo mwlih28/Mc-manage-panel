@@ -116,15 +116,22 @@ class ServerManager extends EventEmitter {
         }
       }
 
-      // Ensure uid 1000 owns the entire data directory so the container can
-      // write to it (e.g. Paper's cache/ and logs/ dirs). Wings runs as root,
-      // so execSync chown works directly on the host filesystem.
+      // Pre-create directories that server software commonly needs (e.g. Paper's
+      // cache/ dir). Creating them on the HOST before container start means the
+      // container sees them already existing, so no permission error on mkdir.
+      // chmod 777 makes them writable by any uid including the container user.
+      for (const dir of ['cache', 'logs', 'config']) {
+        const dirPath = path.join(dataPath, dir);
+        fs.mkdirSync(dirPath, { recursive: true });
+        try { fs.chmodSync(dirPath, 0o777); } catch { /* non-fatal */ }
+      }
+      this.sendConsole(uuid, '[Wings] Pre-created server directories (cache, logs, config).');
+      // Best-effort chown; Wings may or may not be root
       try {
         execSync(`chown -R 1000:1000 "${dataPath}"`);
         this.sendConsole(uuid, '[Wings] Volume ownership set to uid 1000.');
-      } catch (err) {
-        logger.warn(`chown failed for ${uuid}:`, err);
-        this.sendConsole(uuid, `[Wings] chown failed (non-fatal): ${(err as Error).message}`);
+      } catch {
+        // Not root — that is fine, chmod 777 dirs above cover the common cases
       }
 
       // Remove old container if exists
