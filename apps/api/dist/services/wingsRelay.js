@@ -46,11 +46,24 @@ function getOrConnectWings(node, io) {
             const uuid = payload?.uuid;
             if (uuid) {
                 let relayData = data;
-                // Normalize Wings lowercase status → panel uppercase
                 if (event === 'server:status' && payload.state) {
                     const panelStatus = WINGS_TO_PANEL_STATUS[payload.state]
                         ?? payload.state.toUpperCase();
                     relayData = { ...payload, status: panelStatus };
+                }
+                // Normalize Wings snake_case stats → client camelCase
+                if (event === 'server:stats') {
+                    relayData = {
+                        uuid,
+                        cpuAbsolute: payload.cpu_absolute ?? 0,
+                        memoryBytes: payload.memory_bytes ?? 0,
+                        memoryLimitBytes: payload.memory_limit_bytes ?? 0,
+                        diskBytes: payload.disk_bytes ?? 0,
+                        networkRxBytes: payload.network_rx_bytes ?? 0,
+                        networkTxBytes: payload.network_tx_bytes ?? 0,
+                        uptime: payload.uptime ?? 0,
+                        timestamp: Date.now(),
+                    };
                 }
                 io.to(`server:uuid:${uuid}`).emit(event, relayData);
             }

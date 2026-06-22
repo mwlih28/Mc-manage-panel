@@ -71,7 +71,12 @@ export async function writeFile(uuid: string, filePath: string, content: string)
   const dir = path.dirname(target);
 
   fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(target, content, 'utf8');
+  // File may be owned by container uid 1000; unlink first so we can recreate it
+  // as the Wings process user. Directory write permission is sufficient to unlink.
+  if (fs.existsSync(target)) {
+    try { fs.unlinkSync(target); } catch { /* fall through */ }
+  }
+  fs.writeFileSync(target, content, { encoding: 'utf8', mode: 0o666 });
   logger.debug(`File written: ${filePath} for server ${uuid}`);
 }
 

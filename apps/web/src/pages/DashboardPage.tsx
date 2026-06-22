@@ -100,6 +100,9 @@ export function DashboardPage() {
                   {server.status}
                 </span>
                 <div className="hidden sm:flex items-center gap-4 text-xs text-slate-500">
+                  {server.allocation && (
+                    <span className="font-mono">{server.allocation.ip}:{server.allocation.port}</span>
+                  )}
                   <span>{formatBytes(server.memory * 1048576)} RAM</span>
                   <span>{formatBytes(server.disk * 1048576)} Disk</span>
                 </div>

@@ -67,7 +67,15 @@ async function writeFile(uuid, filePath, content) {
     const target = safePath(root, filePath);
     const dir = path_1.default.dirname(target);
     fs_1.default.mkdirSync(dir, { recursive: true });
-    fs_1.default.writeFileSync(target, content, 'utf8');
+    // File may be owned by container uid 1000; unlink first so we can recreate it
+    // as the Wings process user. Directory write permission is sufficient to unlink.
+    if (fs_1.default.existsSync(target)) {
+        try {
+            fs_1.default.unlinkSync(target);
+        }
+        catch { /* fall through */ }
+    }
+    fs_1.default.writeFileSync(target, content, { encoding: 'utf8', mode: 0o666 });
     logger_1.logger.debug(`File written: ${filePath} for server ${uuid}`);
 }
 async function deleteFiles(uuid, filePaths) {
