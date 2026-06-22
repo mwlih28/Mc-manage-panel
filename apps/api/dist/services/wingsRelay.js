@@ -50,39 +50,49 @@ function getOrConnectWings(node, io) {
     });
     // Relay all Wings events to panel clients in the correct room
     wingsSocket.onAny((event, data) => {
-        if (event === 'server:console' || event === 'server:stats' || event === 'server:status') {
-            const payload = data;
-            const uuid = payload?.uuid;
-            if (uuid) {
-                let relayData = data;
-                if (event === 'server:status' && payload.state) {
-                    const panelStatus = WINGS_TO_PANEL_STATUS[payload.state]
-                        ?? payload.state.toUpperCase();
-                    relayData = { ...payload, status: panelStatus };
-                }
-                if (event === 'server:stats') {
-                    relayData = {
-                        uuid,
-                        cpuAbsolute: typeof payload.cpu_absolute === 'number' ? payload.cpu_absolute : 0,
-                        memoryBytes: typeof payload.memory_bytes === 'number' ? payload.memory_bytes : 0,
-                        memoryLimitBytes: typeof payload.memory_limit_bytes === 'number' ? payload.memory_limit_bytes : 0,
-                        diskBytes: typeof payload.disk_bytes === 'number' ? payload.disk_bytes : 0,
-                        networkRxBytes: typeof payload.network_rx_bytes === 'number' ? payload.network_rx_bytes : 0,
-                        networkTxBytes: typeof payload.network_tx_bytes === 'number' ? payload.network_tx_bytes : 0,
-                        uptime: typeof payload.uptime === 'number' ? payload.uptime : 0,
-                        timestamp: Date.now(),
-                    };
-                }
-                if (event === 'server:console') {
-                    pushConsoleBuffer(uuid, {
-                        type: payload.type ?? 'output',
-                        data: payload.data ?? '',
-                        timestamp: typeof payload.timestamp === 'number' ? payload.timestamp : Date.now(),
-                    });
-                }
-                io.to(`server:uuid:${uuid}`).emit(event, relayData);
+        const handled = ['server:console', 'server:stats', 'server:status', 'server:console:history'];
+        if (!handled.includes(event))
+            return;
+        const payload = data;
+        const uuid = payload?.uuid;
+        // Wings sends history as { uuid, lines[] } so we can route it correctly
+        if (event === 'server:console:history') {
+            const h = data;
+            if (h.uuid && Array.isArray(h.lines) && h.lines.length > 0) {
+                h.lines.forEach((l) => pushConsoleBuffer(h.uuid, l));
+                io.to(`server:uuid:${h.uuid}`).emit('server:console:history', h.lines);
             }
+            return;
         }
+        if (!uuid)
+            return;
+        let relayData = data;
+        if (event === 'server:status' && payload.state) {
+            const panelStatus = WINGS_TO_PANEL_STATUS[payload.state]
+                ?? payload.state.toUpperCase();
+            relayData = { ...payload, status: panelStatus };
+        }
+        if (event === 'server:stats') {
+            relayData = {
+                uuid,
+                cpuAbsolute: typeof payload.cpu_absolute === 'number' ? payload.cpu_absolute : 0,
+                memoryBytes: typeof payload.memory_bytes === 'number' ? payload.memory_bytes : 0,
+                memoryLimitBytes: typeof payload.memory_limit_bytes === 'number' ? payload.memory_limit_bytes : 0,
+                diskBytes: typeof payload.disk_bytes === 'number' ? payload.disk_bytes : 0,
+                networkRxBytes: typeof payload.network_rx_bytes === 'number' ? payload.network_rx_bytes : 0,
+                networkTxBytes: typeof payload.network_tx_bytes === 'number' ? payload.network_tx_bytes : 0,
+                uptime: typeof payload.uptime === 'number' ? payload.uptime : 0,
+                timestamp: Date.now(),
+            };
+        }
+        if (event === 'server:console') {
+            pushConsoleBuffer(uuid, {
+                type: payload.type ?? 'output',
+                data: payload.data ?? '',
+                timestamp: typeof payload.timestamp === 'number' ? payload.timestamp : Date.now(),
+            });
+        }
+        io.to(`server:uuid:${uuid}`).emit(event, relayData);
     });
     nodeConnections.set(node.id, { socket: wingsSocket, subscribedUuids });
     return wingsSocket;

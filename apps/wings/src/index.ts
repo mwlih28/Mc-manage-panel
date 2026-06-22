@@ -75,6 +75,15 @@ async function main() {
       socket.join(`server:${uuid}`);
       const status = serverManager.getStatus(uuid);
       socket.emit('server:status', { state: status });
+      // Replay buffered log lines so clients recover history after reconnect.
+      // Include uuid so the relay can route to the correct server room.
+      const history = serverManager.getLogBuffer(uuid);
+      if (history.length > 0) {
+        socket.emit('server:console:history', {
+          uuid,
+          lines: history.map((data) => ({ type: 'output' as const, data, timestamp: Date.now() })),
+        });
+      }
     });
 
     socket.on('unsubscribe', (uuid: string) => {

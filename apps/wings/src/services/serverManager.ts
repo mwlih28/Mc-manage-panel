@@ -13,6 +13,8 @@ import {
 import { panelClient } from './panelClient';
 import type { ServerConfig, ServerStatus, ResourceUsage } from '../types';
 
+const MAX_LOG_BUFFER = 500;
+
 interface ManagedServer {
   config: ServerConfig;
   status: ServerStatus;
@@ -21,6 +23,7 @@ interface ManagedServer {
   statsInterval?: ReturnType<typeof setInterval>;
   logStream?: NodeJS.ReadableStream;
   stdinStream?: NodeJS.ReadWriteStream;
+  logBuffer: string[];
 }
 
 class ServerManager extends EventEmitter {
@@ -52,11 +55,13 @@ class ServerManager extends EventEmitter {
       } catch { /* container gone */ }
     }
 
+    const existingBuffer = this.servers.get(config.uuid)?.logBuffer ?? [];
     this.servers.set(config.uuid, {
       config,
       status,
       containerId: containerId || undefined,
       startedAt: status === 'running' ? new Date() : undefined,
+      logBuffer: existingBuffer,
     });
 
     if (status === 'running' && containerId) {
@@ -415,7 +420,16 @@ class ServerManager extends EventEmitter {
     panelClient.reportStatus(uuid, status).catch(() => { /* best effort */ });
   }
 
+  getLogBuffer(uuid: string): string[] {
+    return this.servers.get(uuid)?.logBuffer ?? [];
+  }
+
   private sendConsole(uuid: string, line: string) {
+    const server = this.servers.get(uuid);
+    if (server) {
+      server.logBuffer.push(line);
+      if (server.logBuffer.length > MAX_LOG_BUFFER) server.logBuffer.shift();
+    }
     this.io?.to(`server:${uuid}`).emit('server:console', { uuid, data: line });
     this.emit('console', { uuid, line });
   }

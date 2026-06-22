@@ -11,6 +11,7 @@ const config_1 = require("../config");
 const logger_1 = require("../utils/logger");
 const dockerService_1 = require("./dockerService");
 const panelClient_1 = require("./panelClient");
+const MAX_LOG_BUFFER = 500;
 class ServerManager extends events_1.EventEmitter {
     constructor() {
         super(...arguments);
@@ -38,11 +39,13 @@ class ServerManager extends events_1.EventEmitter {
             }
             catch { /* container gone */ }
         }
+        const existingBuffer = this.servers.get(config.uuid)?.logBuffer ?? [];
         this.servers.set(config.uuid, {
             config,
             status,
             containerId: containerId || undefined,
             startedAt: status === 'running' ? new Date() : undefined,
+            logBuffer: existingBuffer,
         });
         if (status === 'running' && containerId) {
             this.attachLogStream(config.uuid, containerId);
@@ -386,7 +389,16 @@ class ServerManager extends events_1.EventEmitter {
         this.io?.to(`server:${uuid}`).emit('server:status', { uuid, state: status });
         panelClient_1.panelClient.reportStatus(uuid, status).catch(() => { });
     }
+    getLogBuffer(uuid) {
+        return this.servers.get(uuid)?.logBuffer ?? [];
+    }
     sendConsole(uuid, line) {
+        const server = this.servers.get(uuid);
+        if (server) {
+            server.logBuffer.push(line);
+            if (server.logBuffer.length > MAX_LOG_BUFFER)
+                server.logBuffer.shift();
+        }
         this.io?.to(`server:${uuid}`).emit('server:console', { uuid, data: line });
         this.emit('console', { uuid, line });
     }
