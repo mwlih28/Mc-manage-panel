@@ -193,6 +193,10 @@ export async function ensureVolumePermissions(image: string, dataPath: string): 
   }
 }
 
+// Tracks previous CPU sample per container so that independent stream=false calls
+// can still compute a meaningful delta (precpu_stats is empty on first call).
+const prevCpuStats = new Map<string, { totalUsage: number; systemUsage: number }>();
+
 export async function getContainerStats(containerId: string): Promise<{
   cpu: number;
   memoryBytes: number;
@@ -208,14 +212,27 @@ export async function getContainerStats(containerId: string): Promise<{
       if (err) return reject(err);
       if (!data) return resolve({ cpu: 0, memoryBytes: 0, memoryLimitBytes: 0, networkRx: 0, networkTx: 0 });
 
-      const cpuDelta = data.cpu_stats.cpu_usage.total_usage - (data.precpu_stats?.cpu_usage?.total_usage || 0);
-      const systemDelta = data.cpu_stats.system_cpu_usage - (data.precpu_stats?.system_cpu_usage || 0);
-      const cpuCount = data.cpu_stats.online_cpus || 1;
+      const currTotal = data.cpu_stats.cpu_usage.total_usage || 0;
+      const currSystem = data.cpu_stats.system_cpu_usage || 0;
+      const cpuCount = data.cpu_stats.online_cpus || (data.cpu_stats.cpu_usage as { percpu_usage?: number[] }).percpu_usage?.length || 1;
+
+      // Prefer our own stored previous sample over Docker's precpu_stats (which is
+      // empty on the first stream=false call and may be stale in some Docker versions).
+      const prev = prevCpuStats.get(containerId);
+      const prevTotal = prev?.totalUsage ?? (data.precpu_stats?.cpu_usage?.total_usage || 0);
+      const prevSystem = prev?.systemUsage ?? (data.precpu_stats?.system_cpu_usage || 0);
+
+      const cpuDelta = currTotal - prevTotal;
+      const systemDelta = currSystem - prevSystem;
       const cpu = systemDelta > 0 ? (cpuDelta / systemDelta) * cpuCount * 100 : 0;
 
+      prevCpuStats.set(containerId, { totalUsage: currTotal, systemUsage: currSystem });
+
       const memUsage = data.memory_stats.usage || 0;
-      const memCache = (data.memory_stats.stats as Record<string, number>)?.cache || 0;
-      const memBytes = memUsage - memCache;
+      const memStats = data.memory_stats.stats as Record<string, number> | null | undefined;
+      // cgroups v1 uses 'cache'; cgroups v2 uses 'inactive_file'
+      const reclaimable = memStats?.inactive_file ?? memStats?.cache ?? 0;
+      const memBytes = Math.max(0, memUsage - reclaimable);
       const memLimit = data.memory_stats.limit || 0;
 
       const networks = data.networks || {};

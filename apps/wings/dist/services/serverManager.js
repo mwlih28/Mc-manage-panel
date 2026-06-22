@@ -170,11 +170,29 @@ class ServerManager extends events_1.EventEmitter {
                     await container.kill();
                 }
                 else {
-                    // Send stop command first (for Minecraft: stop)
-                    this.sendCommand(uuid, server.config.environment['MC_STOP_COMMAND'] || 'stop');
-                    await new Promise(r => setTimeout(r, 5000));
+                    // Send MC stop command directly — cannot use this.sendCommand() here because
+                    // status is already 'stopping' and sendCommand guards against non-running states.
+                    const stopCmd = (server.config.environment['MC_STOP_COMMAND'] || 'stop').replace(/"/g, '\\"');
                     try {
-                        await container.stop({ t: 10 });
+                        const exec = await container.exec({
+                            AttachStdin: true,
+                            AttachStdout: false,
+                            AttachStderr: false,
+                            Cmd: ['/bin/sh', '-c', `echo "${stopCmd}" > /proc/1/fd/0`],
+                        });
+                        await exec.start({ hijack: true, stdin: true });
+                    }
+                    catch {
+                        try {
+                            const stream = await container.attach({ stream: true, stdin: true, stdout: false, stderr: false });
+                            stream.write(stopCmd + '\n');
+                            stream.end();
+                        }
+                        catch { /* best effort */ }
+                    }
+                    await new Promise(r => setTimeout(r, 8000));
+                    try {
+                        await container.stop({ t: 15 });
                     }
                     catch { /* may already be stopped */ }
                 }

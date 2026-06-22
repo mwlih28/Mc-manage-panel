@@ -31,6 +31,7 @@ interface ModrinthProject {
 
 interface ModrinthVersion {
   id: string;
+  loaders: string[];
   files: { url: string; filename: string; primary: boolean }[];
 }
 
@@ -166,18 +167,28 @@ export function ServerDetailPage() {
     setInstalling(project.project_id);
     try {
       const versRes = await fetch(`https://api.modrinth.com/v2/project/${project.project_id}/version`);
+      if (!versRes.ok) { toast.error('Could not fetch version list'); return; }
       const versions: ModrinthVersion[] = await versRes.json();
       if (!versions || versions.length === 0) { toast.error('No versions found'); return; }
-      const primaryFile = versions[0].files.find((f) => f.primary) ?? versions[0].files[0];
+
+      // Prefer Bukkit-compatible loaders; fall back to first version
+      const preferredLoaders = ['paper', 'purpur', 'folia', 'spigot', 'bukkit'];
+      const bestVersion =
+        versions.find((v) => v.loaders?.some((l) => preferredLoaders.includes(l.toLowerCase()))) ??
+        versions[0];
+
+      const primaryFile = bestVersion.files.find((f) => f.primary) ?? bestVersion.files[0];
       if (!primaryFile) { toast.error('No downloadable file found'); return; }
+
       await api.post(`/servers/${id}/plugins/install`, {
         url: primaryFile.url,
         filename: primaryFile.filename,
         type: 'plugins',
       });
       toast.success(`${project.title} installed!`);
-    } catch {
-      toast.error('Installation failed');
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Installation failed';
+      toast.error(msg);
     } finally {
       setInstalling(null);
     }
@@ -295,11 +306,18 @@ export function ServerDetailPage() {
           </div>
           <div>
             <h1 className="text-xl font-bold text-slate-100">{data.name}</h1>
-            <div className="flex items-center gap-2 mt-0.5">
+            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
               <span className="text-xs font-mono text-slate-500">{data.uuidShort}</span>
               <span className={`text-xs ${getServerStatusBadge(currentStatus)}`}>
                 {currentStatus}
               </span>
+              {data.allocation && (
+                <span className="text-xs font-mono text-slate-400 bg-dark-800/60 px-1.5 py-0.5 rounded">
+                  {(data.node as typeof data.node & { gameSubdomain?: string })?.gameSubdomain
+                    ? `${data.uuidShort}.${(data.node as typeof data.node & { gameSubdomain?: string }).gameSubdomain}:${data.allocation.port}`
+                    : `${data.allocation.ip}:${data.allocation.port}`}
+                </span>
+              )}
             </div>
           </div>
         </div>
