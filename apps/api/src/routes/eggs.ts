@@ -99,6 +99,29 @@ router.post('/', authenticate, requireAdmin, async (req: AuthRequest, res: Respo
   return res.status(201).json({ data: egg });
 });
 
+// PUT /eggs/:id
+router.put('/:id', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
+  const egg = await prisma.egg.findUnique({ where: { id: req.params.id } });
+  if (!egg) return res.status(404).json({ message: 'Egg not found' });
+
+  const { name, description, dockerImage, startup, configStop, scriptInstall } = req.body;
+
+  const updated = await prisma.egg.update({
+    where: { id: req.params.id },
+    data: {
+      ...(name && { name }),
+      ...(description !== undefined && { description }),
+      ...(dockerImage && { dockerImage }),
+      ...(startup && { startup }),
+      ...(configStop !== undefined && { configStop }),
+      ...(scriptInstall !== undefined && { scriptInstall: scriptInstall || null }),
+    },
+    include: { variables: true, nest: true },
+  });
+
+  return res.json({ data: updated });
+});
+
 // DELETE /eggs/:id
 router.delete('/:id', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
   const egg = await prisma.egg.findUnique({ where: { id: req.params.id }, include: { _count: { select: { servers: true } } } });

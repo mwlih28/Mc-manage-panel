@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Package, Plus, Trash2, Zap } from 'lucide-react';
+import { Package, Plus, Pencil, Trash2, Zap } from 'lucide-react';
 import api from '@/lib/axios';
 import { Egg } from '@/types';
 import { Spinner } from '@/components/ui/Spinner';
@@ -16,14 +16,22 @@ const MINECRAFT_PAPER_TEMPLATE = {
   startup: 'java -Xms128M -XX:MaxRAMPercentage=95.0 -Dterminal.jline=false -Dterminal.ansi=true -jar {{SERVER_JARFILE}} --nogui',
   configStop: 'stop',
   scriptInstall: `#!/bin/bash
+set -e
 cd /mnt/server
+
 PAPER_VERSION=\${MC_VERSION:-latest}
 if [ "\$PAPER_VERSION" = "latest" ]; then
-  PAPER_VERSION=$(curl -s https://api.papermc.io/v2/projects/paper | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['versions'][-1])")
+  PAPER_VERSION=$(curl -s "https://api.papermc.io/v2/projects/paper" | grep -oE '"[0-9]+\\.[0-9]+(\\.[0-9]+)?"' | tr -d '"' | tail -1)
 fi
-BUILD=$(curl -s "https://api.papermc.io/v2/projects/paper/versions/\${PAPER_VERSION}/builds" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['builds'][-1]['build'])")
+echo "Paper version: \${PAPER_VERSION}"
+
+BUILD=$(curl -s "https://api.papermc.io/v2/projects/paper/versions/\${PAPER_VERSION}/builds" | grep -oE '"build":[0-9]+' | tail -1 | grep -oE '[0-9]+$')
+echo "Build: \${BUILD}"
+
 JAR="paper-\${PAPER_VERSION}-\${BUILD}.jar"
-curl -o \${SERVER_JARFILE:-server.jar} "https://api.papermc.io/v2/projects/paper/versions/\${PAPER_VERSION}/builds/\${BUILD}/downloads/\${JAR}"`,
+TARGET=\${SERVER_JARFILE:-server.jar}
+curl -fsSL -o "\${TARGET}" "https://api.papermc.io/v2/projects/paper/versions/\${PAPER_VERSION}/builds/\${BUILD}/downloads/\${JAR}"
+echo "Downloaded: \${TARGET}"`,
   variables: [
     { name: 'Server Jar File', envVariable: 'SERVER_JARFILE', defaultValue: 'server.jar', description: 'The jar file to run', userViewable: true, userEditable: false },
     { name: 'Minecraft Version', envVariable: 'MC_VERSION', defaultValue: 'latest', description: 'Paper version to install', userViewable: true, userEditable: true },
@@ -32,6 +40,7 @@ curl -o \${SERVER_JARFILE:-server.jar} "https://api.papermc.io/v2/projects/paper
 
 export function AdminEggsPage() {
   const [showCreate, setShowCreate] = useState(false);
+  const [editEgg, setEditEgg] = useState<Egg | null>(null);
   const [deleteEgg, setDeleteEgg] = useState<Egg | null>(null);
   const queryClient = useQueryClient();
 
@@ -122,14 +131,22 @@ export function AdminEggsPage() {
                 </div>
               )}
 
-              <button
-                className="btn-danger btn-sm w-full"
-                onClick={() => setDeleteEgg(egg)}
-                disabled={(egg._count?.servers || 0) > 0}
-                title={(egg._count?.servers || 0) > 0 ? 'Cannot delete egg with active servers' : 'Delete egg'}
-              >
-                <Trash2 size={13} /> Delete
-              </button>
+              <div className="flex gap-2">
+                <button
+                  className="btn-secondary btn-sm flex-1"
+                  onClick={() => setEditEgg(egg)}
+                >
+                  <Pencil size={13} /> Edit
+                </button>
+                <button
+                  className="btn-danger btn-sm flex-1"
+                  onClick={() => setDeleteEgg(egg)}
+                  disabled={(egg._count?.servers || 0) > 0}
+                  title={(egg._count?.servers || 0) > 0 ? 'Cannot delete egg with active servers' : 'Delete egg'}
+                >
+                  <Trash2 size={13} /> Delete
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -140,6 +157,17 @@ export function AdminEggsPage() {
           onClose={() => setShowCreate(false)}
           onSuccess={() => {
             setShowCreate(false);
+            queryClient.invalidateQueries({ queryKey: ['admin-eggs'] });
+          }}
+        />
+      )}
+
+      {editEgg && (
+        <EditEggModal
+          egg={editEgg}
+          onClose={() => setEditEgg(null)}
+          onSuccess={() => {
+            setEditEgg(null);
             queryClient.invalidateQueries({ queryKey: ['admin-eggs'] });
           }}
         />
@@ -263,6 +291,96 @@ function CreateEggModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
           <button type="button" className="btn-secondary flex-1" onClick={onClose}>Cancel</button>
           <button type="submit" className="btn-primary flex-1" disabled={isLoading}>
             {isLoading ? <Spinner size="sm" /> : 'Create Egg'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function EditEggModal({ egg, onClose, onSuccess }: { egg: Egg; onClose: () => void; onSuccess: () => void }) {
+  const [form, setForm] = useState({
+    name: egg.name,
+    description: egg.description || '',
+    dockerImage: egg.dockerImage,
+    startup: egg.startup,
+    configStop: egg.configStop || '^C',
+    scriptInstall: egg.scriptInstall || '',
+  });
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    try {
+      await api.put(`/eggs/${egg.id}`, form);
+      toast.success('Egg updated');
+      onSuccess();
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      toast.error(e.response?.data?.message || 'Failed to update egg');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const applyFixedScript = () => {
+    setForm(f => ({ ...f, scriptInstall: MINECRAFT_PAPER_TEMPLATE.scriptInstall }));
+    toast.success('Applied fixed install script');
+  };
+
+  const f = (key: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setForm(prev => ({ ...prev, [key]: e.target.value }));
+
+  return (
+    <Modal isOpen onClose={onClose} title={`Edit Egg: ${egg.name}`} size="lg">
+      {egg.scriptInstall?.includes('python3') && (
+        <div className="mb-4 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-yellow-300 text-sm">
+          <p className="font-medium mb-1">Install script uses python3</p>
+          <p className="text-xs text-yellow-400 mb-2">The yolks:java_17 image doesn't have python3. Use the fixed bash-only version.</p>
+          <button
+            type="button"
+            onClick={applyFixedScript}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-200 text-xs font-medium transition-colors"
+          >
+            <Zap size={12} /> Apply Fixed Script (no python3)
+          </button>
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div>
+          <label className="label">Egg Name</label>
+          <input className="input" value={form.name} onChange={f('name')} required />
+        </div>
+        <div>
+          <label className="label">Description</label>
+          <input className="input" value={form.description} onChange={f('description')} />
+        </div>
+        <div>
+          <label className="label">Docker Image</label>
+          <input className="input font-mono" value={form.dockerImage} onChange={f('dockerImage')} required />
+        </div>
+        <div>
+          <label className="label">Startup Command</label>
+          <input className="input font-mono text-sm" value={form.startup} onChange={f('startup')} required />
+        </div>
+        <div>
+          <label className="label">Stop Command</label>
+          <input className="input font-mono" value={form.configStop} onChange={f('configStop')} />
+        </div>
+        <div>
+          <label className="label">Install Script</label>
+          <textarea
+            className="input font-mono text-xs min-h-[120px] resize-y"
+            value={form.scriptInstall}
+            onChange={f('scriptInstall')}
+          />
+        </div>
+        <div className="flex gap-3 pt-2">
+          <button type="button" className="btn-secondary flex-1" onClick={onClose}>Cancel</button>
+          <button type="submit" className="btn-primary flex-1" disabled={isLoading}>
+            {isLoading ? <Spinner size="sm" /> : 'Save Changes'}
           </button>
         </div>
       </form>

@@ -74,6 +74,7 @@ export interface Egg {
   dockerImage: string;
   startup: string;
   configStop: string;
+  scriptInstall?: string | null;
   variables?: EggVariable[];
   nest?: Nest;
   _count?: { servers: number };
