@@ -89,7 +89,7 @@ export async function getServerResources(
 export async function createServerOnNode(
   server: Server & {
     node: { fqdn: string; daemonPort: number; scheme: string; token: string };
-    egg: { startup: string; dockerImage: string };
+    egg: { startup: string; dockerImage: string; scriptInstall?: string | null; scriptContainer?: string | null };
   }
 ): Promise<void> {
   const client = getNodeClient(
@@ -111,6 +111,8 @@ export async function createServerOnNode(
     environment: env,
     invocation: server.startup || server.egg.startup,
     image: server.image || server.egg.dockerImage,
+    installScript: server.egg.scriptInstall ?? undefined,
+    scriptContainer: server.egg.scriptContainer ?? undefined,
     build: {
       memory_limit: server.memory,
       swap: server.swap,
@@ -125,7 +127,7 @@ export async function createServerOnNode(
   };
 
   await client.post('/servers', config);
-  logger.info(`Server ${server.uuid} created on node ${server.node.fqdn}`);
+  logger.info(`Server ${server.uuid} registered on Wings node ${server.node.fqdn}`);
 }
 
 export async function deleteServerFromNode(

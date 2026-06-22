@@ -82,6 +82,23 @@ async function main() {
     });
 
     socket.on('power', async ({ uuid, action }: { uuid: string; action: string }) => {
+      // Auto-load server from panel if Wings doesn't know about it yet
+      if (!serverManager.getServerList().includes(uuid)) {
+        try {
+          const servers = await panelClient.getServers();
+          const cfg = servers.find(s => s.uuid === uuid);
+          if (cfg) {
+            await serverManager.loadServer(cfg);
+            logger.info(`Auto-loaded server ${uuid} from panel`);
+          } else {
+            logger.warn(`Server ${uuid} not found on panel, cannot start`);
+            return;
+          }
+        } catch (err) {
+          logger.warn(`Failed to auto-load server ${uuid}: ${(err as Error).message}`);
+          return;
+        }
+      }
       switch (action) {
         case 'start': await serverManager.startServer(uuid).catch(err => logger.error(err)); break;
         case 'stop': await serverManager.stopServer(uuid).catch(err => logger.error(err)); break;

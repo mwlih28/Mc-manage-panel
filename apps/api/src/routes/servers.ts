@@ -177,6 +177,22 @@ router.post(
       },
     });
 
+    // Notify Wings to load the new server
+    try {
+      const fullServer = await prisma.server.findUnique({
+        where: { id: server.id },
+        include: {
+          node: { select: { id: true, fqdn: true, daemonPort: true, scheme: true, token: true } },
+          egg: { select: { startup: true, dockerImage: true, scriptInstall: true, scriptContainer: true } },
+        },
+      });
+      if (fullServer?.node) {
+        await createServerOnNode(fullServer as Parameters<typeof createServerOnNode>[0]);
+      }
+    } catch (err) {
+      logger.warn(`Failed to register server with Wings: ${(err as Error).message}`);
+    }
+
     return res.status(201).json({ data: server });
   }
 );
