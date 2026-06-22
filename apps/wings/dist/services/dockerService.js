@@ -161,7 +161,10 @@ async function ensureVolumePermissions(image, dataPath) {
         name,
         Image: image,
         Entrypoint: ['/bin/sh', '-c'],
-        Cmd: ['chown -R 1000:1000 /mnt/server && chmod -R u+rwX,go+rX /mnt/server'],
+        // a+rwX: give everyone read+write, plus execute on directories only.
+        // Using absolute assignment (=) instead of additive (+) so stale restrictive
+        // permissions from any previous owner or umask cannot block writes.
+        Cmd: ['chown -R 1000:1000 /mnt/server && find /mnt/server -type d -exec chmod 777 {} + && find /mnt/server -type f -exec chmod 666 {} +'],
         User: '0',
         WorkingDir: '/mnt/server',
         HostConfig: {
