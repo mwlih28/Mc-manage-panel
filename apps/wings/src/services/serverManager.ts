@@ -20,6 +20,7 @@ interface ManagedServer {
   startedAt?: Date;
   statsInterval?: ReturnType<typeof setInterval>;
   logStream?: NodeJS.ReadableStream;
+  stdinStream?: NodeJS.ReadWriteStream;
 }
 
 class ServerManager extends EventEmitter {
@@ -61,6 +62,7 @@ class ServerManager extends EventEmitter {
     if (status === 'running' && containerId) {
       this.attachLogStream(config.uuid, containerId);
       this.startStatsInterval(config.uuid);
+      this.attachStdinStream(config.uuid, containerId);
     }
 
     logger.info(`Server loaded: ${config.uuid} (${status})`);
@@ -162,6 +164,7 @@ class ServerManager extends EventEmitter {
 
       this.attachLogStream(uuid, container.id);
       this.startStatsInterval(uuid);
+      this.attachStdinStream(uuid, container.id);
 
       logger.info(`Server started: ${uuid}`);
     } catch (err) {
@@ -183,6 +186,11 @@ class ServerManager extends EventEmitter {
     if (server.logStream) {
       try { (server.logStream as NodeJS.ReadableStream & { destroy?: () => void }).destroy?.(); } catch { /* ignore */ }
       server.logStream = undefined;
+    }
+
+    if (server.stdinStream) {
+      try { (server.stdinStream as NodeJS.ReadWriteStream & { destroy?: () => void }).destroy?.(); } catch { /* ignore */ }
+      server.stdinStream = undefined;
     }
 
     if (server.containerId) {
@@ -241,27 +249,46 @@ class ServerManager extends EventEmitter {
     const server = this.servers.get(uuid);
     if (!server || server.status !== 'running' || !server.containerId) return;
 
+    // Prefer the persistent PTY stdin stream (attached when container started)
+    if (server.stdinStream) {
+      try {
+        server.stdinStream.write(command + '\n');
+        return;
+      } catch {
+        server.stdinStream = undefined;
+      }
+    }
+
+    // Stdin stream was lost — re-attach and retry once
+    await this.attachStdinStream(uuid, server.containerId);
+    // Re-read from the map; TypeScript's narrowing doesn't track async mutation
+    const stdin = this.servers.get(uuid)?.stdinStream;
+    if (stdin) {
+      try {
+        stdin.write(command + '\n');
+        return;
+      } catch {
+        const srv = this.servers.get(uuid);
+        if (srv) srv.stdinStream = undefined;
+      }
+    }
+
+    // Last resort: docker exec to find the Java process and write to its stdin fd
     try {
       const d = getDocker();
       const container = d.getContainer(server.containerId);
+      const safeCmd = command.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/`/g, '\\`');
       const exec = await container.exec({
-        AttachStdin: true,
+        AttachStdin: false,
         AttachStdout: false,
         AttachStderr: false,
-        Cmd: ['/bin/sh', '-c', `echo "${command.replace(/"/g, '\\"')}" > /proc/1/fd/0`],
+        Cmd: ['/bin/sh', '-c',
+          `JPID=$(pgrep -n -f java 2>/dev/null); echo "${safeCmd}" > /proc/\${JPID:-1}/fd/0`,
+        ],
       });
-      await exec.start({ hijack: true, stdin: true });
-    } catch {
-      // Fallback: try to attach to container stdin
-      try {
-        const d = getDocker();
-        const container = d.getContainer(server.containerId!);
-        const stream = await container.attach({ stream: true, stdin: true, stdout: false, stderr: false });
-        stream.write(command + '\n');
-        stream.end();
-      } catch (err) {
-        logger.error(`Failed to send command to ${uuid}:`, err);
-      }
+      await exec.start({ hijack: false, stdin: false });
+    } catch (err) {
+      logger.error(`Failed to send command to ${uuid}:`, err);
     }
   }
 
@@ -411,8 +438,17 @@ class ServerManager extends EventEmitter {
 
       let buffer = '';
       stream.on('data', (chunk: Buffer) => {
-        // Docker multiplexes stdout/stderr — strip 8-byte header
-        const data = chunk.length > 8 ? chunk.slice(8).toString('utf8') : chunk.toString('utf8');
+        // Containers with Tty:true produce raw output (no 8-byte Docker multiplexer
+        // frame header). Non-TTY containers do have the header. Detect by checking
+        // the Docker frame magic: byte 0 = 0x01 (stdout) or 0x02 (stderr), bytes
+        // 1-3 = 0x00 (reserved).
+        const isMultiplexed =
+          chunk.length > 8 &&
+          (chunk[0] === 0x01 || chunk[0] === 0x02) &&
+          chunk[1] === 0x00 && chunk[2] === 0x00 && chunk[3] === 0x00;
+        const data = isMultiplexed
+          ? chunk.slice(8).toString('utf8')
+          : chunk.toString('utf8');
         buffer += data;
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
@@ -427,6 +463,35 @@ class ServerManager extends EventEmitter {
           this.setStatus(uuid, 'offline');
         }
       });
+    });
+  }
+
+  private attachStdinStream(uuid: string, containerId: string): Promise<void> {
+    const d = getDocker();
+    const container = d.getContainer(containerId);
+
+    return new Promise((resolve) => {
+      container.attach(
+        { stream: true, stdin: true, stdout: false, stderr: false },
+        (err: Error | null, stream?: NodeJS.ReadWriteStream) => {
+          if (err || !stream) {
+            logger.warn(`stdin attach failed for ${uuid}: ${err?.message ?? 'no stream'}`);
+            resolve();
+            return;
+          }
+          const srv = this.servers.get(uuid);
+          if (srv) srv.stdinStream = stream;
+
+          const cleanup = () => {
+            const s = this.servers.get(uuid);
+            if (s) s.stdinStream = undefined;
+          };
+          stream.on('error', cleanup);
+          stream.on('close', cleanup);
+          stream.on('end', cleanup);
+          resolve();
+        }
+      );
     });
   }
 
