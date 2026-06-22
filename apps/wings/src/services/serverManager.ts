@@ -8,7 +8,7 @@ import { getConfig } from '../config';
 import { logger } from '../utils/logger';
 import {
   createContainer, containerExists, imageExists, pullImage,
-  getDocker, getContainerStats,
+  getDocker, getContainerStats, ensureVolumePermissions,
 } from './dockerService';
 import { panelClient } from './panelClient';
 import type { ServerConfig, ServerStatus, ResourceUsage } from '../types';
@@ -135,6 +135,16 @@ class ServerManager extends EventEmitter {
         try { fs.chmodSync(dirPath, 0o777); } catch { /* non-fatal */ }
       }
       this.sendConsole(uuid, '[Wings] Prepared server directories.');
+
+      // Ensure all files in the volume are owned by UID 1000 so the container
+      // user can write them (Wings writes eula.txt etc. as the mcwings OS user,
+      // which has a different UID). This also fixes server.properties being
+      // unwritable on subsequent starts.
+      try {
+        await ensureVolumePermissions(config.image, dataPath);
+      } catch (err) {
+        logger.warn(`ensureVolumePermissions failed (non-fatal): ${(err as Error).message}`);
+      }
 
       // Remove old container if exists
       const existingId = await containerExists(uuid);

@@ -118,6 +118,16 @@ class ServerManager extends events_1.EventEmitter {
                 catch { /* non-fatal */ }
             }
             this.sendConsole(uuid, '[Wings] Prepared server directories.');
+            // Ensure all files in the volume are owned by UID 1000 so the container
+            // user can write them (Wings writes eula.txt etc. as the mcwings OS user,
+            // which has a different UID). This also fixes server.properties being
+            // unwritable on subsequent starts.
+            try {
+                await (0, dockerService_1.ensureVolumePermissions)(config.image, dataPath);
+            }
+            catch (err) {
+                logger_1.logger.warn(`ensureVolumePermissions failed (non-fatal): ${err.message}`);
+            }
             // Remove old container if exists
             const existingId = await (0, dockerService_1.containerExists)(uuid);
             if (existingId) {
