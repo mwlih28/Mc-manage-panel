@@ -15,6 +15,22 @@ interface NodeConnection {
   subscribedUuids: Set<string>;
 }
 
+export interface ConsoleLine {
+  type: 'output' | 'input' | 'status';
+  data: string;
+  timestamp: number;
+}
+
+const MAX_CONSOLE_BUFFER = 300;
+export const consoleBuffer = new Map<string, ConsoleLine[]>();
+
+export function pushConsoleBuffer(uuid: string, line: ConsoleLine): void {
+  const buf = consoleBuffer.get(uuid) ?? [];
+  buf.push(line);
+  if (buf.length > MAX_CONSOLE_BUFFER) buf.shift();
+  consoleBuffer.set(uuid, buf);
+}
+
 const nodeConnections = new Map<string, NodeConnection>();
 
 const WINGS_TO_PANEL_STATUS: Record<string, string> = {
@@ -39,7 +55,6 @@ export function getOrConnectWings(node: NodeInfo, io: SocketServer): Socket {
 
   wingsSocket.on('connect', () => {
     logger.info(`Wings relay connected to node ${node.id} (${url})`);
-    // Re-subscribe all servers after every (re)connect
     for (const uuid of subscribedUuids) {
       wingsSocket.emit('subscribe', uuid);
       logger.debug(`Subscribed server ${uuid} on node ${node.id}`);
@@ -52,7 +67,6 @@ export function getOrConnectWings(node: NodeInfo, io: SocketServer): Socket {
 
   wingsSocket.on('disconnect', (reason) => {
     logger.warn(`Wings relay disconnected from node ${node.id}: ${reason}`);
-    // Do NOT delete from map — socket.io will auto-reconnect and re-subscribe
   });
 
   // Relay all Wings events to panel clients in the correct room
@@ -67,19 +81,25 @@ export function getOrConnectWings(node: NodeInfo, io: SocketServer): Socket {
             ?? (payload.state as string).toUpperCase();
           relayData = { ...payload, status: panelStatus };
         }
-        // Normalize Wings snake_case stats → client camelCase
         if (event === 'server:stats') {
           relayData = {
             uuid,
-            cpuAbsolute: payload.cpu_absolute ?? 0,
-            memoryBytes: payload.memory_bytes ?? 0,
-            memoryLimitBytes: payload.memory_limit_bytes ?? 0,
-            diskBytes: payload.disk_bytes ?? 0,
-            networkRxBytes: payload.network_rx_bytes ?? 0,
-            networkTxBytes: payload.network_tx_bytes ?? 0,
-            uptime: payload.uptime ?? 0,
+            cpuAbsolute: typeof payload.cpu_absolute === 'number' ? payload.cpu_absolute : 0,
+            memoryBytes: typeof payload.memory_bytes === 'number' ? payload.memory_bytes : 0,
+            memoryLimitBytes: typeof payload.memory_limit_bytes === 'number' ? payload.memory_limit_bytes : 0,
+            diskBytes: typeof payload.disk_bytes === 'number' ? payload.disk_bytes : 0,
+            networkRxBytes: typeof payload.network_rx_bytes === 'number' ? payload.network_rx_bytes : 0,
+            networkTxBytes: typeof payload.network_tx_bytes === 'number' ? payload.network_tx_bytes : 0,
+            uptime: typeof payload.uptime === 'number' ? payload.uptime : 0,
             timestamp: Date.now(),
           };
+        }
+        if (event === 'server:console') {
+          pushConsoleBuffer(uuid, {
+            type: (payload.type as ConsoleLine['type']) ?? 'output',
+            data: (payload.data as string) ?? '',
+            timestamp: typeof payload.timestamp === 'number' ? payload.timestamp : Date.now(),
+          });
         }
         io.to(`server:uuid:${uuid}`).emit(event, relayData);
       }
@@ -99,7 +119,6 @@ export function subscribeServerOnWings(nodeId: string, serverUuid: string): void
     conn.socket.emit('subscribe', serverUuid);
     logger.debug(`Subscribed server ${serverUuid} on node ${nodeId}`);
   }
-  // If not connected yet, the 'connect' handler above will send all pending subs
 }
 
 export function sendCommandToWings(nodeId: string, serverUuid: string, command: string): void {

@@ -7,6 +7,7 @@ import { sendPowerAction, sendCommand as wingsSendCommand } from './wingsClient'
 import {
   getOrConnectWings, subscribeServerOnWings,
   sendCommandToWings, sendPowerToWings,
+  consoleBuffer, pushConsoleBuffer,
 } from './wingsRelay';
 
 interface ConsoleMessage {
@@ -55,6 +56,12 @@ export function initSocketServer(httpServer: HttpServer, corsOrigin: string): So
       // Send initial status
       socket.emit('server:status', { serverId, status: server.status, timestamp: Date.now() });
 
+      // Replay console history so the client gets recent output after refresh
+      const history = consoleBuffer.get(server.uuid) ?? [];
+      if (history.length > 0) {
+        socket.emit('server:console:history', history);
+      }
+
       // Connect to Wings relay if node available
       if (server.node) {
         try {
@@ -84,10 +91,10 @@ export function initSocketServer(httpServer: HttpServer, corsOrigin: string): So
       });
       if (!server) return;
 
-      // Echo command to panel clients
-      io.to(`server:${serverId}`).emit('server:console', {
-        serverId, type: 'input', data: `> ${command}`, timestamp: Date.now(),
-      } as ConsoleMessage);
+      // Echo command to panel clients and buffer it
+      const inputLine: ConsoleMessage = { type: 'input', data: `> ${command}`, timestamp: Date.now() };
+      io.to(`server:${serverId}`).emit('server:console', { serverId, ...inputLine });
+      pushConsoleBuffer(server.uuid, inputLine);
 
       // Try Wings relay first, fall back to HTTP
       if (server.node) {

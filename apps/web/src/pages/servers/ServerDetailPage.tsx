@@ -214,6 +214,10 @@ export function ServerDetailPage() {
       setStats(statsData);
     });
 
+    socket.on('server:console:history', (lines: ConsoleLine[]) => {
+      setConsoleLines(lines.map((l) => ({ ...l, historical: true } as ConsoleLine & { historical?: boolean })));
+    });
+
     socket.on('server:console', (msg: { data: string; type?: ConsoleLine['type']; timestamp?: number }) => {
       setConsoleLines((prev) => [...prev.slice(-500), {
         type: msg.type ?? 'output',
@@ -266,8 +270,10 @@ export function ServerDetailPage() {
   const isRunning = currentStatus === 'RUNNING';
   const isOffline = currentStatus === 'OFFLINE' || currentStatus === 'INSTALL_FAILED';
 
-  const cpuUsage = stats ? Math.min(stats.cpuAbsolute, 100) : 0;
-  const memUsage = stats ? (stats.memoryBytes / stats.memoryLimitBytes) * 100 : 0;
+  const cpuUsage = stats && !isNaN(stats.cpuAbsolute) ? Math.min(stats.cpuAbsolute, 100) : 0;
+  const memUsage = stats && stats.memoryLimitBytes > 0
+    ? Math.min((stats.memoryBytes / stats.memoryLimitBytes) * 100, 100)
+    : 0;
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -400,23 +406,34 @@ export function ServerDetailPage() {
         <div className="flex gap-4">
           <div className="card flex-1 min-w-0">
             <div
-              className="bg-dark-1000 rounded-t-xl p-4 h-96 overflow-y-auto font-mono text-xs scrollbar-none"
-              style={{ background: '#0d1117' }}
+              className="rounded-t-xl p-4 h-96 overflow-y-auto font-mono text-xs scrollbar-none"
+              style={{ background: '#0b0f14' }}
             >
               {consoleLines.length === 0 ? (
-                <p className="text-slate-600">Waiting for output...</p>
+                <p className="text-slate-600 italic">Waiting for output...</p>
               ) : (
-                consoleLines.map((line, i) => (
-                  <p
-                    key={i}
-                    className={cn(
-                      'leading-relaxed whitespace-pre-wrap break-all',
-                      line.type === 'input' ? 'text-yellow-300' : 'text-green-300/90'
-                    )}
-                  >
-                    {line.data}
-                  </p>
-                ))
+                consoleLines.map((line, i) => {
+                  const text = (line.data || '').replace(/\x1b\[[0-9;]*[mGKHF]/g, '').replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
+                  const isError = /\b(error|exception|fatal|severe)\b/i.test(text);
+                  const isWarn = /\b(warn|warning)\b/i.test(text);
+                  return (
+                    <p
+                      key={i}
+                      className={cn(
+                        'leading-relaxed whitespace-pre-wrap break-all',
+                        line.type === 'input'
+                          ? 'text-yellow-300/90'
+                          : isError
+                            ? 'text-red-400/90'
+                            : isWarn
+                              ? 'text-yellow-400/80'
+                              : 'text-emerald-300/80'
+                      )}
+                    >
+                      {text}
+                    </p>
+                  );
+                })
               )}
               <div ref={consoleEndRef} />
             </div>

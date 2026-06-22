@@ -7,6 +7,13 @@ interface NodeInfo {
     scheme: string;
     token: string;
 }
+export interface ConsoleLine {
+    type: 'output' | 'input' | 'status';
+    data: string;
+    timestamp: number;
+}
+export declare const consoleBuffer: Map<string, ConsoleLine[]>;
+export declare function pushConsoleBuffer(uuid: string, line: ConsoleLine): void;
 export declare function getOrConnectWings(node: NodeInfo, io: SocketServer): Socket;
 export declare function subscribeServerOnWings(nodeId: string, serverUuid: string): void;
 export declare function sendCommandToWings(nodeId: string, serverUuid: string, command: string): void;

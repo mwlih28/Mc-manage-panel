@@ -47,6 +47,11 @@ function initSocketServer(httpServer, corsOrigin) {
             socket.join(`server:uuid:${server.uuid}`);
             // Send initial status
             socket.emit('server:status', { serverId, status: server.status, timestamp: Date.now() });
+            // Replay console history so the client gets recent output after refresh
+            const history = wingsRelay_1.consoleBuffer.get(server.uuid) ?? [];
+            if (history.length > 0) {
+                socket.emit('server:console:history', history);
+            }
             // Connect to Wings relay if node available
             if (server.node) {
                 try {
@@ -75,10 +80,10 @@ function initSocketServer(httpServer, corsOrigin) {
             });
             if (!server)
                 return;
-            // Echo command to panel clients
-            io.to(`server:${serverId}`).emit('server:console', {
-                serverId, type: 'input', data: `> ${command}`, timestamp: Date.now(),
-            });
+            // Echo command to panel clients and buffer it
+            const inputLine = { type: 'input', data: `> ${command}`, timestamp: Date.now() };
+            io.to(`server:${serverId}`).emit('server:console', { serverId, ...inputLine });
+            (0, wingsRelay_1.pushConsoleBuffer)(server.uuid, inputLine);
             // Try Wings relay first, fall back to HTTP
             if (server.node) {
                 try {
