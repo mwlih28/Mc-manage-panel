@@ -101,25 +101,30 @@ router.post('/', authenticate, requireAdmin, async (req: AuthRequest, res: Respo
 
 // PUT /eggs/:id
 router.put('/:id', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
-  const egg = await prisma.egg.findUnique({ where: { id: req.params.id } });
-  if (!egg) return res.status(404).json({ message: 'Egg not found' });
+  try {
+    const egg = await prisma.egg.findUnique({ where: { id: req.params.id } });
+    if (!egg) return res.status(404).json({ message: 'Egg not found' });
 
-  const { name, description, dockerImage, startup, configStop, scriptInstall } = req.body;
+    const { name, description, dockerImage, startup, configStop, scriptInstall } = req.body;
 
-  const updated = await prisma.egg.update({
-    where: { id: req.params.id },
-    data: {
-      ...(name && { name }),
-      ...(description !== undefined && { description }),
-      ...(dockerImage && { dockerImage }),
-      ...(startup && { startup }),
-      ...(configStop !== undefined && { configStop }),
-      ...(scriptInstall !== undefined && { scriptInstall: scriptInstall || null }),
-    },
-    include: { variables: true, nest: true },
-  });
+    const updated = await prisma.egg.update({
+      where: { id: req.params.id },
+      data: {
+        ...(name && { name }),
+        ...(description !== undefined && { description }),
+        ...(dockerImage && { dockerImage }),
+        ...(startup && { startup }),
+        ...(configStop !== undefined && { configStop }),
+        ...(scriptInstall !== undefined && { scriptInstall: scriptInstall || null }),
+      },
+      include: { variables: true, nest: true },
+    });
 
-  return res.json({ data: updated });
+    return res.json({ data: updated });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to update egg';
+    return res.status(500).json({ message });
+  }
 });
 
 // DELETE /eggs/:id
