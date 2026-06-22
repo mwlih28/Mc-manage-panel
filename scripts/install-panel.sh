@@ -184,10 +184,15 @@ success ".env written"
 # ────────────────────────────── Build API ──────────────────────────────
 step "Installing and building API"
 cd "${PANEL_DIR}/apps/api"
+# Remove the Railway-generated lock file so npm resolves packages fresh on this system
+rm -f package-lock.json
 info "npm install..."
-npm install --no-fund --no-audit --quiet
+npm install --no-fund --no-audit
+# Verify prisma binary exists
+[[ -x ./node_modules/.bin/prisma ]] \
+  || error "Prisma binary not found after npm install. Check npm output above."
 info "Generating Prisma client..."
-./node_modules/.bin/prisma generate --quiet
+./node_modules/.bin/prisma generate
 info "Compiling TypeScript..."
 npm run build
 success "API built → ${PANEL_DIR}/apps/api/dist"
@@ -195,8 +200,9 @@ success "API built → ${PANEL_DIR}/apps/api/dist"
 # ────────────────────────────── Build Web ──────────────────────────────
 step "Installing and building Web"
 cd "${PANEL_DIR}/apps/web"
+rm -f package-lock.json
 info "npm install..."
-npm install --no-fund --no-audit --quiet
+npm install --no-fund --no-audit
 info "Building frontend (VITE_API_URL=https://${PANEL_DOMAIN})..."
 VITE_API_URL="https://${PANEL_DOMAIN}" npm run build
 success "Web built → ${PANEL_DIR}/apps/web/dist"
