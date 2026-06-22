@@ -24,7 +24,7 @@ interface FileEntry {
   mode: string;
   size: number;
   isFile: boolean;
-  isDirectory: boolean;
+  isDir: boolean;
   isSymlink: boolean;
   modifiedAt: string;
 }
@@ -125,19 +125,26 @@ export function ServerDetailPage() {
       socket.emit('server:subscribe', id);
     });
 
-    socket.on('server:status', ({ status }: { status: ServerStatus }) => {
-      setCurrentStatus(status);
-      queryClient.setQueryData(['server', id], (old: Server | undefined) =>
-        old ? { ...old, status } : old
-      );
+    socket.on('server:status', (msg: { status?: ServerStatus; state?: string; serverId?: string }) => {
+      const newStatus = (msg.status || (msg.state ? msg.state.toUpperCase() : undefined)) as ServerStatus | undefined;
+      if (newStatus) {
+        setCurrentStatus(newStatus);
+        queryClient.setQueryData(['server', id], (old: Server | undefined) =>
+          old ? { ...old, status: newStatus } : old
+        );
+      }
     });
 
     socket.on('server:stats', (statsData: ServerStats) => {
       setStats(statsData);
     });
 
-    socket.on('server:console', (line: ConsoleLine) => {
-      setConsoleLines((prev) => [...prev.slice(-500), line]);
+    socket.on('server:console', (msg: { data: string; type?: ConsoleLine['type']; timestamp?: number }) => {
+      setConsoleLines((prev) => [...prev.slice(-500), {
+        type: msg.type ?? 'output',
+        data: msg.data,
+        timestamp: msg.timestamp ?? Date.now(),
+      }]);
     });
 
     return () => {
@@ -409,18 +416,18 @@ export function ServerDetailPage() {
                   <div className="p-10 text-center text-slate-500 text-sm">Empty directory</div>
                 )}
                 {(filesData?.files as FileEntry[] || []).sort((a, b) =>
-                  a.isDirectory === b.isDirectory ? a.name.localeCompare(b.name) : a.isDirectory ? -1 : 1
+                  a.isDir === b.isDir ? a.name.localeCompare(b.name) : a.isDir ? -1 : 1
                 ).map((file) => (
                   <div key={file.name} className="flex items-center gap-3 px-4 py-2.5 hover:bg-dark-800/30 group">
                     <div className="text-slate-500 shrink-0">
-                      {file.isDirectory
+                      {file.isDir
                         ? <FolderOpen size={16} className="text-yellow-400/70" />
                         : <File size={16} className="text-slate-500" />}
                     </div>
                     <button
                       className="flex-1 text-left text-sm text-slate-300 hover:text-slate-100 truncate"
                       onClick={() => {
-                        if (file.isDirectory) {
+                        if (file.isDir) {
                           setCurrentDir(currentDir.replace(/\/$/, '') + '/' + file.name);
                         } else {
                           openFile((currentDir.replace(/\/$/, '') + '/' + file.name));

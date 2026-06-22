@@ -75,6 +75,17 @@ class ServerManager extends EventEmitter {
     const dataPath = path.join(cfg.system.data, uuid);
     fs.mkdirSync(dataPath, { recursive: true });
 
+    // Auto-accept Minecraft EULA
+    const eulaPath = path.join(dataPath, 'eula.txt');
+    if (!fs.existsSync(eulaPath)) {
+      fs.writeFileSync(eulaPath, 'eula=true\n', 'utf8');
+    } else {
+      const eulaContent = fs.readFileSync(eulaPath, 'utf8');
+      if (eulaContent.includes('eula=false')) {
+        fs.writeFileSync(eulaPath, eulaContent.replace('eula=false', 'eula=true'), 'utf8');
+      }
+    }
+
     try {
       const { config } = server;
 
@@ -251,12 +262,12 @@ class ServerManager extends EventEmitter {
     if (!server) return;
     server.status = status;
     this.emit('status', { uuid, status });
-    this.io?.to(`server:${uuid}`).emit('server:status', { state: status });
+    this.io?.to(`server:${uuid}`).emit('server:status', { uuid, state: status });
     panelClient.reportStatus(uuid, status).catch(() => { /* best effort */ });
   }
 
   private sendConsole(uuid: string, line: string) {
-    this.io?.to(`server:${uuid}`).emit('server:console', { data: line });
+    this.io?.to(`server:${uuid}`).emit('server:console', { uuid, data: line });
     this.emit('console', { uuid, line });
   }
 
@@ -305,7 +316,7 @@ class ServerManager extends EventEmitter {
     server.statsInterval = setInterval(async () => {
       if (server.status !== 'running') return;
       const resources = await this.getResources(uuid);
-      this.io?.to(`server:${uuid}`).emit('server:stats', resources);
+      this.io?.to(`server:${uuid}`).emit('server:stats', { uuid, ...resources });
     }, 2000);
   }
 

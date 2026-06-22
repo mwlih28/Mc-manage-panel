@@ -39,14 +39,24 @@ export function getOrConnectWings(node: NodeInfo, io: SocketServer): Socket {
     nodeConnections.delete(node.id);
   });
 
+  const WINGS_TO_PANEL_STATUS: Record<string, string> = {
+    running: 'RUNNING', offline: 'OFFLINE', starting: 'STARTING', stopping: 'STOPPING', installing: 'INSTALLING',
+  };
+
   // Relay all Wings events to panel clients
   wingsSocket.onAny((event: string, data: unknown) => {
     if (event === 'server:console' || event === 'server:stats' || event === 'server:status') {
       const payload = data as Record<string, unknown>;
       const uuid = payload?.uuid as string;
       if (uuid) {
-        // Find panel room by server uuid and relay
-        io.to(`server:uuid:${uuid}`).emit(event, data);
+        let relayData: unknown = data;
+        // Normalize Wings status (lowercase 'state') to panel format (uppercase 'status')
+        if (event === 'server:status' && payload.state) {
+          const panelStatus = WINGS_TO_PANEL_STATUS[payload.state as string]
+            ?? (payload.state as string).toUpperCase();
+          relayData = { ...payload, status: panelStatus };
+        }
+        io.to(`server:uuid:${uuid}`).emit(event, relayData);
       }
     }
   });
