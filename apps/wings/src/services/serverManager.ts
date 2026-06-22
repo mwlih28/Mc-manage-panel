@@ -74,6 +74,7 @@ class ServerManager extends EventEmitter {
     const cfg = getConfig();
     const dataPath = path.join(cfg.system.data, uuid);
     fs.mkdirSync(dataPath, { recursive: true });
+    try { fs.chmodSync(dataPath, 0o777); } catch { /* ignore if insufficient perms */ }
 
     // Auto-accept Minecraft EULA
     const eulaPath = path.join(dataPath, 'eula.txt');
