@@ -1,8 +1,12 @@
+[phases.setup]
+nixPkgs = []
+
 [phases.install]
 cmds = ["npm install"]
 
 [phases.build]
 cmds = ["npm run build"]
+envVars = ["VITE_API_URL"]
 
 [start]
 cmd = "npx serve -s dist -l $PORT"
