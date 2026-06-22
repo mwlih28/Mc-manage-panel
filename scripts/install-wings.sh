@@ -154,7 +154,7 @@ mkdir -p \
   "$DATA_DIR/tmp" \
   "$LOG_DIR"
 chown -R "${WINGS_USER}:${WINGS_USER}" "$WINGS_DIR" "$DATA_DIR" "$LOG_DIR"
-chown root:root "$CONFIG_DIR"
+chown root:"${WINGS_USER}" "$CONFIG_DIR"
 chmod 750 "$CONFIG_DIR"
 success "Directories created"
 
@@ -273,6 +273,7 @@ logging:
   level: 'info'
 YAML
 
+chown "${WINGS_USER}:${WINGS_USER}" "${CONFIG_DIR}/config.yml"
 chmod 600 "${CONFIG_DIR}/config.yml"
 success "Config → ${CONFIG_DIR}/config.yml"
 
