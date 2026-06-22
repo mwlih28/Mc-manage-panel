@@ -1,0 +1,9 @@
+node_modules
+dist
+.env
+.env.*
+logs
+*.log
+.git
+Dockerfile.sandboxtest
+_sandbox_ca.crt
