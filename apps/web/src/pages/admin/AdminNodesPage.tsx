@@ -1,8 +1,16 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Cpu, Trash2, Settings, Wifi, WifiOff, Copy, Check, Terminal } from 'lucide-react';
+import { Plus, Cpu, Trash2, Settings, Wifi, WifiOff, Copy, Check, Terminal, Network } from 'lucide-react';
 import api from '@/lib/axios';
 import { Node } from '@/types';
+
+interface Allocation {
+  id: string;
+  ip: string;
+  port: number;
+  assigned: boolean;
+  server?: { id: string; name: string };
+}
 import { formatBytes } from '@/lib/utils';
 import { Spinner } from '@/components/ui/Spinner';
 import { Modal } from '@/components/ui/Modal';
@@ -169,7 +177,8 @@ function CopyButton({ text }: { text: string }) {
 }
 
 function NodeDetailModal({ node, onClose, onSuccess }: { node: Node; onClose: () => void; onSuccess: () => void }) {
-  const [tab, setTab] = useState<'configuration' | 'settings'>('configuration');
+  const [tab, setTab] = useState<'configuration' | 'allocations' | 'settings'>('configuration');
+  const queryClient = useQueryClient();
   const [form, setForm] = useState({
     name: node.name,
     description: node.description || '',
@@ -184,6 +193,43 @@ function NodeDetailModal({ node, onClose, onSuccess }: { node: Node; onClose: ()
   const [isLoading, setIsLoading] = useState(false);
 
   const installCmd = `bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/claude%2Fpterodactyl-panel-builder-8uy3tp/scripts/install-wings.sh)`;
+
+  const { data: allocData, isLoading: allocLoading } = useQuery({
+    queryKey: ['node-allocations', node.id],
+    queryFn: () => api.get(`/nodes/${node.id}/allocations?perPage=100`).then((r) => r.data),
+    enabled: tab === 'allocations',
+  });
+  const allocations: Allocation[] = allocData?.data || [];
+
+  const [newIp, setNewIp] = useState('');
+  const [newPorts, setNewPorts] = useState('');
+  const [addingAlloc, setAddingAlloc] = useState(false);
+
+  const addAllocations = async () => {
+    const ip = newIp.trim();
+    const ports = newPorts.split(',').map((p) => parseInt(p.trim())).filter((p) => !isNaN(p) && p > 0);
+    if (!ip || ports.length === 0) { toast.error('Enter IP and at least one port'); return; }
+    setAddingAlloc(true);
+    try {
+      await api.post(`/nodes/${node.id}/allocations`, { ip, ports });
+      toast.success(`Added ${ports.length} allocation(s)`);
+      setNewIp(''); setNewPorts('');
+      queryClient.invalidateQueries({ queryKey: ['node-allocations', node.id] });
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      toast.error(e.response?.data?.message || 'Failed to add allocations');
+    } finally { setAddingAlloc(false); }
+  };
+
+  const deleteAllocation = async (allocId: string) => {
+    try {
+      await api.delete(`/nodes/${node.id}/allocations/${allocId}`);
+      queryClient.invalidateQueries({ queryKey: ['node-allocations', node.id] });
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      toast.error(e.response?.data?.message || 'Failed to delete allocation');
+    }
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -207,7 +253,7 @@ function NodeDetailModal({ node, onClose, onSuccess }: { node: Node; onClose: ()
     <Modal isOpen onClose={onClose} title={node.name} size="lg">
       {/* Tabs */}
       <div className="flex gap-1 mb-5 border-b border-slate-700/50 -mt-1">
-        {(['configuration', 'settings'] as const).map((t) => (
+        {(['configuration', 'allocations', 'settings'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -277,6 +323,53 @@ function NodeDetailModal({ node, onClose, onSuccess }: { node: Node; onClose: ()
               <li>When install finishes, this node will show <span className="text-green-400">ONLINE</span></li>
             </ol>
           </div>
+        </div>
+      )}
+
+      {tab === 'allocations' && (
+        <div className="space-y-4">
+          {/* Add allocations */}
+          <div className="rounded-lg border border-slate-700/50 p-4 space-y-3">
+            <p className="text-sm font-medium text-slate-200 flex items-center gap-2"><Network size={14} /> Add Allocations</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="label">IP Address</label>
+                <input className="input" placeholder="192.168.1.1" value={newIp} onChange={(e) => setNewIp(e.target.value)} />
+              </div>
+              <div>
+                <label className="label">Ports (comma-separated)</label>
+                <input className="input" placeholder="25565, 25566, 25567" value={newPorts} onChange={(e) => setNewPorts(e.target.value)} />
+              </div>
+            </div>
+            <button className="btn-primary btn-sm" onClick={addAllocations} disabled={addingAlloc}>
+              {addingAlloc ? <Spinner size="sm" /> : <><Plus size={13} /> Add Ports</>}
+            </button>
+          </div>
+
+          {/* Allocation list */}
+          {allocLoading ? (
+            <div className="flex justify-center py-6"><Spinner /></div>
+          ) : allocations.length === 0 ? (
+            <div className="text-center py-6 text-slate-500 text-sm">No allocations yet. Add at least one port above.</div>
+          ) : (
+            <div className="space-y-1 max-h-64 overflow-y-auto">
+              {allocations.map((a) => (
+                <div key={a.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-dark-950/60">
+                  <div className="flex items-center gap-3">
+                    <code className="text-xs font-mono text-slate-300">{a.ip}:{a.port}</code>
+                    {a.assigned
+                      ? <span className="badge badge-blue text-[10px]">{a.server?.name || 'in use'}</span>
+                      : <span className="badge badge-green text-[10px]">free</span>}
+                  </div>
+                  {!a.assigned && (
+                    <button className="btn-danger btn-sm py-0.5 px-2" onClick={() => deleteAllocation(a.id)}>
+                      <Trash2 size={11} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
