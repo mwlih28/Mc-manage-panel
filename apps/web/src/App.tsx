@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { LoginPage } from '@/pages/auth/LoginPage';
 import { RegisterPage } from '@/pages/auth/RegisterPage';
+import { SetupPage } from '@/pages/auth/SetupPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { ServersPage } from '@/pages/servers/ServersPage';
 import { ServerDetailPage } from '@/pages/servers/ServerDetailPage';
@@ -18,6 +19,7 @@ export default function App() {
   return (
     <Routes>
       {/* Public routes */}
+      <Route path="/setup" element={<SetupPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
 

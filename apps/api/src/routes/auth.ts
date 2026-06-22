@@ -146,4 +146,57 @@ router.post('/logout', authenticate, async (req: AuthRequest, res: Response) => 
   return res.json({ message: 'Logged out successfully' });
 });
 
+// GET /auth/setup/status - check if initial setup is needed
+router.get('/setup/status', async (_req, res) => {
+  const count = await prisma.user.count();
+  return res.json({ needsSetup: count === 0 });
+});
+
+// POST /auth/setup - create first admin user (only works if no users exist)
+router.post(
+  '/setup',
+  [
+    body('email').isEmail().normalizeEmail(),
+    body('username').isLength({ min: 3, max: 20 }).matches(/^[a-zA-Z0-9_]+$/),
+    body('password').isLength({ min: 8 }),
+    body('firstName').notEmpty().trim(),
+    body('lastName').notEmpty().trim(),
+  ],
+  async (req: Request, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(422).json({ errors: errors.array() });
+    }
+
+    const count = await prisma.user.count();
+    if (count > 0) {
+      return res.status(403).json({ message: 'Setup already completed' });
+    }
+
+    const { email, username, password, firstName, lastName } = req.body;
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    const user = await prisma.user.create({
+      data: {
+        email,
+        username,
+        password: hashedPassword,
+        firstName,
+        lastName,
+        role: 'ADMIN',
+        rootAdmin: true,
+      },
+    });
+
+    const tokens = generateTokenPair({
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+    });
+
+    const { password: _pw, ...userWithoutPassword } = user;
+    return res.status(201).json({ user: userWithoutPassword, ...tokens });
+  }
+);
+
 export default router;

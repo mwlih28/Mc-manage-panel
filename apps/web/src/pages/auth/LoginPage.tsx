@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Navigate, useNavigate, useLocation, Link } from 'react-router-dom';
 import { Server, Eye, EyeOff } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
@@ -11,12 +11,28 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [checkingSetup, setCheckingSetup] = useState(true);
+  const [needsSetup, setNeedsSetup] = useState(false);
   const { setAuth, isAuthenticated } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/dashboard';
 
+  useEffect(() => {
+    api.get('/auth/setup/status').then(({ data }) => {
+      setNeedsSetup(data.needsSetup);
+    }).finally(() => setCheckingSetup(false));
+  }, []);
+
   if (isAuthenticated) return <Navigate to="/dashboard" replace />;
+  if (needsSetup) return <Navigate to="/setup" replace />;
+  if (checkingSetup) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-dark-950">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
