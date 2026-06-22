@@ -95,6 +95,10 @@ class ServerManager extends EventEmitter {
         return config.environment[key.trim()] ?? '';
       });
 
+      // Make the data directory world-writable BEFORE install so the install
+      // container (uid 1000) can write files into it.
+      try { fs.chmodSync(dataPath, 0o777); } catch { /* non-fatal */ }
+
       // Pull image if needed
       if (!await imageExists(config.image)) {
         this.sendConsole(uuid, `[Wings] Pulling image ${config.image}...`);
@@ -116,23 +120,14 @@ class ServerManager extends EventEmitter {
         }
       }
 
-      // Pre-create directories that server software commonly needs (e.g. Paper's
-      // cache/ dir). Creating them on the HOST before container start means the
-      // container sees them already existing, so no permission error on mkdir.
-      // chmod 777 makes them writable by any uid including the container user.
+      // Pre-create subdirectories that server software needs (e.g. Paper's cache/).
+      // chmod 777 so any container uid can write without requiring a root chown.
       for (const dir of ['cache', 'logs', 'config']) {
         const dirPath = path.join(dataPath, dir);
         fs.mkdirSync(dirPath, { recursive: true });
         try { fs.chmodSync(dirPath, 0o777); } catch { /* non-fatal */ }
       }
-      this.sendConsole(uuid, '[Wings] Pre-created server directories (cache, logs, config).');
-      // Best-effort chown; Wings may or may not be root
-      try {
-        execSync(`chown -R 1000:1000 "${dataPath}"`);
-        this.sendConsole(uuid, '[Wings] Volume ownership set to uid 1000.');
-      } catch {
-        // Not root — that is fine, chmod 777 dirs above cover the common cases
-      }
+      this.sendConsole(uuid, '[Wings] Prepared server directories.');
 
       // Remove old container if exists
       const existingId = await containerExists(uuid);

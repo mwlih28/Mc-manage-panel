@@ -6,7 +6,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.serverManager = void 0;
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
-const child_process_1 = require("child_process");
 const events_1 = require("events");
 const config_1 = require("../config");
 const logger_1 = require("../utils/logger");
@@ -78,6 +77,12 @@ class ServerManager extends events_1.EventEmitter {
             const invocation = config.invocation.replace(/\{\{([^}]+)\}\}/g, (_, key) => {
                 return config.environment[key.trim()] ?? '';
             });
+            // Make the data directory world-writable BEFORE install so the install
+            // container (uid 1000) can write files into it.
+            try {
+                fs_1.default.chmodSync(dataPath, 0o777);
+            }
+            catch { /* non-fatal */ }
             // Pull image if needed
             if (!await (0, dockerService_1.imageExists)(config.image)) {
                 this.sendConsole(uuid, `[Wings] Pulling image ${config.image}...`);
@@ -98,10 +103,8 @@ class ServerManager extends events_1.EventEmitter {
                     throw err;
                 }
             }
-            // Pre-create directories that server software commonly needs (e.g. Paper's
-            // cache/ dir). Creating them on the HOST before container start means the
-            // container sees them already existing, so no permission error on mkdir.
-            // chmod 777 makes them writable by any uid including the container user.
+            // Pre-create subdirectories that server software needs (e.g. Paper's cache/).
+            // chmod 777 so any container uid can write without requiring a root chown.
             for (const dir of ['cache', 'logs', 'config']) {
                 const dirPath = path_1.default.join(dataPath, dir);
                 fs_1.default.mkdirSync(dirPath, { recursive: true });
@@ -110,15 +113,7 @@ class ServerManager extends events_1.EventEmitter {
                 }
                 catch { /* non-fatal */ }
             }
-            this.sendConsole(uuid, '[Wings] Pre-created server directories (cache, logs, config).');
-            // Best-effort chown; Wings may or may not be root
-            try {
-                (0, child_process_1.execSync)(`chown -R 1000:1000 "${dataPath}"`);
-                this.sendConsole(uuid, '[Wings] Volume ownership set to uid 1000.');
-            }
-            catch {
-                // Not root — that is fine, chmod 777 dirs above cover the common cases
-            }
+            this.sendConsole(uuid, '[Wings] Prepared server directories.');
             // Remove old container if exists
             const existingId = await (0, dockerService_1.containerExists)(uuid);
             if (existingId) {
