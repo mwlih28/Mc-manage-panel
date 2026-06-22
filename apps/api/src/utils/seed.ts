@@ -98,7 +98,10 @@ async function main() {
   // Create Egg
   const paperEgg = await prisma.egg.upsert({
     where: { uuid: '00000000-0000-0000-0000-000000000002' },
-    update: {},
+    update: {
+      dockerImage: 'ghcr.io/pterodactyl/yolks:java_21',
+      startup: 'java -Xms128M -Xmx{{SERVER_MEMORY}}M -jar {{SERVER_JARFILE}}',
+    },
     create: {
       uuid: '00000000-0000-0000-0000-000000000002',
       nestId: minecraftNest.id,
@@ -110,6 +113,15 @@ async function main() {
       configStop: '^C',
     },
   });
+
+  // Migrate any existing servers still using an older Java image to java_21
+  await prisma.server.updateMany({
+    where: {
+      image: { in: ['ghcr.io/pterodactyl/yolks:java_17', 'ghcr.io/pterodactyl/yolks:java_11', 'ghcr.io/pterodactyl/yolks:java_8'] },
+    },
+    data: { image: 'ghcr.io/pterodactyl/yolks:java_21' },
+  });
+  console.log('Migrated servers to java_21 image');
 
   // Create demo server
   const shortUuid = uuidv4().replace(/-/g, '').slice(0, 8);
