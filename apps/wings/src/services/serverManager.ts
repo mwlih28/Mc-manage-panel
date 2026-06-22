@@ -7,7 +7,7 @@ import { getConfig } from '../config';
 import { logger } from '../utils/logger';
 import {
   createContainer, containerExists, imageExists, pullImage,
-  getDocker, getContainerStats,
+  getDocker, getContainerStats, ensureVolumePermissions,
 } from './dockerService';
 import { panelClient } from './panelClient';
 import type { ServerConfig, ServerStatus, ResourceUsage } from '../types';
@@ -99,6 +99,15 @@ class ServerManager extends EventEmitter {
       if (!await imageExists(config.image)) {
         this.sendConsole(uuid, `[Wings] Pulling image ${config.image}...`);
         await pullImage(config.image);
+      }
+
+      // Ensure the data volume is owned by uid 1000 so the container runtime user
+      // (and the install step) can create files/dirs like Paper's cache/ folder.
+      this.sendConsole(uuid, '[Wings] Preparing volume permissions...');
+      try {
+        await ensureVolumePermissions(config.image, dataPath);
+      } catch (err) {
+        logger.warn(`Volume permission prep failed for ${uuid}:`, err);
       }
 
       // Run install script on first start (when server jar doesn't exist)
@@ -294,10 +303,10 @@ class ServerManager extends EventEmitter {
       if (existing.length > 0) await d.getContainer(existing[0].Id).remove({ force: true });
     } catch { /* ignore */ }
 
-    // Write install script to data dir, append chown so main container (uid 1000) can write
+    // Write install script to data dir. Volume ownership is handled separately by
+    // ensureVolumePermissions(), so the install runs as uid 1000 on a writable dir.
     const scriptFile = path.join(dataPath, '.wings_install.sh');
-    const scriptContent = config.installScript! + '\nchown -R 1000:1000 /mnt/server 2>/dev/null || true\n';
-    fs.writeFileSync(scriptFile, scriptContent, 'utf8');
+    fs.writeFileSync(scriptFile, config.installScript!, 'utf8');
 
     const envArray = Object.entries(config.environment).map(([k, v]) => `${k}=${v}`);
 

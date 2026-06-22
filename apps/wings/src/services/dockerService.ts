@@ -140,6 +140,53 @@ export async function createContainer(
   return container as unknown as Docker.Container;
 }
 
+/**
+ * Ensure the server data volume is owned by uid 1000 (the container runtime user).
+ *
+ * The yolks images run as uid 1000 via an ENTRYPOINT that switches user regardless
+ * of Docker's User setting, and the main container drops ALL capabilities — so it
+ * cannot fix its own volume ownership. The Wings process itself often cannot chown
+ * the host directory (it is not root / does not own it). We therefore run a tiny,
+ * short-lived container as root with the entrypoint overridden (to bypass the
+ * uid-1000 switch). Since the Docker daemon runs as root and there is no user
+ * namespace remapping, container-root == host-root, so this chown affects the
+ * bind-mounted host directory directly.
+ */
+export async function ensureVolumePermissions(image: string, dataPath: string): Promise<void> {
+  const d = getDocker();
+  const name = `mc_perms_${Date.now().toString(36)}`;
+
+  // Remove any stale perms container
+  try {
+    const existing = await d.listContainers({ all: true, filters: { name: [name] } });
+    if (existing.length > 0) await d.getContainer(existing[0].Id).remove({ force: true });
+  } catch { /* ignore */ }
+
+  const container = await d.createContainer({
+    name,
+    Image: image,
+    Entrypoint: ['/bin/sh', '-c'],
+    Cmd: ['chown -R 1000:1000 /mnt/server && chmod -R u+rwX,go+rX /mnt/server'],
+    User: '0',
+    WorkingDir: '/mnt/server',
+    HostConfig: {
+      Binds: [`${dataPath}:/mnt/server`],
+      NetworkMode: 'none',
+      AutoRemove: false,
+    },
+  });
+
+  try {
+    await container.start();
+    const result = await (container as unknown as { wait(): Promise<{ StatusCode: number }> }).wait();
+    if (result.StatusCode !== 0) {
+      logger.warn(`ensureVolumePermissions exited with code ${result.StatusCode} for ${dataPath}`);
+    }
+  } finally {
+    await container.remove({ force: true }).catch(() => { /* ignore */ });
+  }
+}
+
 export async function getContainerStats(containerId: string): Promise<{
   cpu: number;
   memoryBytes: number;
