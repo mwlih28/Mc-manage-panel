@@ -111,6 +111,7 @@ export async function createContainer(
     AttachStderr: true,
     OpenStdin: true,
     Tty: true,
+    User: 'root',
     WorkingDir: '/home/container',
     HostConfig: {
       Binds: [`${dataPath}:/home/container`],
