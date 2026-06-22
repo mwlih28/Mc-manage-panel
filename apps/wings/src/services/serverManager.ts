@@ -306,7 +306,7 @@ class ServerManager extends EventEmitter {
       Image: config.image,
       Cmd: ['/bin/bash', '/mnt/server/.wings_install.sh'],
       Env: envArray,
-      User: 'root',
+      User: '1000',
       WorkingDir: '/mnt/server',
       AttachStdout: true,
       AttachStderr: true,
