@@ -95,7 +95,13 @@ export async function createContainer(
   const cfg = getConfig();
   const containerName = `mc_${serverUuid}`;
 
-  const envArray = Object.entries(env).map(([k, v]) => `${k}=${v}`);
+  // yolks entrypoints run `eval "${STARTUP}"` and ignore Docker CMD entirely.
+  // Inject mkdir into STARTUP so the cache dir exists before Paper/Paperclip runs.
+  const startupCmd = `mkdir -p /home/container/cache /home/container/logs 2>/dev/null; ${cmd}`;
+  const envArray = [
+    ...Object.entries(env).map(([k, v]) => `${k}=${v}`),
+    `STARTUP=${startupCmd}`,
+  ];
   const memBytes = limits.memory * 1024 * 1024;
   const swapBytes = limits.swap > 0 ? (limits.memory + limits.swap) * 1024 * 1024 : -1;
   const cpuQuota = limits.cpu > 0 ? Math.floor(limits.cpu * 1000) : -1;
@@ -103,7 +109,7 @@ export async function createContainer(
   const container = await d.createContainer({
     name: containerName,
     Image: image,
-    Cmd: ['/bin/sh', '-c', `mkdir -p /home/container/cache /home/container/logs 2>/dev/null; ${cmd}`],
+    Cmd: ['/bin/sh', '-c', startupCmd],
     Env: envArray,
     Hostname: serverUuid.slice(0, 8),
     AttachStdin: true,
