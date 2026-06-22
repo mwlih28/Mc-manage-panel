@@ -122,10 +122,17 @@ systemctl enable docker --now
 success "Docker ready: $(docker --version | cut -d' ' -f3 | tr -d ',')"
 
 # ────────────────────────────── Node.js 20 ──────────────────────────────
-step "Installing Node.js ${NODE_VERSION}"
-if ! node --version 2>/dev/null | grep -q "^v${NODE_VERSION}"; then
+step "Installing Node.js ${NODE_VERSION}+"
+CURRENT_NODE_MAJOR=0
+if command -v node &>/dev/null; then
+  CURRENT_NODE_MAJOR=$(node --version | sed 's/v\([0-9]*\).*/\1/')
+fi
+if [[ "$CURRENT_NODE_MAJOR" -lt "$NODE_VERSION" ]]; then
+  info "Installing Node.js ${NODE_VERSION} via NodeSource..."
   curl -fsSL "https://deb.nodesource.com/setup_${NODE_VERSION}.x" | bash - >/dev/null
   apt-get install -y nodejs >/dev/null
+else
+  info "Node.js $(node --version) already installed (>= ${NODE_VERSION})"
 fi
 success "Node $(node --version), npm $(npm --version)"
 
@@ -157,6 +164,10 @@ if [[ -d "${WINGS_DIR}/.git" ]]; then
   info "Updating existing installation..."
   git -C "$WINGS_DIR" fetch origin --quiet
   git -C "$WINGS_DIR" reset --hard "origin/${BRANCH}" --quiet
+elif [[ -d "${WINGS_DIR}" ]]; then
+  info "Removing incomplete directory and re-cloning..."
+  rm -rf "$WINGS_DIR"
+  git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$WINGS_DIR" --quiet
 else
   info "Cloning from ${REPO_URL} ..."
   git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$WINGS_DIR" --quiet

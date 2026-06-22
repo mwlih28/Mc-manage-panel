@@ -103,11 +103,17 @@ apt-get install -y -q \
 success "System packages installed"
 
 # ────────────────────────────── Node.js 20 ──────────────────────────────
-step "Installing Node.js ${NODE_VERSION}"
-if ! node --version 2>/dev/null | grep -q "^v${NODE_VERSION}"; then
-  info "Adding NodeSource repository..."
+step "Installing Node.js ${NODE_VERSION}+"
+CURRENT_NODE_MAJOR=0
+if command -v node &>/dev/null; then
+  CURRENT_NODE_MAJOR=$(node --version | sed 's/v\([0-9]*\).*/\1/')
+fi
+if [[ "$CURRENT_NODE_MAJOR" -lt "$NODE_VERSION" ]]; then
+  info "Installing Node.js ${NODE_VERSION} via NodeSource..."
   curl -fsSL "https://deb.nodesource.com/setup_${NODE_VERSION}.x" | bash - >/dev/null
   apt-get install -y nodejs >/dev/null
+else
+  info "Node.js $(node --version) already installed (>= ${NODE_VERSION})"
 fi
 success "Node $(node --version), npm $(npm --version)"
 
@@ -146,6 +152,11 @@ if [[ -d "${PANEL_DIR}/.git" ]]; then
   info "Updating existing installation..."
   git -C "$PANEL_DIR" fetch origin --quiet
   git -C "$PANEL_DIR" reset --hard "origin/${BRANCH}" --quiet
+elif [[ -d "${PANEL_DIR}" ]]; then
+  # Directory exists but is not a git repo (e.g. partial previous install)
+  info "Removing incomplete directory and re-cloning..."
+  rm -rf "$PANEL_DIR"
+  git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$PANEL_DIR" --quiet
 else
   info "Cloning from ${REPO_URL} ..."
   git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$PANEL_DIR" --quiet
