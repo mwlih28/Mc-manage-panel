@@ -111,13 +111,17 @@ function sendCommandToWings(nodeId, serverUuid, command) {
     const conn = nodeConnections.get(nodeId);
     if (conn?.socket.connected) {
         conn.socket.emit('command', { uuid: serverUuid, command });
+        return;
     }
+    throw new Error(`Wings socket not connected for node ${nodeId}`);
 }
 function sendPowerToWings(nodeId, serverUuid, action) {
     const conn = nodeConnections.get(nodeId);
     if (conn?.socket.connected) {
         conn.socket.emit('power', { uuid: serverUuid, action });
+        return;
     }
+    throw new Error(`Wings socket not connected for node ${nodeId}`);
 }
 function disconnectNode(nodeId) {
     const conn = nodeConnections.get(nodeId);

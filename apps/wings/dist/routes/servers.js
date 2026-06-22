@@ -6,11 +6,15 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
+const os_1 = __importDefault(require("os"));
+const child_process_1 = require("child_process");
+const util_1 = require("util");
 const axios_1 = __importDefault(require("axios"));
 const serverManager_1 = require("../services/serverManager");
 const logger_1 = require("../utils/logger");
 const config_1 = require("../config");
 const mcPing_1 = require("../services/mcPing");
+const execFileAsync = (0, util_1.promisify)(child_process_1.execFile);
 const router = (0, express_1.Router)();
 // Load/register a server
 router.post('/', async (req, res) => {
@@ -110,32 +114,65 @@ router.post('/:uuid/plugins/install', async (req, res) => {
         return res.status(422).json({ message: 'Only .jar files are supported' });
     }
     const cfg = (0, config_1.getConfig)();
-    const targetDir = path_1.default.resolve(path_1.default.join(cfg.system.data, uuid, type));
     const expectedBase = path_1.default.resolve(path_1.default.join(cfg.system.data, uuid));
+    const targetDir = path_1.default.resolve(path_1.default.join(expectedBase, type));
     if (!targetDir.startsWith(expectedBase)) {
         return res.status(403).json({ message: 'Forbidden path' });
     }
-    fs_1.default.mkdirSync(targetDir, { recursive: true });
-    const targetPath = path_1.default.join(targetDir, safeFilename);
+    // Download to a temporary directory, then copy into the container via docker cp.
+    // Wings runs as a non-root user (mcwings) that cannot write to the volume dirs
+    // owned by uid 1000. docker cp goes through the Docker daemon (root), bypassing
+    // this restriction and working on both running and stopped containers.
+    const tmpDir = path_1.default.join(os_1.default.tmpdir(), `mc_install_${Date.now()}_${uuid}`);
+    const tmpFile = path_1.default.join(tmpDir, safeFilename);
     try {
+        fs_1.default.mkdirSync(tmpDir, { recursive: true });
         const response = await axios_1.default.get(url, {
             responseType: 'stream',
             timeout: 60000,
-            maxContentLength: 100 * 1024 * 1024, // 100 MB
+            maxContentLength: 100 * 1024 * 1024,
         });
         await new Promise((resolve, reject) => {
-            const writer = fs_1.default.createWriteStream(targetPath);
+            const writer = fs_1.default.createWriteStream(tmpFile);
             response.data.pipe(writer);
             writer.on('finish', resolve);
             writer.on('error', reject);
         });
-        logger_1.logger.info(`Plugin installed: ${safeFilename} → ${targetPath}`);
-        return res.json({ message: `${safeFilename} installed successfully` });
+        const containerName = `mc_${uuid}`;
+        // Ensure target dir exists inside the container (only works if running; ignore failure)
+        await execFileAsync('docker', ['exec', containerName, 'mkdir', '-p', `/home/container/${type}`]).catch(() => { });
+        // Copy the temp directory's contents into the container.
+        // Using srcDir/ → destDir creates the destination directory if it doesn't exist,
+        // and works on stopped containers (Docker daemon handles the copy as root).
+        try {
+            await execFileAsync('docker', ['cp', tmpDir + '/', `${containerName}:/home/container/${type}`]);
+            logger_1.logger.info(`Plugin installed via docker cp: ${safeFilename}`);
+            return res.json({ message: `${safeFilename} installed successfully` });
+        }
+        catch {
+            // Container doesn't exist yet (never started) — write via a helper container
+            // that mounts the volume as root and can set correct ownership.
+            const dataPath = path_1.default.join(cfg.system.data, uuid);
+            await execFileAsync('docker', [
+                'run', '--rm',
+                '-v', `${dataPath}:/vol`,
+                '-v', `${tmpDir}:/src:ro`,
+                'alpine',
+                'sh', '-c',
+                `mkdir -p /vol/${type} && cp /src/${safeFilename} /vol/${type}/${safeFilename} && chown 1000:1000 /vol/${type}/${safeFilename}`,
+            ]);
+            logger_1.logger.info(`Plugin installed via helper container: ${safeFilename}`);
+            return res.json({ message: `${safeFilename} installed successfully` });
+        }
     }
     catch (err) {
-        if (fs_1.default.existsSync(targetPath))
-            fs_1.default.unlinkSync(targetPath);
         return res.status(500).json({ message: err.message });
+    }
+    finally {
+        try {
+            fs_1.default.rmSync(tmpDir, { recursive: true, force: true });
+        }
+        catch { /* ignore */ }
     }
 });
 exports.default = router;

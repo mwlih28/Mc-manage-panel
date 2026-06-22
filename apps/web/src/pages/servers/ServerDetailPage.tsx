@@ -215,6 +215,9 @@ export function ServerDetailPage() {
       const newStatus = (msg.status || (msg.state ? msg.state.toUpperCase() : undefined)) as ServerStatus | undefined;
       if (newStatus) {
         setCurrentStatus(newStatus);
+        if (newStatus === 'OFFLINE' || newStatus === 'INSTALL_FAILED') {
+          setStats(null);
+        }
         queryClient.setQueryData(['server', id], (old: Server | undefined) =>
           old ? { ...old, status: newStatus } : old
         );
@@ -360,7 +363,7 @@ export function ServerDetailPage() {
       </div>
 
       {/* Resource overview */}
-      {stats && isRunning && (
+      {stats && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <MiniStat
             icon={<Cpu size={14} />}
