@@ -151,6 +151,7 @@ success "User '${PANEL_USER}' ready"
 
 # ────────────────────────────── Clone / update source ──────────────────────────────
 step "Fetching panel source"
+git config --global --add safe.directory "$PANEL_DIR" 2>/dev/null || true
 if [[ -d "${PANEL_DIR}/.git" ]]; then
   info "Updating existing installation..."
   git -C "$PANEL_DIR" fetch origin --quiet

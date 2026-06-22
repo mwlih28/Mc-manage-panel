@@ -160,6 +160,7 @@ success "Directories created"
 
 # ────────────────────────────── Clone / update source ──────────────────────────────
 step "Fetching Wings source"
+git config --global --add safe.directory "$WINGS_DIR" 2>/dev/null || true
 if [[ -d "${WINGS_DIR}/.git" ]]; then
   info "Updating existing installation..."
   git -C "$WINGS_DIR" fetch origin --quiet
