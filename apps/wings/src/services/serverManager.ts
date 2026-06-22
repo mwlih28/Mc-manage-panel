@@ -1,5 +1,6 @@
 import path from 'path';
 import fs from 'fs';
+import { execSync } from 'child_process';
 import { EventEmitter } from 'events';
 import { Server as SocketServer } from 'socket.io';
 import Docker from 'dockerode';
@@ -7,7 +8,7 @@ import { getConfig } from '../config';
 import { logger } from '../utils/logger';
 import {
   createContainer, containerExists, imageExists, pullImage,
-  getDocker, getContainerStats, ensureVolumePermissions,
+  getDocker, getContainerStats,
 } from './dockerService';
 import { panelClient } from './panelClient';
 import type { ServerConfig, ServerStatus, ResourceUsage } from '../types';
@@ -74,7 +75,6 @@ class ServerManager extends EventEmitter {
     const cfg = getConfig();
     const dataPath = path.join(cfg.system.data, uuid);
     fs.mkdirSync(dataPath, { recursive: true });
-    try { fs.chmodSync(dataPath, 0o777); } catch { /* ignore if insufficient perms */ }
 
     // Auto-accept Minecraft EULA
     const eulaPath = path.join(dataPath, 'eula.txt');
@@ -101,21 +101,6 @@ class ServerManager extends EventEmitter {
         await pullImage(config.image);
       }
 
-      // Ensure the data volume is owned by uid 1000 so the container runtime user
-      // (and the install step) can create files/dirs like Paper's cache/ folder.
-      this.sendConsole(uuid, '[Wings] Preparing volume permissions...');
-      try {
-        await ensureVolumePermissions(config.image, dataPath);
-      } catch (err) {
-        logger.warn(`Volume permission prep failed for ${uuid}:`, err);
-        this.sendConsole(uuid, `[Wings] Volume permission prep failed: ${(err as Error).message}`);
-      }
-      // Diagnostic: report actual ownership/mode of the volume after prep.
-      try {
-        const st = fs.statSync(dataPath);
-        this.sendConsole(uuid, `[Wings] Volume ${dataPath} -> uid=${st.uid} gid=${st.gid} mode=${(st.mode & 0o777).toString(8)}`);
-      } catch { /* ignore */ }
-
       // Run install script on first start (when server jar doesn't exist)
       const jarFile = config.environment['SERVER_JARFILE'] || 'server.jar';
       const isFirstStart = !fs.existsSync(path.join(dataPath, jarFile));
@@ -129,6 +114,17 @@ class ServerManager extends EventEmitter {
           this.setStatus(uuid, 'offline');
           throw err;
         }
+      }
+
+      // Ensure uid 1000 owns the entire data directory so the container can
+      // write to it (e.g. Paper's cache/ and logs/ dirs). Wings runs as root,
+      // so execSync chown works directly on the host filesystem.
+      try {
+        execSync(`chown -R 1000:1000 "${dataPath}"`);
+        this.sendConsole(uuid, '[Wings] Volume ownership set to uid 1000.');
+      } catch (err) {
+        logger.warn(`chown failed for ${uuid}:`, err);
+        this.sendConsole(uuid, `[Wings] chown failed (non-fatal): ${(err as Error).message}`);
       }
 
       // Remove old container if exists
