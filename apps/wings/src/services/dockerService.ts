@@ -103,7 +103,7 @@ export async function createContainer(
   const container = await d.createContainer({
     name: containerName,
     Image: image,
-    Cmd: ['/bin/sh', '-c', cmd],
+    Cmd: ['/bin/sh', '-c', `mkdir -p /home/container/cache /home/container/logs 2>/dev/null; ${cmd}`],
     Env: envArray,
     Hostname: serverUuid.slice(0, 8),
     AttachStdin: true,
