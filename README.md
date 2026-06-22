@@ -1,23 +1,109 @@
 # MC Manage Panel
 
-A comprehensive game server management panel inspired by Pterodactyl Panel. Built with React, Express, TypeScript, and Socket.io.
+A Pterodactyl-inspired game server management panel. Manage Minecraft and other game servers from a web UI — with a Wings daemon on each node, real-time console, resource monitoring, and full admin controls.
 
-![Dashboard](https://img.shields.io/badge/status-active-green)
+![Status](https://img.shields.io/badge/status-active-green)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen)
 
+---
+
+## One-command Install (Ubuntu / Debian)
+
+### 1 — Install the Panel (on your panel server)
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/install-panel.sh)
+```
+
+The script will ask for:
+- Your panel domain (e.g. `panel.yourdomain.com`) — point DNS before running
+- Admin email, username, and password
+- Whether to set up SSL with Let's Encrypt
+
+After it finishes, open your domain in a browser and sign in.
+
+### 2 — Install Wings (on each game server / node)
+
+Run this on **every server** that will host game servers:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/install-wings.sh)
+```
+
+The script will ask for:
+- Your panel URL (e.g. `https://panel.yourdomain.com`)
+- Node token — get this from **Admin → Nodes → your node** in the panel
+- This server's public IP or FQDN
+- Wings port (default: 8080)
+
+### Supported OS
+
+| OS | Versions |
+|----|----------|
+| Ubuntu | 20.04, 22.04, 24.04 |
+| Debian | 11, 12 |
+
+---
+
 ## Features
 
-- **Server Management** — Create, start, stop, restart, and kill game servers
-- **Real-time Console** — Live server console with command input via WebSocket
-- **Resource Monitoring** — Real-time CPU, RAM, disk, and network stats
-- **Backup System** — Create and manage server backups
-- **User Management** — Full RBAC with admin and user roles
-- **Node Management** — Manage daemon nodes and port allocations
-- **Egg System** — Server configuration templates (Minecraft, etc.)
-- **Activity Log** — Track all panel activity
-- **JWT Auth** — Secure authentication with refresh token rotation
-- **Dark UI** — Modern dark-themed interface
+- **Server Management** — Create, start, stop, restart, kill game servers
+- **Real-time Console** — Live server output + command input via WebSocket
+- **Resource Monitoring** — CPU, RAM, disk stats streamed from Wings nodes
+- **Backup System** — Create and restore server backups
+- **User Management** — Admin and user roles, create/edit/delete users
+- **Node Management** — Add Wings nodes, manage port allocations
+- **Egg System** — Server configuration templates (Minecraft Paper, etc.)
+- **Activity Log** — Full audit trail of panel actions
+- **JWT Authentication** — Access + refresh token pair, secure bcrypt hashing
+- **Dark UI** — Modern responsive dark-themed interface
+
+---
+
+## How it works
+
+```
+[ Browser ]
+     │  HTTPS
+     ▼
+[ Panel (Nginx) ]
+     ├── /          → React SPA (static files)
+     ├── /api/      → Express API  (port 3001)
+     └── /socket.io → Socket.io    (port 3001)
+
+[ Wings Daemon ] ← Panel API communicates over HTTP/WS
+     └── Docker containers (one per game server)
+```
+
+The **Panel** is the web UI + API, installed once.  
+**Wings** is a lightweight daemon installed on each machine that will run game servers. It manages Docker containers and streams console output back to the panel.
+
+---
+
+## After Installation
+
+### First login
+1. Go to `https://your-panel-domain.com`
+2. Sign in with the admin credentials you set during install
+
+### Add a node
+1. **Admin → Nodes → New Node**
+2. Fill in the FQDN / IP of your game server, port 8080, memory & disk limits
+3. Copy the **Node Token** from the Configuration tab
+
+### Connect Wings
+1. SSH into your game server
+2. Run the Wings install script (pasted above)
+3. Enter the Panel URL and the token you just copied
+4. Back in the panel, the node status should turn green
+
+### Create a server
+1. **Admin → Servers → New Server**
+2. Pick a node, allocation, egg (e.g. Minecraft Paper), resource limits
+3. Click Create — Wings downloads the egg and starts the container
+
+---
 
 ## Tech Stack
 
@@ -25,36 +111,11 @@ A comprehensive game server management panel inspired by Pterodactyl Panel. Buil
 |-------|-----------|
 | Frontend | React 18, TypeScript, Vite, Tailwind CSS |
 | Backend | Express, TypeScript, Prisma ORM |
-| Database | PostgreSQL (SQLite for dev) |
+| Database | PostgreSQL |
 | Real-time | Socket.io |
+| Node daemon | Node.js + Dockerode |
 | Auth | JWT + bcrypt |
-
----
-
-## Quick Start (Docker)
-
-The fastest way to run the panel locally or on a VPS:
-
-```bash
-git clone https://github.com/mwlih28/mc-manage-panel.git
-cd mc-manage-panel
-
-# Copy and edit environment variables
-cp apps/api/.env.example .env
-# Edit .env with your settings
-
-# Start everything
-docker compose up -d
-
-# Run database seed (first time only)
-docker compose exec api npx ts-node src/utils/seed.ts
-```
-
-Open http://localhost in your browser.
-
-**Default credentials:**
-- Admin: `admin@example.com` / `Admin123!`
-- User: `user@example.com` / `User123!`
+| Proxy | Nginx |
 
 ---
 
@@ -62,92 +123,29 @@ Open http://localhost in your browser.
 
 ### Prerequisites
 - Node.js 20+
-- Docker (for PostgreSQL) OR local PostgreSQL
+- PostgreSQL (or Docker)
 
-### 1. Clone and install
 ```bash
 git clone https://github.com/mwlih28/mc-manage-panel.git
 cd mc-manage-panel
 
-npm install
+# Install API deps
 cd apps/api && npm install
-cd ../web && npm install
-```
 
-### 2. Start PostgreSQL
-```bash
-docker compose -f docker-compose.dev.yml up -d
-```
+# Configure
+cp .env.example .env   # edit DATABASE_URL, JWT_SECRET, etc.
 
-### 3. Configure API
-```bash
-cp apps/api/.env.development apps/api/.env
-```
-
-### 4. Setup database
-```bash
-cd apps/api
-npx prisma migrate dev
+# Apply schema + seed
+npx prisma db push
 npx ts-node src/utils/seed.ts
+
+# Start API (port 3001)
+npm run dev
 ```
-
-### 5. Start dev servers
-```bash
-# Terminal 1 — API (port 3001)
-cd apps/api && npm run dev
-
-# Terminal 2 — Web (port 5173)
-cd apps/web && npm run dev
-```
-
----
-
-## Production Deployment
-
-### Option A: Railway (Recommended — Free)
-
-**Backend:**
-1. Go to [railway.app](https://railway.app) → New Project → Deploy from GitHub repo
-2. Select the `apps/api` folder as the root
-3. Add a **PostgreSQL** database service
-4. Set environment variables (see `.env.example`)
-5. Railway auto-deploys on every push to `main`
-
-**Frontend:**
-1. Go to [vercel.com](https://vercel.com) → New Project → Import from GitHub
-2. Set root directory to `apps/web`
-3. Add environment variable: `VITE_API_URL=https://your-railway-api-url.railway.app`
-4. Deploy
-
-### Option B: VPS with Docker
 
 ```bash
-# On your server
-git clone https://github.com/mwlih28/mc-manage-panel.git
-cd mc-manage-panel
-
-# Create .env with production values
-cat > .env << EOF
-JWT_SECRET=$(openssl rand -hex 32)
-JWT_REFRESH_SECRET=$(openssl rand -hex 32)
-CORS_ORIGIN=https://your-domain.com
-API_URL=https://api.your-domain.com
-EOF
-
-# Build and start
-docker compose up -d --build
-
-# Seed database
-docker compose exec api node dist/utils/seed.js
-```
-
-### Option C: GitHub Container Registry
-
-After pushing to `main`, Docker images are built automatically:
-
-```
-ghcr.io/mwlih28/mc-manage-panel/api:latest
-ghcr.io/mwlih28/mc-manage-panel/web:latest
+# In another terminal — start web (port 5173)
+cd apps/web && npm install && npm run dev
 ```
 
 ---
@@ -156,51 +154,59 @@ ghcr.io/mwlih28/mc-manage-panel/web:latest
 
 ### API (`apps/api/.env`)
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql://user:pass@host:5432/db` |
-| `JWT_SECRET` | JWT signing secret (min 32 chars) | `openssl rand -hex 32` |
-| `JWT_REFRESH_SECRET` | Refresh token secret (min 32 chars) | `openssl rand -hex 32` |
-| `CORS_ORIGIN` | Frontend URL for CORS | `https://panel.yourdomain.com` |
-| `PORT` | API server port | `3001` |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | yes | PostgreSQL connection string |
+| `JWT_SECRET` | yes | JWT signing secret (32+ chars) |
+| `JWT_REFRESH_SECRET` | yes | Refresh token secret (32+ chars) |
+| `CORS_ORIGIN` | yes | Panel URL for CORS |
+| `PORT` | no | API port (default `3001`) |
 
-### Web (`apps/web/.env`)
+### Web (build-time)
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `VITE_API_URL` | API server URL | `https://api.yourdomain.com` |
+| Variable | Description |
+|----------|-------------|
+| `VITE_API_URL` | Full API URL — leave empty for same-domain nginx proxy |
 
 ---
 
-## API Endpoints
+## API Reference
 
 ```
+GET    /health
+
 POST   /api/v1/auth/login
 POST   /api/v1/auth/register
 POST   /api/v1/auth/refresh
 GET    /api/v1/auth/me
+GET    /api/v1/auth/setup/status
+POST   /api/v1/auth/setup
 
 GET    /api/v1/servers
-POST   /api/v1/servers
+POST   /api/v1/servers          (admin)
 GET    /api/v1/servers/:id
-PATCH  /api/v1/servers/:id
-DELETE /api/v1/servers/:id
+PATCH  /api/v1/servers/:id      (admin)
+DELETE /api/v1/servers/:id      (admin)
 POST   /api/v1/servers/:id/power
-GET    /api/v1/servers/:id/backups
-POST   /api/v1/servers/:id/backups
 
-GET    /api/v1/nodes
-POST   /api/v1/nodes
+GET    /api/v1/nodes            (admin)
+POST   /api/v1/nodes            (admin)
 GET    /api/v1/nodes/:id/allocations
-POST   /api/v1/nodes/:id/allocations
+POST   /api/v1/nodes/:id/allocations  (admin)
 
-GET    /api/v1/users          (admin)
-POST   /api/v1/users          (admin)
-PATCH  /api/v1/users/:id      (admin)
-DELETE /api/v1/users/:id      (admin)
+GET    /api/v1/users            (admin)
+POST   /api/v1/users            (admin)
+PATCH  /api/v1/users/:id        (admin)
+DELETE /api/v1/users/:id        (admin)
 
-GET    /api/v1/stats           (admin)
+GET    /api/v1/eggs             (admin)
+GET    /api/v1/stats            (admin)
 GET    /api/v1/stats/overview
+
+# Wings (daemon-to-panel)
+GET    /api/v1/wings/node
+POST   /api/v1/wings/heartbeat
+GET    /api/v1/wings/servers
 ```
 
 ---

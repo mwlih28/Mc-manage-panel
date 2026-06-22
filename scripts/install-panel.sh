@@ -1,232 +1,259 @@
 #!/usr/bin/env bash
-# MC Manage Panel - Panel Installation Script
-# Supports: Ubuntu 20.04/22.04/24.04, Debian 11/12
-# Usage: bash <(curl -s https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/install-panel.sh)
+# MC Manage Panel — Panel Installer
+# Supported: Ubuntu 20.04 / 22.04 / 24.04, Debian 11 / 12
+#
+# One-liner install:
+#   bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/install-panel.sh)
 
 set -euo pipefail
-IFS=$'\n\t'
 
-# ─────────── Colors ───────────
+# ────────────────────────────── Colors ──────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 BLUE='\033[0;34m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 
-# ─────────── Helpers ───────────
-info()    { echo -e "${CYAN}[INFO]${NC} $*"; }
-success() { echo -e "${GREEN}[OK]${NC} $*"; }
-warn()    { echo -e "${YELLOW}[WARN]${NC} $*"; }
-error()   { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
-step()    { echo -e "\n${BOLD}${BLUE}══ $* ══${NC}"; }
+info()    { echo -e "  ${CYAN}•${NC} $*"; }
+success() { echo -e "  ${GREEN}✔${NC} $*"; }
+warn()    { echo -e "  ${YELLOW}⚠${NC} $*"; }
+error()   { echo -e "\n  ${RED}✖ ERROR:${NC} $*\n" >&2; exit 1; }
+step()    { echo -e "\n${BOLD}${BLUE}┌─ $* ${NC}"; }
 
+# ────────────────────────────── Defaults ──────────────────────────────
 PANEL_DIR="/var/www/mc-panel"
 PANEL_USER="mcpanel"
 NODE_VERSION="20"
-REPO="https://github.com/mwlih28/mc-manage-panel"
+REPO_URL="https://github.com/mwlih28/mc-manage-panel"
+BRANCH="main"
 
-# ─────────── Banner ───────────
-echo -e "${BOLD}"
-echo "╔══════════════════════════════════════════════════════╗"
-echo "║          MC Manage Panel — Installer v1.0            ║"
-echo "╚══════════════════════════════════════════════════════╝"
+# ────────────────────────────── Banner ──────────────────────────────
+echo -e "\n${BOLD}"
+echo "  ╔═══════════════════════════════════════════════════╗"
+echo "  ║       MC Manage Panel — Installer v1.0            ║"
+echo "  ║        Game Server Management Platform            ║"
+echo "  ╚═══════════════════════════════════════════════════╝"
 echo -e "${NC}"
 
-# ─────────── Root check ───────────
-[[ $EUID -ne 0 ]] && error "This script must be run as root. Try: sudo bash install-panel.sh"
+# ────────────────────────────── Pre-flight ──────────────────────────────
+[[ $EUID -ne 0 ]] && error "This script must be run as root.\n  Try: sudo bash $0"
 
-# ─────────── OS detection ───────────
-if [[ -f /etc/os-release ]]; then
-  . /etc/os-release
-  OS_NAME="$ID"
-  OS_VER="$VERSION_ID"
-else
-  error "Cannot detect OS. Supported: Ubuntu 20/22/24, Debian 11/12"
-fi
+[[ -f /etc/os-release ]] || error "Cannot detect OS."
+. /etc/os-release
+OS_ID="$ID"
+OS_VER="$VERSION_ID"
 
-info "Detected OS: ${OS_NAME} ${OS_VER}"
-
-case "$OS_NAME" in
+case "$OS_ID" in
   ubuntu|debian) ;;
-  *) error "Unsupported OS: $OS_NAME. Use Ubuntu or Debian." ;;
+  *) error "Unsupported OS: $OS_ID. This installer supports Ubuntu 20/22/24 and Debian 11/12." ;;
 esac
 
-# ─────────── Collect inputs ───────────
+info "OS: ${OS_ID} ${OS_VER}"
+
+# ────────────────────────────── Collect inputs ──────────────────────────────
 step "Configuration"
 
-read -rp "$(echo -e "${CYAN}Panel domain (e.g. panel.yourdomain.com):${NC} ")" PANEL_DOMAIN
-[[ -z "$PANEL_DOMAIN" ]] && error "Domain is required"
+echo ""
+read -rp "  Panel domain (e.g. panel.yourdomain.com): " PANEL_DOMAIN
+[[ -z "$PANEL_DOMAIN" ]] && error "Domain is required."
 
-read -rp "$(echo -e "${CYAN}Panel admin email:${NC} ")" ADMIN_EMAIL
-[[ -z "$ADMIN_EMAIL" ]] && error "Email is required"
+read -rp "  Admin email: " ADMIN_EMAIL
+[[ -z "$ADMIN_EMAIL" ]] && error "Email is required."
 
-read -rsp "$(echo -e "${CYAN}Admin password (min 8 chars):${NC} ")" ADMIN_PASSWORD; echo
-[[ ${#ADMIN_PASSWORD} -lt 8 ]] && error "Password must be at least 8 characters"
+read -rp "  Admin username [admin]: " ADMIN_USERNAME
+ADMIN_USERNAME="${ADMIN_USERNAME:-admin}"
 
-read -rp "$(echo -e "${CYAN}Admin first name [Admin]:${NC} ")" ADMIN_FIRSTNAME
+read -rp "  Admin first name [Admin]: " ADMIN_FIRSTNAME
 ADMIN_FIRSTNAME="${ADMIN_FIRSTNAME:-Admin}"
 
-read -rp "$(echo -e "${CYAN}Admin last name [User]:${NC} ")" ADMIN_LASTNAME
+read -rp "  Admin last name [User]: " ADMIN_LASTNAME
 ADMIN_LASTNAME="${ADMIN_LASTNAME:-User}"
 
-read -rp "$(echo -e "${CYAN}Install SSL with Let's Encrypt? [y/N]:${NC} ")" INSTALL_SSL
-INSTALL_SSL="${INSTALL_SSL:-n}"
+while true; do
+  read -rsp "  Admin password (min 8 chars): " ADMIN_PASSWORD; echo
+  [[ ${#ADMIN_PASSWORD} -ge 8 ]] && break
+  warn "Password must be at least 8 characters."
+done
 
+read -rp "  Setup SSL with Let's Encrypt? [Y/n]: " SETUP_SSL
+SETUP_SSL="${SETUP_SSL:-y}"
+
+echo ""
+echo -e "  ${BOLD}Summary:${NC}"
+echo "    Domain  : $PANEL_DOMAIN"
+echo "    Email   : $ADMIN_EMAIL"
+echo "    Username: $ADMIN_USERNAME"
+echo "    SSL     : $SETUP_SSL"
+echo ""
+read -rp "  Proceed? [Y/n]: " CONFIRM
+[[ "${CONFIRM,,}" == "n" ]] && { echo "Aborted."; exit 0; }
+
+# Generate secrets
 DB_PASSWORD=$(openssl rand -hex 24)
 JWT_SECRET=$(openssl rand -hex 32)
 JWT_REFRESH_SECRET=$(openssl rand -hex 32)
-
-echo ""
-info "Panel Domain: $PANEL_DOMAIN"
-info "Admin Email: $ADMIN_EMAIL"
-info "SSL: $INSTALL_SSL"
-echo ""
-read -rp "$(echo -e "${YELLOW}Continue? [Y/n]:${NC} ")" CONFIRM
-[[ "${CONFIRM,,}" == "n" ]] && exit 0
-
-# ─────────── System update ───────────
-step "Updating system packages"
-apt-get update -qq
-apt-get upgrade -y -qq
-apt-get install -y -qq curl wget git unzip tar software-properties-common apt-transport-https ca-certificates gnupg lsb-release
-
-# ─────────── Node.js ───────────
-step "Installing Node.js ${NODE_VERSION}"
-if ! command -v node &>/dev/null; then
-  curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash -
-  apt-get install -y nodejs
-fi
-NODE_VER=$(node --version)
-success "Node.js installed: $NODE_VER"
-
-# ─────────── PostgreSQL ───────────
-step "Installing PostgreSQL"
-if ! command -v psql &>/dev/null; then
-  apt-get install -y postgresql postgresql-contrib
-fi
-systemctl enable postgresql --now
-
-# Create database and user
 DB_NAME="mcpanel"
 DB_USER="mcpanel"
 
-sudo -u postgres psql <<PSQL
-DO \$\$
-BEGIN
-  IF NOT EXISTS (SELECT FROM pg_catalog.pg_user WHERE usename = '${DB_USER}') THEN
-    CREATE USER ${DB_USER} WITH PASSWORD '${DB_PASSWORD}';
-  END IF;
-END
-\$\$;
-CREATE DATABASE IF NOT EXISTS ${DB_NAME} OWNER ${DB_USER};
-GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME} TO ${DB_USER};
-PSQL
+# ────────────────────────────── System packages ──────────────────────────────
+step "Installing system packages"
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -q
+apt-get install -y -q \
+  curl wget git openssl \
+  software-properties-common apt-transport-https \
+  ca-certificates gnupg lsb-release nginx
+success "System packages installed"
 
-# PostgreSQL 15+ needs schema grant
-sudo -u postgres psql -d "$DB_NAME" -c "GRANT ALL ON SCHEMA public TO ${DB_USER};" 2>/dev/null || true
-
-success "PostgreSQL configured: database=${DB_NAME}, user=${DB_USER}"
-
-# ─────────── Nginx ───────────
-step "Installing Nginx"
-apt-get install -y nginx
-systemctl enable nginx --now
-
-# ─────────── Create panel user ───────────
-step "Creating panel user"
-if ! id -u "$PANEL_USER" &>/dev/null; then
-  useradd -r -d "$PANEL_DIR" -s /bin/bash "$PANEL_USER"
+# ────────────────────────────── Node.js 20 ──────────────────────────────
+step "Installing Node.js ${NODE_VERSION}"
+if ! node --version 2>/dev/null | grep -q "^v${NODE_VERSION}"; then
+  info "Adding NodeSource repository..."
+  curl -fsSL "https://deb.nodesource.com/setup_${NODE_VERSION}.x" | bash - >/dev/null
+  apt-get install -y nodejs >/dev/null
 fi
+success "Node $(node --version), npm $(npm --version)"
 
-# ─────────── Clone/install panel ───────────
-step "Installing Panel"
-mkdir -p "$PANEL_DIR"
+# ────────────────────────────── PostgreSQL ──────────────────────────────
+step "Setting up PostgreSQL"
+if ! command -v psql &>/dev/null; then
+  apt-get install -y postgresql postgresql-contrib >/dev/null
+fi
+systemctl enable postgresql --now
 
-if [[ -d "$PANEL_DIR/.git" ]]; then
+# Create role (idempotent)
+sudo -u postgres psql -qtc "SELECT 1 FROM pg_roles WHERE rolname='${DB_USER}'" | grep -q 1 \
+  || sudo -u postgres psql -c "CREATE USER ${DB_USER} WITH PASSWORD '${DB_PASSWORD}';" >/dev/null
+
+# Create database (idempotent)
+sudo -u postgres psql -qtc "SELECT 1 FROM pg_database WHERE datname='${DB_NAME}'" | grep -q 1 \
+  || sudo -u postgres createdb -O "${DB_USER}" "${DB_NAME}"
+
+# Grants (PostgreSQL 15+ requires explicit schema grant)
+sudo -u postgres psql -d "${DB_NAME}" \
+  -c "GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME} TO ${DB_USER};" >/dev/null 2>&1 || true
+sudo -u postgres psql -d "${DB_NAME}" \
+  -c "GRANT ALL ON SCHEMA public TO ${DB_USER};" >/dev/null 2>&1 || true
+
+success "PostgreSQL: database='${DB_NAME}' user='${DB_USER}'"
+
+# ────────────────────────────── Panel user ──────────────────────────────
+step "Creating service user"
+id -u "$PANEL_USER" &>/dev/null \
+  || useradd -r -m -d "$PANEL_DIR" -s /usr/sbin/nologin "$PANEL_USER"
+success "User '${PANEL_USER}' ready"
+
+# ────────────────────────────── Clone / update source ──────────────────────────────
+step "Fetching panel source"
+if [[ -d "${PANEL_DIR}/.git" ]]; then
   info "Updating existing installation..."
-  git -C "$PANEL_DIR" pull origin main
+  git -C "$PANEL_DIR" fetch origin --quiet
+  git -C "$PANEL_DIR" reset --hard "origin/${BRANCH}" --quiet
 else
-  info "Cloning repository..."
-  git clone "$REPO" "$PANEL_DIR"
+  info "Cloning from ${REPO_URL} ..."
+  git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$PANEL_DIR" --quiet
 fi
+success "Source at ${PANEL_DIR}"
 
-cd "$PANEL_DIR"
-
-# Install dependencies
-info "Installing dependencies..."
-npm install --prefix apps/api --omit=dev --quiet
-npm install --prefix apps/web --quiet
-
-# Build frontend
-info "Building frontend..."
-VITE_API_URL="https://${PANEL_DOMAIN}" npm run build --prefix apps/web
-
-# ─────────── Create .env ───────────
-step "Configuring environment"
-cat > "$PANEL_DIR/apps/api/.env" <<ENV
+# ────────────────────────────── Write .env (before build) ──────────────────────────────
+step "Writing API environment"
+cat > "${PANEL_DIR}/apps/api/.env" <<ENV
 NODE_ENV=production
 PORT=3001
-DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@localhost:5432/${DB_NAME}
+DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@127.0.0.1:5432/${DB_NAME}
 JWT_SECRET=${JWT_SECRET}
 JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
-JWT_EXPIRES_IN=1h
+JWT_EXPIRES_IN=15m
 JWT_REFRESH_EXPIRES_IN=7d
 CORS_ORIGIN=https://${PANEL_DOMAIN}
 APP_NAME=MC Manage Panel
 APP_URL=https://${PANEL_DOMAIN}
 PANEL_VERSION=1.0.0
 ENV
+chmod 600 "${PANEL_DIR}/apps/api/.env"
+success ".env written"
 
-# ─────────── Database migration ───────────
-step "Running database migrations"
-cd "$PANEL_DIR/apps/api"
-npx prisma generate
-npx prisma db push --accept-data-loss
+# ────────────────────────────── Build API ──────────────────────────────
+step "Installing and building API"
+cd "${PANEL_DIR}/apps/api"
+info "npm install..."
+npm install --no-fund --no-audit --quiet
+info "Generating Prisma client..."
+./node_modules/.bin/prisma generate --quiet
+info "Compiling TypeScript..."
+npm run build
+success "API built → ${PANEL_DIR}/apps/api/dist"
 
-# ─────────── Seed admin user ───────────
+# ────────────────────────────── Build Web ──────────────────────────────
+step "Installing and building Web"
+cd "${PANEL_DIR}/apps/web"
+info "npm install..."
+npm install --no-fund --no-audit --quiet
+info "Building frontend (VITE_API_URL=https://${PANEL_DOMAIN})..."
+VITE_API_URL="https://${PANEL_DOMAIN}" npm run build
+success "Web built → ${PANEL_DIR}/apps/web/dist"
+
+# ────────────────────────────── Database schema ──────────────────────────────
+step "Applying database schema"
+cd "${PANEL_DIR}/apps/api"
+./node_modules/.bin/prisma db push --accept-data-loss
+success "Schema applied"
+
+# ────────────────────────────── Create admin account ──────────────────────────────
 step "Creating admin account"
+# Pass credentials via env vars to avoid shell-quoting issues with special chars
+SEED_EMAIL="$ADMIN_EMAIL" \
+SEED_USERNAME="$ADMIN_USERNAME" \
+SEED_PASSWORD="$ADMIN_PASSWORD" \
+SEED_FIRSTNAME="$ADMIN_FIRSTNAME" \
+SEED_LASTNAME="$ADMIN_LASTNAME" \
+SEED_APP_URL="https://${PANEL_DOMAIN}" \
 node -e "
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
-const { v4: uuidv4 } = require('uuid');
-
 const prisma = new PrismaClient();
-
-async function seed() {
-  const hash = await bcrypt.hash('${ADMIN_PASSWORD}', 12);
-  const user = await prisma.user.upsert({
-    where: { email: '${ADMIN_EMAIL}' },
-    update: {},
-    create: {
-      email: '${ADMIN_EMAIL}',
-      username: 'admin',
+(async () => {
+  const hash = await bcrypt.hash(process.env.SEED_PASSWORD, 12);
+  await prisma.user.upsert({
+    where:  { email: process.env.SEED_EMAIL },
+    update: {
       password: hash,
-      firstName: '${ADMIN_FIRSTNAME}',
-      lastName: '${ADMIN_LASTNAME}',
-      role: 'ADMIN',
-      rootAdmin: true,
+      firstName: process.env.SEED_FIRSTNAME,
+      lastName:  process.env.SEED_LASTNAME,
+      role: 'ADMIN', rootAdmin: true,
+    },
+    create: {
+      email:     process.env.SEED_EMAIL,
+      username:  process.env.SEED_USERNAME,
+      password:  hash,
+      firstName: process.env.SEED_FIRSTNAME,
+      lastName:  process.env.SEED_LASTNAME,
+      role: 'ADMIN', rootAdmin: true,
     },
   });
-
   const settings = [
-    { key: 'app:name', value: 'MC Manage Panel' },
-    { key: 'app:url', value: 'https://${PANEL_DOMAIN}' },
+    { key: 'app:name',            value: 'MC Manage Panel' },
+    { key: 'app:url',             value: process.env.SEED_APP_URL },
+    { key: 'app:version',         value: '1.0.0' },
+    { key: 'recaptcha:enabled',   value: 'false' },
   ];
   for (const s of settings) {
-    await prisma.setting.upsert({ where: { key: s.key }, update: s, create: s });
+    await prisma.setting.upsert({ where: { key: s.key }, update: { value: s.value }, create: s });
   }
-
-  console.log('Admin created: ' + user.email);
+  console.log('Admin account ready: ' + process.env.SEED_EMAIL);
   await prisma.\$disconnect();
-}
-
-seed().catch(e => { console.error(e); process.exit(1); });
+})().catch(e => { console.error(e.message); process.exit(1); });
 "
+success "Admin account created: ${ADMIN_EMAIL}"
 
-chown -R "$PANEL_USER:$PANEL_USER" "$PANEL_DIR"
+# ────────────────────────────── Permissions ──────────────────────────────
+chown -R "${PANEL_USER}:${PANEL_USER}" "$PANEL_DIR"
+chmod 750 "${PANEL_DIR}/apps/api/dist"
 
-# ─────────── Systemd service ───────────
+# ────────────────────────────── Systemd service ──────────────────────────────
 step "Creating systemd service"
+NODE_BIN="$(which node)"
 cat > /etc/systemd/system/mc-panel.service <<SERVICE
 [Unit]
 Description=MC Manage Panel API
+Documentation=https://github.com/mwlih28/mc-manage-panel
 After=network.target postgresql.service
 Wants=postgresql.service
 
@@ -234,112 +261,137 @@ Wants=postgresql.service
 Type=simple
 User=${PANEL_USER}
 WorkingDirectory=${PANEL_DIR}/apps/api
-ExecStart=/usr/bin/node dist/index.js
+ExecStart=${NODE_BIN} dist/index.js
 Restart=always
-RestartSec=10
+RestartSec=5
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=mc-panel
-Environment=NODE_ENV=production
+# Env is loaded by dotenv from .env file in WorkingDirectory
 
 [Install]
 WantedBy=multi-user.target
 SERVICE
 
-# Build TS
-cd "$PANEL_DIR/apps/api"
-npx tsc
-
 systemctl daemon-reload
-systemctl enable mc-panel
-systemctl start mc-panel
-success "Panel service started"
+systemctl enable mc-panel --quiet
+systemctl restart mc-panel
+sleep 2
 
-# ─────────── Nginx config ───────────
+if systemctl is-active --quiet mc-panel; then
+  success "mc-panel service running"
+else
+  warn "mc-panel service failed to start. Check: journalctl -u mc-panel -n 50"
+fi
+
+# ────────────────────────────── Nginx ──────────────────────────────
 step "Configuring Nginx"
 cat > /etc/nginx/sites-available/mc-panel <<NGINX
 server {
     listen 80;
+    listen [::]:80;
     server_name ${PANEL_DOMAIN};
+
     root ${PANEL_DIR}/apps/web/dist;
     index index.html;
 
     client_max_body_size 100m;
 
-    # Frontend (React SPA)
+    # React SPA — all non-file paths serve index.html
     location / {
         try_files \$uri \$uri/ /index.html;
-        add_header Cache-Control "no-cache";
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
     }
 
-    # Static assets cache
+    # Immutable static assets
     location /assets/ {
         expires 1y;
         add_header Cache-Control "public, immutable";
     }
 
-    # API proxy
+    # API reverse proxy
     location /api/ {
-        proxy_pass http://127.0.0.1:3001;
+        proxy_pass         http://127.0.0.1:3001;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        proxy_read_timeout 300;
+        proxy_set_header   Host              \$host;
+        proxy_set_header   X-Real-IP         \$remote_addr;
+        proxy_set_header   X-Forwarded-For   \$proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto \$scheme;
+        proxy_read_timeout 300s;
     }
 
-    # WebSocket proxy (Socket.io)
+    # WebSocket (Socket.io console/stats)
     location /socket.io/ {
-        proxy_pass http://127.0.0.1:3001;
+        proxy_pass         http://127.0.0.1:3001;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header   Upgrade    \$http_upgrade;
+        proxy_set_header   Connection "upgrade";
+        proxy_set_header   Host       \$host;
+        proxy_set_header   X-Real-IP  \$remote_addr;
         proxy_cache_bypass \$http_upgrade;
+        proxy_read_timeout 3600s;
     }
 }
 NGINX
 
+# Enable and reload
 ln -sf /etc/nginx/sites-available/mc-panel /etc/nginx/sites-enabled/mc-panel
 rm -f /etc/nginx/sites-enabled/default
-nginx -t && systemctl reload nginx
-success "Nginx configured"
+nginx -t
+systemctl reload nginx
+success "Nginx configured for ${PANEL_DOMAIN}"
 
-# ─────────── SSL ───────────
-if [[ "${INSTALL_SSL,,}" == "y" ]]; then
-  step "Installing SSL certificate"
-  apt-get install -y certbot python3-certbot-nginx
-  certbot --nginx -d "$PANEL_DOMAIN" --non-interactive --agree-tos -m "$ADMIN_EMAIL" || warn "SSL setup failed, check DNS"
+# ────────────────────────────── SSL ──────────────────────────────
+if [[ "${SETUP_SSL,,}" != "n" ]]; then
+  step "Setting up SSL (Let's Encrypt)"
+  apt-get install -y certbot python3-certbot-nginx >/dev/null
+  if certbot --nginx -d "$PANEL_DOMAIN" \
+      --non-interactive --agree-tos \
+      --email "$ADMIN_EMAIL" \
+      --redirect 2>/dev/null; then
+    success "SSL certificate installed — HTTPS enabled"
+    # Update CORS_ORIGIN (already https)
+  else
+    warn "Certbot failed. Make sure ${PANEL_DOMAIN} points to this server's IP."
+    warn "You can retry later: certbot --nginx -d ${PANEL_DOMAIN}"
+  fi
 fi
 
-# ─────────── Firewall ───────────
-step "Configuring firewall"
+# ────────────────────────────── Firewall ──────────────────────────────
+step "Configuring firewall (UFW)"
 if command -v ufw &>/dev/null; then
-  ufw allow 22/tcp   >/dev/null 2>&1 || true
-  ufw allow 80/tcp   >/dev/null 2>&1 || true
-  ufw allow 443/tcp  >/dev/null 2>&1 || true
+  ufw allow 22/tcp   comment "SSH"    >/dev/null 2>&1 || true
+  ufw allow 80/tcp   comment "HTTP"   >/dev/null 2>&1 || true
+  ufw allow 443/tcp  comment "HTTPS"  >/dev/null 2>&1 || true
   ufw --force enable >/dev/null 2>&1 || true
-  success "UFW configured (ports 22, 80, 443 open)"
+  success "UFW enabled: ports 22, 80, 443 open"
+else
+  info "UFW not found — skipping firewall config"
 fi
 
-# ─────────── Done ───────────
+# ────────────────────────────── Done ──────────────────────────────
+SCHEME="http"
+[[ "${SETUP_SSL,,}" != "n" ]] && SCHEME="https"
+
 echo ""
 echo -e "${GREEN}${BOLD}"
-echo "╔══════════════════════════════════════════════════════╗"
-echo "║         Installation Complete!                       ║"
-echo "╚══════════════════════════════════════════════════════╝"
+echo "  ╔═══════════════════════════════════════════════════╗"
+echo "  ║          Installation Complete! 🎉                ║"
+echo "  ╚═══════════════════════════════════════════════════╝"
 echo -e "${NC}"
-echo -e "${BOLD}Panel URL:${NC}     http${INSTALL_SSL:+s}://${PANEL_DOMAIN}"
-echo -e "${BOLD}Admin Email:${NC}   ${ADMIN_EMAIL}"
-echo -e "${BOLD}Admin Pass:${NC}    (the one you entered)"
+echo -e "  ${BOLD}Panel URL:${NC}      ${SCHEME}://${PANEL_DOMAIN}"
+echo -e "  ${BOLD}Admin email:${NC}    ${ADMIN_EMAIL}"
+echo -e "  ${BOLD}Admin password:${NC} (the one you entered)"
 echo ""
-echo -e "${BOLD}Service:${NC}       systemctl status mc-panel"
-echo -e "${BOLD}Logs:${NC}          journalctl -u mc-panel -f"
+echo -e "  ${BOLD}Service management:${NC}"
+echo "    systemctl status  mc-panel"
+echo "    systemctl restart mc-panel"
+echo "    journalctl -u mc-panel -f"
 echo ""
-echo -e "${YELLOW}Next step:${NC} Install Wings on your game server nodes:"
-echo "  bash <(curl -s https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/install-wings.sh)"
+echo -e "  ${BOLD}Next steps:${NC}"
+echo "  1. Open ${SCHEME}://${PANEL_DOMAIN} and sign in"
+echo "  2. Go to Admin → Nodes → New Node to add a game server"
+echo "  3. Copy the node token, then on your game server run:"
+echo ""
+echo -e "  ${CYAN}bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/${BRANCH}/scripts/install-wings.sh)${NC}"
 echo ""
