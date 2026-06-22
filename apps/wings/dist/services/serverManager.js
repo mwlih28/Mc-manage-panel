@@ -229,6 +229,9 @@ class ServerManager extends events_1.EventEmitter {
     getStatus(uuid) {
         return this.servers.get(uuid)?.status || 'offline';
     }
+    getServerEnvironment(uuid) {
+        return this.servers.get(uuid)?.config.environment ?? {};
+    }
     async getResources(uuid) {
         const server = this.servers.get(uuid);
         if (!server || server.status !== 'running' || !server.containerId) {

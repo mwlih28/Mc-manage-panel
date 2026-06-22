@@ -4,7 +4,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Play, Square, RotateCcw, Zap, Terminal, BarChart2,
   HardDrive, Archive, ChevronLeft, Cpu, MemoryStick,
-  Folder, FolderOpen, File, ChevronRight, ArrowLeft, Pencil, Trash2, Plus, X, Check
+  Folder, FolderOpen, File, ChevronRight, ArrowLeft, Pencil, Trash2, Plus, X, Check,
+  Package, Users, Search, Download
 } from 'lucide-react';
 import { io as ioClient, Socket } from 'socket.io-client';
 import api from '@/lib/axios';
@@ -17,7 +18,21 @@ import { Spinner } from '@/components/ui/Spinner';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
-type Tab = 'console' | 'files' | 'stats' | 'backups';
+type Tab = 'console' | 'files' | 'plugins' | 'stats' | 'backups';
+
+interface ModrinthProject {
+  project_id: string;
+  slug: string;
+  title: string;
+  description: string;
+  downloads: number;
+  icon_url?: string;
+}
+
+interface ModrinthVersion {
+  id: string;
+  files: { url: string; filename: string; primary: boolean }[];
+}
 
 interface FileEntry {
   name: string;
@@ -57,6 +72,15 @@ export function ServerDetailPage() {
   const [editingFile, setEditingFile] = useState<{ path: string; content: string } | null>(null);
   const [editContent, setEditContent] = useState('');
   const [savingFile, setSavingFile] = useState(false);
+
+  // Plugins / Modrinth
+  const [pluginQuery, setPluginQuery] = useState('');
+  const [pluginResults, setPluginResults] = useState<ModrinthProject[]>([]);
+  const [pluginLoading, setPluginLoading] = useState(false);
+  const [installing, setInstalling] = useState<string | null>(null);
+
+  // Players
+  const [players, setPlayers] = useState<{ online: number; max: number; names: string[] }>({ online: 0, max: 0, names: [] });
 
   const { data: filesData, isLoading: filesLoading, refetch: refetchFiles } = useQuery({
     queryKey: ['server-files', id, currentDir],
@@ -107,6 +131,57 @@ export function ServerDetailPage() {
   useEffect(() => {
     if (data) setCurrentStatus(data.status);
   }, [data]);
+
+  // Poll players every 30s when server is running
+  useEffect(() => {
+    if (!id) return;
+    const fetchPlayers = async () => {
+      try {
+        const { data: pd } = await api.get(`/servers/${id}/players`);
+        setPlayers({ online: pd.online ?? 0, max: pd.max ?? 0, names: (pd.players ?? []).map((p: { name: string }) => p.name) });
+      } catch { /* ignore */ }
+    };
+    fetchPlayers();
+    const interval = setInterval(fetchPlayers, 30000);
+    return () => clearInterval(interval);
+  }, [id]);
+
+  const searchPlugins = async () => {
+    if (!pluginQuery.trim()) return;
+    setPluginLoading(true);
+    setPluginResults([]);
+    try {
+      const facets = encodeURIComponent(JSON.stringify([['project_type:plugin']]));
+      const res = await fetch(`https://api.modrinth.com/v2/search?query=${encodeURIComponent(pluginQuery)}&facets=${facets}&limit=20`);
+      const json = await res.json();
+      setPluginResults(json.hits ?? []);
+    } catch {
+      toast.error('Failed to search Modrinth');
+    } finally {
+      setPluginLoading(false);
+    }
+  };
+
+  const installPlugin = async (project: ModrinthProject) => {
+    setInstalling(project.project_id);
+    try {
+      const versRes = await fetch(`https://api.modrinth.com/v2/project/${project.project_id}/version`);
+      const versions: ModrinthVersion[] = await versRes.json();
+      if (!versions || versions.length === 0) { toast.error('No versions found'); return; }
+      const primaryFile = versions[0].files.find((f) => f.primary) ?? versions[0].files[0];
+      if (!primaryFile) { toast.error('No downloadable file found'); return; }
+      await api.post(`/servers/${id}/plugins/install`, {
+        url: primaryFile.url,
+        filename: primaryFile.filename,
+        type: 'plugins',
+      });
+      toast.success(`${project.title} installed!`);
+    } catch {
+      toast.error('Installation failed');
+    } finally {
+      setInstalling(null);
+    }
+  };
 
   // Socket connection
   useEffect(() => {
@@ -298,7 +373,7 @@ export function ServerDetailPage() {
       {/* Tabs */}
       <div className="border-b border-dark-800">
         <div className="flex gap-1">
-          {(['console', 'files', 'stats', 'backups'] as Tab[]).map((tab) => (
+          {(['console', 'files', 'plugins', 'stats', 'backups'] as Tab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -311,6 +386,7 @@ export function ServerDetailPage() {
             >
               {tab === 'console' && <Terminal size={14} className="inline mr-1.5" />}
               {tab === 'files' && <Folder size={14} className="inline mr-1.5" />}
+              {tab === 'plugins' && <Package size={14} className="inline mr-1.5" />}
               {tab === 'stats' && <BarChart2 size={14} className="inline mr-1.5" />}
               {tab === 'backups' && <Archive size={14} className="inline mr-1.5" />}
               {tab}
@@ -321,42 +397,65 @@ export function ServerDetailPage() {
 
       {/* Console Tab */}
       {activeTab === 'console' && (
-        <div className="card">
-          <div
-            className="bg-dark-1000 rounded-t-xl p-4 h-96 overflow-y-auto font-mono text-xs scrollbar-none"
-            style={{ background: '#0d1117' }}
-          >
-            {consoleLines.length === 0 ? (
-              <p className="text-slate-600">Waiting for output...</p>
-            ) : (
-              consoleLines.map((line, i) => (
-                <p
-                  key={i}
-                  className={cn(
-                    'leading-relaxed whitespace-pre-wrap break-all',
-                    line.type === 'input' ? 'text-yellow-300' : 'text-green-300/90'
-                  )}
-                >
-                  {line.data}
-                </p>
-              ))
-            )}
-            <div ref={consoleEndRef} />
+        <div className="flex gap-4">
+          <div className="card flex-1 min-w-0">
+            <div
+              className="bg-dark-1000 rounded-t-xl p-4 h-96 overflow-y-auto font-mono text-xs scrollbar-none"
+              style={{ background: '#0d1117' }}
+            >
+              {consoleLines.length === 0 ? (
+                <p className="text-slate-600">Waiting for output...</p>
+              ) : (
+                consoleLines.map((line, i) => (
+                  <p
+                    key={i}
+                    className={cn(
+                      'leading-relaxed whitespace-pre-wrap break-all',
+                      line.type === 'input' ? 'text-yellow-300' : 'text-green-300/90'
+                    )}
+                  >
+                    {line.data}
+                  </p>
+                ))
+              )}
+              <div ref={consoleEndRef} />
+            </div>
+            <form onSubmit={sendCommand} className="flex gap-2 p-3 border-t border-dark-800">
+              <span className="flex items-center text-green-400 font-mono text-sm px-2">$</span>
+              <input
+                type="text"
+                className="input flex-1 font-mono text-sm"
+                placeholder="Enter command..."
+                value={command}
+                onChange={(e) => setCommand(e.target.value)}
+                disabled={!isRunning}
+              />
+              <button type="submit" className="btn-primary btn-sm" disabled={!isRunning || !command.trim()}>
+                Send
+              </button>
+            </form>
           </div>
-          <form onSubmit={sendCommand} className="flex gap-2 p-3 border-t border-dark-800">
-            <span className="flex items-center text-green-400 font-mono text-sm px-2">$</span>
-            <input
-              type="text"
-              className="input flex-1 font-mono text-sm"
-              placeholder="Enter command..."
-              value={command}
-              onChange={(e) => setCommand(e.target.value)}
-              disabled={!isRunning}
-            />
-            <button type="submit" className="btn-primary btn-sm" disabled={!isRunning || !command.trim()}>
-              Send
-            </button>
-          </form>
+
+          {/* Players widget */}
+          <div className="card w-48 shrink-0 self-start">
+            <div className="card-header flex items-center gap-2">
+              <Users size={13} className="text-slate-400" />
+              <span className="text-xs font-semibold text-slate-200">
+                Players {isRunning ? `${players.online}/${players.max}` : '—'}
+              </span>
+            </div>
+            <div className="p-3 space-y-1 max-h-80 overflow-y-auto">
+              {!isRunning ? (
+                <p className="text-xs text-slate-600">Server offline</p>
+              ) : players.names.length === 0 ? (
+                <p className="text-xs text-slate-600">No players online</p>
+              ) : (
+                players.names.map((name) => (
+                  <p key={name} className="text-xs text-slate-300 font-mono truncate">{name}</p>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -481,6 +580,67 @@ export function ServerDetailPage() {
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Plugins Tab */}
+      {activeTab === 'plugins' && (
+        <div className="card">
+          <div className="card-header">
+            <h3 className="text-sm font-semibold text-slate-100">Plugin Installer</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Search Modrinth and install plugins directly to your server</p>
+          </div>
+          <div className="p-4 border-b border-dark-800">
+            <form
+              onSubmit={(e) => { e.preventDefault(); searchPlugins(); }}
+              className="flex gap-2"
+            >
+              <input
+                type="text"
+                className="input flex-1"
+                placeholder="Search plugins (e.g. WorldEdit, EssentialsX)..."
+                value={pluginQuery}
+                onChange={(e) => setPluginQuery(e.target.value)}
+              />
+              <button type="submit" className="btn-primary btn-sm" disabled={pluginLoading || !pluginQuery.trim()}>
+                {pluginLoading ? <Spinner size="sm" /> : <><Search size={14} /> Search</>}
+              </button>
+            </form>
+          </div>
+
+          <div className="divide-y divide-dark-800/50">
+            {pluginResults.length === 0 && !pluginLoading && (
+              <div className="p-10 text-center text-slate-500">
+                <Package size={36} className="mx-auto mb-3 opacity-20" />
+                <p className="text-sm">Search for plugins to install</p>
+              </div>
+            )}
+            {pluginResults.map((project) => (
+              <div key={project.project_id} className="flex items-start gap-4 px-5 py-4">
+                {project.icon_url ? (
+                  <img src={project.icon_url} alt="" className="w-10 h-10 rounded-lg shrink-0 object-cover" />
+                ) : (
+                  <div className="w-10 h-10 rounded-lg bg-dark-800 flex items-center justify-center shrink-0">
+                    <Package size={18} className="text-slate-500" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-slate-200">{project.title}</p>
+                  <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{project.description}</p>
+                  <p className="text-xs text-slate-600 mt-1">{project.downloads.toLocaleString()} downloads</p>
+                </div>
+                <button
+                  className="btn-primary btn-sm shrink-0"
+                  disabled={installing === project.project_id}
+                  onClick={() => installPlugin(project)}
+                >
+                  {installing === project.project_id
+                    ? <Spinner size="sm" />
+                    : <><Download size={13} /> Install</>}
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
