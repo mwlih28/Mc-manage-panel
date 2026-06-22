@@ -108,7 +108,13 @@ class ServerManager extends EventEmitter {
         await ensureVolumePermissions(config.image, dataPath);
       } catch (err) {
         logger.warn(`Volume permission prep failed for ${uuid}:`, err);
+        this.sendConsole(uuid, `[Wings] Volume permission prep failed: ${(err as Error).message}`);
       }
+      // Diagnostic: report actual ownership/mode of the volume after prep.
+      try {
+        const st = fs.statSync(dataPath);
+        this.sendConsole(uuid, `[Wings] Volume ${dataPath} -> uid=${st.uid} gid=${st.gid} mode=${(st.mode & 0o777).toString(8)}`);
+      } catch { /* ignore */ }
 
       // Run install script on first start (when server jar doesn't exist)
       const jarFile = config.environment['SERVER_JARFILE'] || 'server.jar';
