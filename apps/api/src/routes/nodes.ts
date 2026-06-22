@@ -71,9 +71,9 @@ router.post(
       data: {
         name, description, fqdn,
         scheme: scheme || 'https',
-        port: port || 8080,
-        daemonPort: daemonPort || 2022,
-        daemonSftp: daemonSftp || 2022,
+        port: parseInt(port) || 8080,
+        daemonPort: parseInt(daemonPort) || 2022,
+        daemonSftp: parseInt(daemonSftp) || 2022,
         memory: parseInt(memory),
         memoryOverallocate: parseInt(memoryOverallocate) || 0,
         disk: parseInt(disk),
