@@ -12,7 +12,7 @@ const MINECRAFT_PAPER_TEMPLATE = {
   nestName: 'Minecraft',
   name: 'Paper',
   description: 'High performance Minecraft server with plugin support.',
-  dockerImage: 'ghcr.io/pterodactyl/yolks:java_17',
+  dockerImage: 'ghcr.io/pterodactyl/yolks:java_21',
   startup: 'java -Xms128M -XX:MaxRAMPercentage=95.0 -Dterminal.jline=false -Dterminal.ansi=true -jar {{SERVER_JARFILE}} --nogui',
   configStop: 'stop',
   scriptInstall: `#!/bin/bash

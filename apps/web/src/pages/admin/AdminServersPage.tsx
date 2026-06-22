@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Plus, Search, Trash2, ExternalLink } from 'lucide-react';
+import { Plus, Search, Trash2, ExternalLink, Pencil } from 'lucide-react';
 import api from '@/lib/axios';
 import { Server } from '@/types';
 import { getServerStatusBadge, getServerStatusDot, formatDate } from '@/lib/utils';
@@ -15,6 +15,7 @@ export function AdminServersPage() {
   const [page, setPage] = useState(1);
   const [showCreate, setShowCreate] = useState(false);
   const [deleteServer, setDeleteServer] = useState<Server | null>(null);
+  const [editServer, setEditServer] = useState<Server | null>(null);
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -122,6 +123,12 @@ export function AdminServersPage() {
                             <ExternalLink size={14} />
                           </Link>
                           <button
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-panel-400 hover:bg-panel-500/10 transition-colors"
+                            onClick={() => setEditServer(server)}
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
                             className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
                             onClick={() => setDeleteServer(server)}
                           >
@@ -154,6 +161,17 @@ export function AdminServersPage() {
           onClose={() => setShowCreate(false)}
           onSuccess={() => {
             setShowCreate(false);
+            queryClient.invalidateQueries({ queryKey: ['admin-servers'] });
+          }}
+        />
+      )}
+
+      {editServer && (
+        <EditServerModal
+          server={editServer}
+          onClose={() => setEditServer(null)}
+          onSuccess={() => {
+            setEditServer(null);
             queryClient.invalidateQueries({ queryKey: ['admin-servers'] });
           }}
         />
@@ -274,6 +292,51 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
           <button type="button" className="btn-secondary flex-1" onClick={onClose}>Cancel</button>
           <button type="submit" className="btn-primary flex-1" disabled={isLoading}>
             {isLoading ? <Spinner size="sm" /> : 'Create Server'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function EditServerModal({ server, onClose, onSuccess }: { server: Server; onClose: () => void; onSuccess: () => void }) {
+  const [image, setImage] = useState((server as Server & { image?: string }).image || 'ghcr.io/pterodactyl/yolks:java_21');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    try {
+      await api.patch(`/servers/${server.id}`, { image });
+      toast.success('Server image updated. Restart the server to apply.');
+      onSuccess();
+    } catch {
+      toast.error('Failed to update server');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <Modal isOpen onClose={onClose} title={`Edit: ${server.name}`} size="md">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="label">Docker Image</label>
+          <input
+            className="input font-mono"
+            value={image}
+            onChange={(e) => setImage(e.target.value)}
+            placeholder="ghcr.io/pterodactyl/yolks:java_21"
+            required
+          />
+          <p className="text-xs text-slate-500 mt-1">
+            Use <code className="text-panel-400">ghcr.io/pterodactyl/yolks:java_21</code> for Paper 1.21+
+          </p>
+        </div>
+        <div className="flex gap-3 pt-2">
+          <button type="button" className="btn-secondary flex-1" onClick={onClose}>Cancel</button>
+          <button type="submit" className="btn-primary flex-1" disabled={isLoading}>
+            {isLoading ? <Spinner size="sm" /> : 'Save'}
           </button>
         </div>
       </form>
