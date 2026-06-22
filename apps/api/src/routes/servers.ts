@@ -1,11 +1,27 @@
 import { Router, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import { v4 as uuidv4 } from 'uuid';
+import axios from 'axios';
 import { prisma } from '../utils/prisma';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import { AuthRequest } from '../types';
 import { sendPowerAction, sendCommand as wingsSendCommand, createServerOnNode, getServerResources } from '../services/wingsClient';
 import { logger } from '../utils/logger';
+
+async function getWingsClient(serverId: string, userId: string, isAdmin: boolean) {
+  const server = await prisma.server.findFirst({
+    where: { id: serverId, ...(isAdmin ? {} : { userId }) },
+    include: { node: true },
+  });
+  if (!server || !server.node) return null;
+  const { node } = server;
+  const client = axios.create({
+    baseURL: `${node.scheme}://${node.fqdn}:${node.daemonPort}/api`,
+    headers: { Authorization: `Bearer ${node.token}` },
+    timeout: 15000,
+  });
+  return { server, client };
+}
 
 const router = Router();
 
@@ -347,6 +363,88 @@ router.get('/:id/activity', authenticate, async (req: AuthRequest, res: Response
   });
 
   return res.json({ data: activities });
+});
+
+// ──────────────────────────────────────────────────────
+// File Manager (proxy to Wings)
+// ──────────────────────────────────────────────────────
+
+// GET /servers/:id/files?directory=/
+router.get('/:id/files', authenticate, async (req: AuthRequest, res: Response) => {
+  const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
+  if (!ctx) return res.status(404).json({ message: 'Server not found' });
+  try {
+    const { data } = await ctx.client.get(`/servers/${ctx.server.uuid}/files`, { params: { directory: req.query.directory || '/' } });
+    return res.json(data);
+  } catch (err) {
+    const e = err as { response?: { data?: unknown; status?: number } };
+    return res.status(e.response?.status || 500).json(e.response?.data || { message: 'Wings error' });
+  }
+});
+
+// GET /servers/:id/files/contents?file=path
+router.get('/:id/files/contents', authenticate, async (req: AuthRequest, res: Response) => {
+  const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
+  if (!ctx) return res.status(404).json({ message: 'Server not found' });
+  try {
+    const { data } = await ctx.client.get(`/servers/${ctx.server.uuid}/files/contents`, { params: { file: req.query.file } });
+    return res.json(data);
+  } catch (err) {
+    const e = err as { response?: { data?: unknown; status?: number } };
+    return res.status(e.response?.status || 500).json(e.response?.data || { message: 'Wings error' });
+  }
+});
+
+// POST /servers/:id/files/write
+router.post('/:id/files/write', authenticate, async (req: AuthRequest, res: Response) => {
+  const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
+  if (!ctx) return res.status(404).json({ message: 'Server not found' });
+  try {
+    const { data } = await ctx.client.post(`/servers/${ctx.server.uuid}/files/write`, req.body);
+    return res.json(data);
+  } catch (err) {
+    const e = err as { response?: { data?: unknown; status?: number } };
+    return res.status(e.response?.status || 500).json(e.response?.data || { message: 'Wings error' });
+  }
+});
+
+// POST /servers/:id/files/delete
+router.post('/:id/files/delete', authenticate, async (req: AuthRequest, res: Response) => {
+  const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
+  if (!ctx) return res.status(404).json({ message: 'Server not found' });
+  try {
+    const { data } = await ctx.client.post(`/servers/${ctx.server.uuid}/files/delete`, req.body);
+    return res.json(data);
+  } catch (err) {
+    const e = err as { response?: { data?: unknown; status?: number } };
+    return res.status(e.response?.status || 500).json(e.response?.data || { message: 'Wings error' });
+  }
+});
+
+// POST /servers/:id/files/create-folder
+router.post('/:id/files/create-folder', authenticate, async (req: AuthRequest, res: Response) => {
+  const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
+  if (!ctx) return res.status(404).json({ message: 'Server not found' });
+  try {
+    const { data } = await ctx.client.post(`/servers/${ctx.server.uuid}/files/create-folder`, req.body);
+    return res.json(data);
+  } catch (err) {
+    const e = err as { response?: { data?: unknown; status?: number } };
+    return res.status(e.response?.status || 500).json(e.response?.data || { message: 'Wings error' });
+  }
+});
+
+// PUT /servers/:id/files/rename
+router.put('/:id/files/rename', authenticate, async (req: AuthRequest, res: Response) => {
+  const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
+  if (!ctx) return res.status(404).json({ message: 'Server not found' });
+  try {
+    const { data } = await ctx.client.put(`/servers/${ctx.server.uuid}/files/rename`, req.body);
+    return res.json(data);
+  } catch (err) {
+    const e = err as { response?: { data?: unknown; status?: number } };
+    return res.status(e.response?.status || 500).json(e.response?.data || { message: 'Wings error' });
+  }
 });
 
 export default router;

@@ -3,7 +3,8 @@ import { useParams, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Play, Square, RotateCcw, Zap, Terminal, BarChart2,
-  HardDrive, Archive, ChevronLeft, Cpu, MemoryStick
+  HardDrive, Archive, ChevronLeft, Cpu, MemoryStick,
+  Folder, FolderOpen, File, ChevronRight, ArrowLeft, Pencil, Trash2, Plus, X, Check
 } from 'lucide-react';
 import { io as ioClient, Socket } from 'socket.io-client';
 import api from '@/lib/axios';
@@ -16,7 +17,17 @@ import { Spinner } from '@/components/ui/Spinner';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
-type Tab = 'console' | 'stats' | 'backups';
+type Tab = 'console' | 'files' | 'stats' | 'backups';
+
+interface FileEntry {
+  name: string;
+  mode: string;
+  size: number;
+  isFile: boolean;
+  isDirectory: boolean;
+  isSymlink: boolean;
+  modifiedAt: string;
+}
 
 interface ConsoleLine {
   type: 'output' | 'input' | 'status';
@@ -41,6 +52,51 @@ export function ServerDetailPage() {
     queryFn: () => api.get(`/servers/${id}`).then((r) => r.data.data as Server),
     enabled: !!id,
   });
+
+  const [currentDir, setCurrentDir] = useState('/');
+  const [editingFile, setEditingFile] = useState<{ path: string; content: string } | null>(null);
+  const [editContent, setEditContent] = useState('');
+  const [savingFile, setSavingFile] = useState(false);
+
+  const { data: filesData, isLoading: filesLoading, refetch: refetchFiles } = useQuery({
+    queryKey: ['server-files', id, currentDir],
+    queryFn: () => api.get(`/servers/${id}/files`, { params: { directory: currentDir } }).then((r) => r.data),
+    enabled: activeTab === 'files' && !!id,
+  });
+
+  const openFile = async (filePath: string) => {
+    try {
+      const { data } = await api.get(`/servers/${id}/files/contents`, { params: { file: filePath } });
+      setEditingFile({ path: filePath, content: data.content });
+      setEditContent(data.content);
+    } catch {
+      toast.error('Cannot open file');
+    }
+  };
+
+  const saveFile = async () => {
+    if (!editingFile) return;
+    setSavingFile(true);
+    try {
+      await api.post(`/servers/${id}/files/write`, { file: editingFile.path, content: editContent });
+      toast.success('File saved');
+      setEditingFile(null);
+    } catch {
+      toast.error('Failed to save file');
+    } finally {
+      setSavingFile(false);
+    }
+  };
+
+  const deleteFile = async (filePath: string) => {
+    try {
+      await api.post(`/servers/${id}/files/delete`, { files: [filePath] });
+      toast.success('Deleted');
+      refetchFiles();
+    } catch {
+      toast.error('Failed to delete');
+    }
+  };
 
   const { data: backupsData } = useQuery({
     queryKey: ['server-backups', id],
@@ -235,7 +291,7 @@ export function ServerDetailPage() {
       {/* Tabs */}
       <div className="border-b border-dark-800">
         <div className="flex gap-1">
-          {(['console', 'stats', 'backups'] as Tab[]).map((tab) => (
+          {(['console', 'files', 'stats', 'backups'] as Tab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -247,6 +303,7 @@ export function ServerDetailPage() {
               )}
             >
               {tab === 'console' && <Terminal size={14} className="inline mr-1.5" />}
+              {tab === 'files' && <Folder size={14} className="inline mr-1.5" />}
               {tab === 'stats' && <BarChart2 size={14} className="inline mr-1.5" />}
               {tab === 'backups' && <Archive size={14} className="inline mr-1.5" />}
               {tab}
@@ -293,6 +350,130 @@ export function ServerDetailPage() {
               Send
             </button>
           </form>
+        </div>
+      )}
+
+      {/* Files Tab */}
+      {activeTab === 'files' && (
+        <div className="card">
+          {/* Breadcrumb */}
+          <div className="flex items-center gap-1.5 px-4 py-3 border-b border-dark-800 text-xs font-mono text-slate-400 flex-wrap">
+            <button onClick={() => setCurrentDir('/')} className="hover:text-slate-200">/</button>
+            {currentDir.split('/').filter(Boolean).map((part, i, arr) => (
+              <span key={i} className="flex items-center gap-1">
+                <ChevronRight size={10} />
+                <button
+                  onClick={() => setCurrentDir('/' + arr.slice(0, i + 1).join('/'))}
+                  className="hover:text-slate-200"
+                >{part}</button>
+              </span>
+            ))}
+            {currentDir !== '/' && (
+              <button
+                className="ml-auto flex items-center gap-1 text-slate-500 hover:text-slate-300"
+                onClick={() => setCurrentDir(currentDir.split('/').slice(0, -1).join('/') || '/')}
+              >
+                <ArrowLeft size={12} /> Up
+              </button>
+            )}
+          </div>
+
+          {/* File editor overlay */}
+          {editingFile && (
+            <div className="p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono text-slate-400">{editingFile.path}</span>
+                <div className="flex gap-2">
+                  <button className="btn-secondary btn-sm" onClick={() => setEditingFile(null)}><X size={13} /> Cancel</button>
+                  <button className="btn-primary btn-sm" onClick={saveFile} disabled={savingFile}>
+                    {savingFile ? 'Saving...' : <><Check size={13} /> Save</>}
+                  </button>
+                </div>
+              </div>
+              <textarea
+                className="w-full h-96 bg-dark-950 border border-slate-700/50 rounded-lg p-3 font-mono text-xs text-slate-300 resize-y focus:outline-none focus:border-brand-500/50"
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                spellCheck={false}
+              />
+            </div>
+          )}
+
+          {/* File list */}
+          {!editingFile && (
+            filesLoading ? (
+              <div className="flex justify-center py-10"><Spinner /></div>
+            ) : (
+              <div className="divide-y divide-dark-800/50">
+                {(!filesData?.files || filesData.files.length === 0) && (
+                  <div className="p-10 text-center text-slate-500 text-sm">Empty directory</div>
+                )}
+                {(filesData?.files as FileEntry[] || []).sort((a, b) =>
+                  a.isDirectory === b.isDirectory ? a.name.localeCompare(b.name) : a.isDirectory ? -1 : 1
+                ).map((file) => (
+                  <div key={file.name} className="flex items-center gap-3 px-4 py-2.5 hover:bg-dark-800/30 group">
+                    <div className="text-slate-500 shrink-0">
+                      {file.isDirectory
+                        ? <FolderOpen size={16} className="text-yellow-400/70" />
+                        : <File size={16} className="text-slate-500" />}
+                    </div>
+                    <button
+                      className="flex-1 text-left text-sm text-slate-300 hover:text-slate-100 truncate"
+                      onClick={() => {
+                        if (file.isDirectory) {
+                          setCurrentDir(currentDir.replace(/\/$/, '') + '/' + file.name);
+                        } else {
+                          openFile((currentDir.replace(/\/$/, '') + '/' + file.name));
+                        }
+                      }}
+                    >
+                      {file.name}
+                    </button>
+                    <span className="text-xs text-slate-600 shrink-0 hidden group-hover:inline">
+                      {file.isFile ? formatBytes(file.size) : ''}
+                    </span>
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {file.isFile && (
+                        <button
+                          className="p-1 text-slate-500 hover:text-slate-300"
+                          onClick={() => openFile((currentDir.replace(/\/$/, '') + '/' + file.name))}
+                          title="Edit"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                      )}
+                      <button
+                        className="p-1 text-slate-500 hover:text-red-400"
+                        onClick={() => deleteFile((currentDir.replace(/\/$/, '') + '/' + file.name))}
+                        title="Delete"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          )}
+
+          {/* Toolbar */}
+          {!editingFile && (
+            <div className="flex gap-2 px-4 py-3 border-t border-dark-800">
+              <button
+                className="btn-secondary btn-sm"
+                onClick={async () => {
+                  const name = prompt('Folder name:');
+                  if (!name) return;
+                  try {
+                    await api.post(`/servers/${id}/files/create-folder`, { name, directory: currentDir });
+                    refetchFiles();
+                  } catch { toast.error('Failed to create folder'); }
+                }}
+              >
+                <Plus size={13} /> New Folder
+              </button>
+            </div>
+          )}
         </div>
       )}
 
