@@ -76,7 +76,7 @@ class ServerManager extends EventEmitter {
   async startServer(uuid: string): Promise<void> {
     const server = this.servers.get(uuid);
     if (!server) throw new Error(`Server ${uuid} not found`);
-    if (server.status === 'running' || server.status === 'starting') return;
+    if (server.status === 'running' || server.status === 'starting' || server.status === 'stopping') return;
 
     this.setStatus(uuid, 'starting');
     const cfg = getConfig();
@@ -183,7 +183,7 @@ class ServerManager extends EventEmitter {
   async stopServer(uuid: string, kill = false): Promise<void> {
     const server = this.servers.get(uuid);
     if (!server) throw new Error(`Server ${uuid} not found`);
-    if (server.status === 'offline') return;
+    if (server.status === 'offline' || server.status === 'stopping') return;
 
     this.setStatus(uuid, 'stopping');
     clearInterval(server.statsInterval);
@@ -191,11 +191,6 @@ class ServerManager extends EventEmitter {
     if (server.logStream) {
       try { (server.logStream as NodeJS.ReadableStream & { destroy?: () => void }).destroy?.(); } catch { /* ignore */ }
       server.logStream = undefined;
-    }
-
-    if (server.stdinStream) {
-      try { (server.stdinStream as NodeJS.ReadWriteStream & { destroy?: () => void }).destroy?.(); } catch { /* ignore */ }
-      server.stdinStream = undefined;
     }
 
     if (server.containerId) {
@@ -206,24 +201,33 @@ class ServerManager extends EventEmitter {
         if (kill) {
           await container.kill();
         } else {
-          // Send MC stop command directly — cannot use this.sendCommand() here because
-          // status is already 'stopping' and sendCommand guards against non-running states.
           const stopCmd = (server.config.environment['MC_STOP_COMMAND'] || 'stop').replace(/"/g, '\\"');
-          try {
-            const exec = await container.exec({
-              AttachStdin: true,
-              AttachStdout: false,
-              AttachStderr: false,
-              Cmd: ['/bin/sh', '-c', `echo "${stopCmd}" > /proc/1/fd/0`],
-            });
-            await exec.start({ hijack: true, stdin: true });
-          } catch {
+
+          // Use the persistent stdinStream first — most reliable path to Minecraft stdin
+          if (server.stdinStream) {
             try {
-              const stream = await container.attach({ stream: true, stdin: true, stdout: false, stderr: false });
-              stream.write(stopCmd + '\n');
-              stream.end();
-            } catch { /* best effort */ }
+              server.stdinStream.write(stopCmd + '\n');
+              await new Promise(r => setTimeout(r, 500));
+            } catch { /* stream may be closing */ }
+          } else {
+            // Fall back to exec writing to PID 1's stdin fd
+            try {
+              const exec = await container.exec({
+                AttachStdin: true,
+                AttachStdout: false,
+                AttachStderr: false,
+                Cmd: ['/bin/sh', '-c', `echo "${stopCmd}" > /proc/1/fd/0`],
+              });
+              await exec.start({ hijack: true, stdin: true });
+            } catch {
+              try {
+                const stream = await container.attach({ stream: true, stdin: true, stdout: false, stderr: false });
+                stream.write(stopCmd + '\n');
+                stream.end();
+              } catch { /* best effort */ }
+            }
           }
+
           await new Promise(r => setTimeout(r, 8000));
           try { await container.stop({ t: 15 }); } catch { /* may already be stopped */ }
         }
@@ -234,6 +238,12 @@ class ServerManager extends EventEmitter {
       }
     }
 
+    // Clean up streams after the stop command was sent and container is gone
+    if (server.stdinStream) {
+      try { (server.stdinStream as NodeJS.ReadWriteStream & { destroy?: () => void }).destroy?.(); } catch { /* ignore */ }
+      server.stdinStream = undefined;
+    }
+
     server.containerId = undefined;
     server.startedAt = undefined;
     this.setStatus(uuid, 'offline');
@@ -241,6 +251,10 @@ class ServerManager extends EventEmitter {
   }
 
   async restartServer(uuid: string): Promise<void> {
+    const server = this.servers.get(uuid);
+    if (!server) return;
+    // Prevent double-restart: if already stopping or offline nothing useful to do
+    if (server.status === 'stopping') return;
     await this.stopServer(uuid);
     await new Promise(r => setTimeout(r, 1000));
     await this.startServer(uuid);
