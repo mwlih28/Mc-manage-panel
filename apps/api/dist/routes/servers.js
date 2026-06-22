@@ -108,14 +108,25 @@ router.post('/', auth_1.authenticate, auth_1.requireAdmin, [
         return res.status(422).json({ message: 'Node not found' });
     if (!egg)
         return res.status(422).json({ message: 'Egg not found' });
-    // Handle allocation
+    // Handle allocation — pick a free one, or auto-create if none exist
     let finalAllocationId = allocationId;
     if (!finalAllocationId) {
-        const freeAlloc = await prisma_1.prisma.allocation.findFirst({
+        let freeAlloc = await prisma_1.prisma.allocation.findFirst({
             where: { nodeId, assigned: false },
+            orderBy: { port: 'asc' },
         });
-        if (!freeAlloc)
-            return res.status(400).json({ message: 'No free allocations on this node' });
+        if (!freeAlloc) {
+            // Auto-generate next available port starting from 25565
+            const highest = await prisma_1.prisma.allocation.findFirst({
+                where: { nodeId },
+                orderBy: { port: 'desc' },
+            });
+            const nextPort = highest ? highest.port + 1 : 25565;
+            const nodeRecord = await prisma_1.prisma.node.findUnique({ where: { id: nodeId } });
+            freeAlloc = await prisma_1.prisma.allocation.create({
+                data: { nodeId, ip: nodeRecord?.fqdn || '0.0.0.0', port: nextPort },
+            });
+        }
         finalAllocationId = freeAlloc.id;
     }
     const server = await prisma_1.prisma.server.create({

@@ -207,8 +207,19 @@ function NodeDetailModal({ node, onClose, onSuccess }: { node: Node; onClose: ()
 
   const addAllocations = async () => {
     const ip = newIp.trim();
-    const ports = newPorts.split(',').map((p) => parseInt(p.trim())).filter((p) => !isNaN(p) && p > 0);
-    if (!ip || ports.length === 0) { toast.error('Enter IP and at least one port'); return; }
+    // Support "25565-25600" range notation as well as "25565, 25566" comma list
+    let ports: number[] = [];
+    const rangeMatch = newPorts.trim().match(/^(\d+)-(\d+)$/);
+    if (rangeMatch) {
+      const from = parseInt(rangeMatch[1]);
+      const to = parseInt(rangeMatch[2]);
+      if (to > from && to - from <= 500) {
+        ports = Array.from({ length: to - from + 1 }, (_, i) => from + i);
+      }
+    } else {
+      ports = newPorts.split(',').map((p) => parseInt(p.trim())).filter((p) => !isNaN(p) && p > 0);
+    }
+    if (!ip || ports.length === 0) { toast.error('Enter IP and ports (e.g. 25565-25600 or 25565,25566)'); return; }
     setAddingAlloc(true);
     try {
       await api.post(`/nodes/${node.id}/allocations`, { ip, ports });
@@ -338,7 +349,7 @@ function NodeDetailModal({ node, onClose, onSuccess }: { node: Node; onClose: ()
               </div>
               <div>
                 <label className="label">Ports (comma-separated)</label>
-                <input className="input" placeholder="25565, 25566, 25567" value={newPorts} onChange={(e) => setNewPorts(e.target.value)} />
+                <input className="input" placeholder="25565-25600 or 25565,25566" value={newPorts} onChange={(e) => setNewPorts(e.target.value)} />
               </div>
             </div>
             <button className="btn-primary btn-sm" onClick={addAllocations} disabled={addingAlloc}>
