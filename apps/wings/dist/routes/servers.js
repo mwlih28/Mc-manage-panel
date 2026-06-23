@@ -294,11 +294,10 @@ router.post('/:uuid/plugins/install', async (req, res) => {
         const containerName = `mc_${uuid}`;
         // Ensure target dir exists inside the container (only works if running; ignore failure)
         await execFileAsync('docker', ['exec', containerName, 'mkdir', '-p', `/home/container/${type}`]).catch(() => { });
-        // Copy the temp directory's contents into the container.
-        // Using srcDir/ → destDir creates the destination directory if it doesn't exist,
-        // and works on stopped containers (Docker daemon handles the copy as root).
+        // Copy the specific file (not the directory) to avoid trailing-slash ambiguity.
+        // docker cp works on both running and stopped containers via the Docker daemon (root).
         try {
-            await execFileAsync('docker', ['cp', tmpDir + '/', `${containerName}:/home/container/${type}`]);
+            await execFileAsync('docker', ['cp', tmpFile, `${containerName}:/home/container/${type}/${safeFilename}`]);
             logger_1.logger.info(`Plugin installed via docker cp: ${safeFilename}`);
             return res.json({ message: `${safeFilename} installed successfully` });
         }

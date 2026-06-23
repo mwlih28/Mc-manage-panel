@@ -609,7 +609,7 @@ router.post('/:id/plugins/install', authenticate, async (req: AuthRequest, res: 
   const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
   try {
-    const { data } = await ctx.client.post(`/servers/${ctx.server.uuid}/plugins/install`, req.body, { timeout: 60000 });
+    const { data } = await ctx.client.post(`/servers/${ctx.server.uuid}/plugins/install`, req.body, { timeout: 120000 });
     return res.json(data);
   } catch (err) {
     const e = err as { response?: { data?: unknown; status?: number } };

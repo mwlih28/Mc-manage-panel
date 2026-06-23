@@ -6,7 +6,7 @@ import {
   HardDrive, Archive, ChevronLeft, Cpu, MemoryStick,
   Folder, FolderOpen, File, ChevronRight, ArrowLeft, Pencil, Trash2, Plus, X, Check,
   Package, Users, Search, Download, RefreshCw, Tag, AlertTriangle, Shield, ShieldOff,
-  MapPin, Clock, Sword, Hammer, Footprints, Ban, LogOut, Wifi
+  MapPin, Clock, Sword, Hammer, Footprints, Ban, LogOut, Wifi, Navigation
 } from 'lucide-react';
 import { io as ioClient, Socket } from 'socket.io-client';
 import api from '@/lib/axios';
@@ -132,6 +132,7 @@ export function ServerDetailPage() {
   const [banReason, setBanReason] = useState('');
   const [kickReason, setKickReason] = useState('');
   const [playerActionLoading, setPlayerActionLoading] = useState<string | null>(null);
+  const [tpAdminName, setTpAdminName] = useState(() => localStorage.getItem('mcAdminName') || '');
 
   const { data: filesData, isLoading: filesLoading, refetch: refetchFiles } = useQuery({
     queryKey: ['server-files', id, currentDir],
@@ -447,8 +448,8 @@ export function ServerDetailPage() {
     finally { setPlayerDetailsLoading(false); }
   };
 
-  const playerAction = async (action: 'ban' | 'unban' | 'kick' | 'ipban', player: PlayerHistoryEntry) => {
-    if (!player.uuid && action !== 'kick') { toast.error('Player UUID unknown'); return; }
+  const playerAction = async (action: 'ban' | 'unban' | 'kick' | 'ipban' | 'tp', player: PlayerHistoryEntry) => {
+    if (!player.uuid && action !== 'kick' && action !== 'tp') { toast.error('Player UUID unknown'); return; }
     setPlayerActionLoading(action);
     try {
       if (action === 'ban') {
@@ -463,6 +464,10 @@ export function ServerDetailPage() {
       } else if (action === 'ipban') {
         await api.post(`/servers/${id}/players/${player.uuid}/ipban`, { name: player.name, reason: banReason || 'IP banned by admin' });
         toast.success(`${player.name} IP banned`);
+      } else if (action === 'tp') {
+        if (!tpAdminName.trim()) { toast.error('Enter your in-game name first'); return; }
+        await api.post(`/servers/${id}/command`, { command: `tp ${tpAdminName.trim()} ${player.name}` });
+        toast.success(`Teleporting ${tpAdminName} → ${player.name}`);
       }
       // Refresh details
       if (player.uuid) {
@@ -1231,9 +1236,9 @@ export function ServerDetailPage() {
             ) : !playerInventory ? (
               <p className="text-slate-500 text-sm text-center py-8">Could not read inventory.</p>
             ) : (
-              <div className="space-y-4">
-                <InventoryGrid title="Inventory" items={playerInventory.inventory} />
-                <InventoryGrid title="Ender Chest" items={playerInventory.enderChest} />
+              <div className="space-y-6">
+                <MCInventoryGrid items={playerInventory.inventory} />
+                <MCInventoryGrid items={playerInventory.enderChest} isEnderChest />
               </div>
             )}
           </div>
@@ -1337,9 +1342,9 @@ export function ServerDetailPage() {
                   {playerDetails && (
                     <section>
                       <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Inventory</h3>
-                      <InventoryGrid title="Inventory" items={playerDetails.inventory} onDelete={slot => deleteInventoryItem(selectedPlayer, slot, false)} />
-                      <div className="mt-4">
-                        <InventoryGrid title="Ender Chest" items={playerDetails.enderChest} onDelete={slot => deleteInventoryItem(selectedPlayer, slot, true)} />
+                      <MCInventoryGrid items={playerDetails.inventory} onDelete={slot => deleteInventoryItem(selectedPlayer, slot, false)} />
+                      <div className="mt-6">
+                        <MCInventoryGrid items={playerDetails.enderChest} isEnderChest onDelete={slot => deleteInventoryItem(selectedPlayer, slot, true)} />
                       </div>
                     </section>
                   )}
@@ -1348,6 +1353,24 @@ export function ServerDetailPage() {
                   <section>
                     <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Actions</h3>
                     <div className="space-y-3">
+                      {/* Teleport — only when player is online */}
+                      {selectedPlayer.online && (
+                        <div className="flex gap-2">
+                          <input
+                            className="input flex-1 text-sm"
+                            placeholder="Your in-game name (admin)..."
+                            value={tpAdminName}
+                            onChange={e => { setTpAdminName(e.target.value); localStorage.setItem('mcAdminName', e.target.value); }}
+                          />
+                          <button
+                            className="btn-primary btn-sm shrink-0"
+                            disabled={playerActionLoading === 'tp'}
+                            onClick={() => playerAction('tp', selectedPlayer)}
+                          >
+                            {playerActionLoading === 'tp' ? <Spinner size="sm" /> : <><Navigation size={13} />TP Here</>}
+                          </button>
+                        </div>
+                      )}
                       {/* Kick */}
                       {selectedPlayer.online && (
                         <div className="flex gap-2">
@@ -1394,37 +1417,144 @@ export function ServerDetailPage() {
   );
 }
 
-function InventoryGrid({ title, items, onDelete }: { title: string; items: NbtItem[]; onDelete?: (slot: number) => void }) {
-  if (items.length === 0) return (
-    <div>
-      <p className="text-xs font-semibold text-slate-400 mb-2">{title}</p>
-      <p className="text-xs text-slate-600">Empty</p>
+function getItemStyle(id: string): { bg: string; fg: string } {
+  const s = id.toLowerCase();
+  if (s.includes('diamond'))   return { bg: '#0e3d4a', fg: '#00d8ff' };
+  if (s.includes('netherite')) return { bg: '#2d1a2d', fg: '#9b7fa6' };
+  if (s.includes('gold') || s.includes('golden')) return { bg: '#3d3000', fg: '#ffd700' };
+  if (s.includes('emerald'))   return { bg: '#0a2e0a', fg: '#00c020' };
+  if (s.includes('redstone'))  return { bg: '#2e0a0a', fg: '#ff4444' };
+  if (s.includes('obsidian') || s.includes('ancient_debris')) return { bg: '#1a0a2e', fg: '#7a4fd4' };
+  if (s.includes('iron'))      return { bg: '#252525', fg: '#c0c0c0' };
+  if (s.includes('lapis'))     return { bg: '#0a0a2e', fg: '#4488ff' };
+  if (s.includes('coal'))      return { bg: '#1a1a1a', fg: '#666' };
+  if (s.includes('potion') || s.includes('enchanted')) return { bg: '#0a1020', fg: '#6699ff' };
+  if (s.includes('sword') || s.includes('axe') || s.includes('pickaxe') || s.includes('shovel') || s.includes('hoe')) return { bg: '#1a1a30', fg: '#aaaaff' };
+  if (s.includes('helmet') || s.includes('chestplate') || s.includes('leggings') || s.includes('boots')) return { bg: '#1a2e1a', fg: '#44cc88' };
+  if (s.includes('bow') || s.includes('arrow') || s.includes('crossbow')) return { bg: '#2a1a00', fg: '#cc8844' };
+  if (s.includes('apple') || s.includes('bread') || s.includes('beef') || s.includes('chicken') || s.includes('fish') || s.includes('carrot') || s.includes('potato')) return { bg: '#2e1a0a', fg: '#ff8844' };
+  if (s.includes('oak') || s.includes('birch') || s.includes('spruce') || s.includes('acacia') || s.includes('plank') || s.includes('log')) return { bg: '#2a1a00', fg: '#c87840' };
+  if (s.includes('stone') || s.includes('cobble') || s.includes('brick')) return { bg: '#1e1e1e', fg: '#888' };
+  if (s.includes('grass') || s.includes('dirt') || s.includes('sand')) return { bg: '#152e0a', fg: '#66aa44' };
+  if (s.includes('glass') || s.includes('ice'))   return { bg: '#0a1a2e', fg: '#88aaff' };
+  if (s.includes('tnt') || s.includes('fire') || s.includes('lava')) return { bg: '#2e1000', fg: '#ff6600' };
+  return { bg: '#1a2030', fg: '#778899' };
+}
+
+function itemAbbr(id: string): string {
+  return id.split('_').map(w => w[0]?.toUpperCase() ?? '').join('').slice(0, 3);
+}
+
+function MCSlot({ item, onDelete }: { item?: NbtItem; onDelete?: (slot: number) => void }) {
+  if (!item) {
+    return (
+      <div
+        className="w-9 h-9 rounded-sm flex-shrink-0"
+        style={{ background: '#1a2030', border: '1px solid #0d1520', boxShadow: 'inset 1px 1px 0 rgba(0,0,0,0.6), inset -1px -1px 0 rgba(255,255,255,0.04)' }}
+      />
+    );
+  }
+  const { bg, fg } = getItemStyle(item.id);
+  return (
+    <div
+      className="relative group flex-shrink-0 cursor-default"
+      title={`${item.id.replace(/_/g, ' ')} ×${item.count}  [slot ${item.slot}]`}
+    >
+      <div
+        className="w-9 h-9 rounded-sm flex items-center justify-center relative overflow-hidden"
+        style={{ background: bg, border: `1px solid ${fg}30`, boxShadow: 'inset 1px 1px 0 rgba(255,255,255,0.07), inset -1px -1px 0 rgba(0,0,0,0.5)' }}
+      >
+        <span className="text-[7px] font-bold select-none" style={{ color: fg }}>{itemAbbr(item.id)}</span>
+        {item.count > 1 && (
+          <span className="absolute bottom-0 right-0.5 text-[8px] font-bold leading-none select-none"
+            style={{ color: '#fff', textShadow: '1px 1px 0 #000, -0.5px -0.5px 0 #000' }}>
+            {item.count}
+          </span>
+        )}
+      </div>
+      {onDelete && (
+        <button
+          onClick={() => onDelete(item.slot)}
+          className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 hover:bg-red-400 text-white rounded-full hidden group-hover:flex items-center justify-center shadow z-10"
+          title="Remove"
+        ><X size={7} /></button>
+      )}
     </div>
   );
+}
+
+function MCInventoryGrid({ items, isEnderChest = false, onDelete }: {
+  items: NbtItem[];
+  isEnderChest?: boolean;
+  onDelete?: (slot: number) => void;
+}) {
+  const slotMap = new Map(items.map(i => [i.slot, i]));
+
+  const row = (slots: number[]) => (
+    <div className="flex gap-0.5">
+      {slots.map(s => <MCSlot key={s} item={slotMap.get(s)} onDelete={onDelete} />)}
+    </div>
+  );
+
+  if (isEnderChest) {
+    const used = items.filter(i => i.slot >= 0 && i.slot <= 26).length;
+    return (
+      <div>
+        <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-2">
+          Ender Chest
+          <span className="text-slate-600 font-normal">{used}/27 slots</span>
+        </p>
+        <div className="inline-flex flex-col gap-0.5 p-1.5 rounded"
+          style={{ background: '#130a1e', border: '2px solid #3d1a5e' }}>
+          {row(Array.from({ length: 9 }, (_, i) => i))}
+          {row(Array.from({ length: 9 }, (_, i) => 9 + i))}
+          {row(Array.from({ length: 9 }, (_, i) => 18 + i))}
+        </div>
+      </div>
+    );
+  }
+
+  // Main inventory: armor (36-39) + main (9-35) + hotbar (0-8)
+  const armorSlots  = [39, 38, 37, 36]; // helmet → boots
+  const armorLabels = ['⛑', '🦺', '👗', '👢'];
+  const usedMain = items.filter(i => i.slot >= 0 && i.slot <= 39).length;
+
   return (
     <div>
-      <p className="text-xs font-semibold text-slate-400 mb-2">{title} <span className="text-slate-600">({items.length} items)</span></p>
-      <div className="flex flex-wrap gap-1.5">
-        {items.map((item, i) => (
-          <div key={i} className="relative group">
-            <div
-              className="w-11 h-11 bg-dark-700 border border-dark-600 rounded flex flex-col items-center justify-center hover:border-panel-500/40 transition-colors cursor-default"
-              title={`${item.id} ×${item.count} (slot ${item.slot})`}
-            >
-              <span className="text-[7px] text-slate-400 leading-tight text-center px-0.5 truncate w-full">{item.id.replace(/_/g, ' ')}</span>
-              {item.count > 1 && <span className="text-[9px] font-bold text-yellow-400 leading-none">×{item.count}</span>}
-            </div>
-            {onDelete && (
-              <button
-                onClick={() => onDelete(item.slot)}
-                className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 hover:bg-red-400 text-white rounded-full hidden group-hover:flex items-center justify-center transition-all shadow"
-                title="Remove item"
-              >
-                <X size={8} />
-              </button>
-            )}
-          </div>
-        ))}
+      <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-2">
+        Inventory
+        <span className="text-slate-600 font-normal">{usedMain}/40 slots</span>
+      </p>
+      <div className="inline-flex flex-col gap-1 p-1.5 rounded"
+        style={{ background: '#0d1520', border: '2px solid #1e3050' }}>
+
+        {/* Armor column */}
+        <div className="flex gap-0.5 mb-0.5">
+          {armorSlots.map((s, i) => {
+            const item = slotMap.get(s);
+            return item
+              ? <MCSlot key={s} item={item} onDelete={onDelete} />
+              : (
+                <div key={s} className="w-9 h-9 rounded-sm flex items-center justify-center flex-shrink-0"
+                  title={`Armor slot ${s} (empty)`}
+                  style={{ background: '#131f30', border: '1px solid #1e3050', opacity: 0.5 }}>
+                  <span className="text-sm select-none">{armorLabels[i]}</span>
+                </div>
+              );
+          })}
+          <div className="ml-1 text-[9px] text-slate-600 self-center leading-tight">armor</div>
+        </div>
+
+        {/* Main inventory (slots 9–35) */}
+        {row(Array.from({ length: 9 }, (_, i) => 9 + i))}
+        {row(Array.from({ length: 9 }, (_, i) => 18 + i))}
+        {row(Array.from({ length: 9 }, (_, i) => 27 + i))}
+
+        {/* Hotbar separator */}
+        <div className="my-0.5 border-t" style={{ borderColor: '#1e3050' }} />
+
+        {/* Hotbar (slots 0–8) */}
+        {row(Array.from({ length: 9 }, (_, i) => i))}
       </div>
     </div>
   );

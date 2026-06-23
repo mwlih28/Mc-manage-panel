@@ -591,7 +591,7 @@ router.post('/:id/plugins/install', auth_1.authenticate, async (req, res) => {
     if (!ctx)
         return res.status(404).json({ message: 'Server not found' });
     try {
-        const { data } = await ctx.client.post(`/servers/${ctx.server.uuid}/plugins/install`, req.body, { timeout: 60000 });
+        const { data } = await ctx.client.post(`/servers/${ctx.server.uuid}/plugins/install`, req.body, { timeout: 120000 });
         return res.json(data);
     }
     catch (err) {
