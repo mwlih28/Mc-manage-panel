@@ -159,7 +159,13 @@ router.post(
         cpu: parseInt(cpu) || 0,
         startup: startup || egg.startup,
         image: image || egg.dockerImage,
-        env: JSON.stringify({ ...Object.fromEntries((egg.variables || []).map(v => [v.envVariable, v.defaultValue])), ...(env || {}) }),
+        env: JSON.stringify({
+          // Always seed the two variables the JVM startup template depends on
+          SERVER_MEMORY: String(parseInt(memory)),
+          SERVER_JARFILE: 'server.jar',
+          ...Object.fromEntries((egg.variables || []).map(v => [v.envVariable, v.defaultValue])),
+          ...(env || {}),
+        }),
         databaseLimit: parseInt(databaseLimit) || 0,
         allocationLimit: parseInt(allocationLimit) || 0,
         backupLimit: parseInt(backupLimit) || 0,
@@ -230,7 +236,11 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
 
   // Any authenticated user can update MC version (needed for plugin compatibility filtering)
   if (mcVersion) {
-    const currentEnv = JSON.parse((server.env as string) || '{}') as Record<string, string>;
+    let currentEnv: Record<string, string> = {};
+    try { currentEnv = JSON.parse(server.env as string) || {}; } catch { /* use empty */ }
+    // Always restore critical JVM variables in case they were missing
+    if (!currentEnv.SERVER_MEMORY) currentEnv.SERVER_MEMORY = String(server.memory);
+    if (!currentEnv.SERVER_JARFILE) currentEnv.SERVER_JARFILE = 'server.jar';
     updateData.env = JSON.stringify({ ...currentEnv, MC_VERSION: mcVersion });
   }
 

@@ -145,6 +145,27 @@ async function main() {
         data: { startup: AIKAR_STARTUP },
     });
     console.log(`Migrated ${migratedStartup.count} server(s) to Aikar JVM flags`);
+    // Ensure every server has SERVER_MEMORY and SERVER_JARFILE in its env JSON.
+    // Older servers may be missing these because the create form didn't include them.
+    const allServers = await prisma.server.findMany({ select: { id: true, memory: true, env: true } });
+    let envFixed = 0;
+    for (const srv of allServers) {
+        let env = {};
+        try {
+            env = JSON.parse(srv.env) || {};
+        }
+        catch { /* start fresh */ }
+        const changed = !env.SERVER_MEMORY || !env.SERVER_JARFILE;
+        if (!env.SERVER_MEMORY)
+            env.SERVER_MEMORY = String(srv.memory);
+        if (!env.SERVER_JARFILE)
+            env.SERVER_JARFILE = 'server.jar';
+        if (changed) {
+            await prisma.server.update({ where: { id: srv.id }, data: { env: JSON.stringify(env) } });
+            envFixed++;
+        }
+    }
+    console.log(`Fixed SERVER_MEMORY/SERVER_JARFILE in env for ${envFixed} server(s)`);
     // Create demo server
     const shortUuid = (0, uuid_1.v4)().replace(/-/g, '').slice(0, 8);
     await prisma.server.upsert({

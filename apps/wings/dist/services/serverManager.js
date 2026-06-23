@@ -77,9 +77,16 @@ class ServerManager extends events_1.EventEmitter {
         }
         try {
             const { config } = server;
-            // Substitute {{VAR}} placeholders in invocation with environment values
+            // Substitute {{VAR}} placeholders in invocation with environment values.
+            // Fall back to sensible defaults for critical JVM variables so a missing
+            // SERVER_MEMORY in env never produces a broken -XmsM flag.
             const invocation = config.invocation.replace(/\{\{([^}]+)\}\}/g, (_, key) => {
-                return config.environment[key.trim()] ?? '';
+                const k = key.trim();
+                if (k === 'SERVER_MEMORY')
+                    return config.environment[k] || String(config.build.memory_limit);
+                if (k === 'SERVER_JARFILE')
+                    return config.environment[k] || 'server.jar';
+                return config.environment[k] ?? '';
             });
             // Make the data directory world-writable BEFORE install so the install
             // container (uid 1000) can write files into it.
