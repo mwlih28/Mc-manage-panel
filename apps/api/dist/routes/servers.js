@@ -488,6 +488,103 @@ router.get('/:id/players/:playerUuid/inventory', auth_1.authenticate, async (req
         return res.status(500).json({ message: 'Could not read inventory' });
     }
 });
+// GET /servers/:id/players/all — all players who ever joined
+router.get('/:id/players/all', auth_1.authenticate, async (req, res) => {
+    const ctx = await getWingsClient(req.params.id, req.user.id, req.user.role === 'ADMIN');
+    if (!ctx)
+        return res.status(404).json({ message: 'Server not found' });
+    try {
+        const { data } = await ctx.client.get(`/servers/${ctx.server.uuid}/players/all`, { timeout: 10000 });
+        return res.json(data);
+    }
+    catch {
+        return res.json({ players: [], count: 0 });
+    }
+});
+// GET /servers/:id/players/:playerUuid/details
+router.get('/:id/players/:playerUuid/details', auth_1.authenticate, async (req, res) => {
+    const isAdmin = req.user.role === 'ADMIN';
+    const ctx = await getWingsClient(req.params.id, req.user.id, isAdmin);
+    if (!ctx)
+        return res.status(404).json({ message: 'Server not found' });
+    try {
+        const { data } = await ctx.client.get(`/servers/${ctx.server.uuid}/players/${req.params.playerUuid}/details`, { timeout: 10000 });
+        return res.json(data);
+    }
+    catch {
+        return res.status(500).json({ message: 'Could not read player data' });
+    }
+});
+// POST /servers/:id/players/:playerUuid/ban
+router.post('/:id/players/:playerUuid/ban', auth_1.authenticate, auth_1.requireAdmin, async (req, res) => {
+    const ctx = await getWingsClient(req.params.id, req.user.id, true);
+    if (!ctx)
+        return res.status(404).json({ message: 'Server not found' });
+    try {
+        const { data } = await ctx.client.post(`/servers/${ctx.server.uuid}/players/${req.params.playerUuid}/ban`, req.body, { timeout: 10000 });
+        return res.json(data);
+    }
+    catch (err) {
+        const e = err;
+        return res.status(e.response?.status || 500).json(e.response?.data || { message: 'Ban failed' });
+    }
+});
+// DELETE /servers/:id/players/:playerUuid/ban
+router.delete('/:id/players/:playerUuid/ban', auth_1.authenticate, auth_1.requireAdmin, async (req, res) => {
+    const ctx = await getWingsClient(req.params.id, req.user.id, true);
+    if (!ctx)
+        return res.status(404).json({ message: 'Server not found' });
+    try {
+        const { data } = await ctx.client.delete(`/servers/${ctx.server.uuid}/players/${req.params.playerUuid}/ban`, { params: req.query, timeout: 10000 });
+        return res.json(data);
+    }
+    catch (err) {
+        const e = err;
+        return res.status(e.response?.status || 500).json(e.response?.data || { message: 'Unban failed' });
+    }
+});
+// POST /servers/:id/players/:playerUuid/kick
+router.post('/:id/players/:playerUuid/kick', auth_1.authenticate, auth_1.requireAdmin, async (req, res) => {
+    const ctx = await getWingsClient(req.params.id, req.user.id, true);
+    if (!ctx)
+        return res.status(404).json({ message: 'Server not found' });
+    try {
+        const { data } = await ctx.client.post(`/servers/${ctx.server.uuid}/players/${req.params.playerUuid}/kick`, req.body, { timeout: 10000 });
+        return res.json(data);
+    }
+    catch (err) {
+        const e = err;
+        return res.status(e.response?.status || 500).json(e.response?.data || { message: 'Kick failed' });
+    }
+});
+// POST /servers/:id/players/:playerUuid/ipban
+router.post('/:id/players/:playerUuid/ipban', auth_1.authenticate, auth_1.requireAdmin, async (req, res) => {
+    const ctx = await getWingsClient(req.params.id, req.user.id, true);
+    if (!ctx)
+        return res.status(404).json({ message: 'Server not found' });
+    try {
+        const { data } = await ctx.client.post(`/servers/${ctx.server.uuid}/players/${req.params.playerUuid}/ipban`, req.body, { timeout: 10000 });
+        return res.json(data);
+    }
+    catch (err) {
+        const e = err;
+        return res.status(e.response?.status || 500).json(e.response?.data || { message: 'IP ban failed' });
+    }
+});
+// DELETE /servers/:id/players/:playerUuid/inventory/:slot
+router.delete('/:id/players/:playerUuid/inventory/:slot', auth_1.authenticate, auth_1.requireAdmin, async (req, res) => {
+    const ctx = await getWingsClient(req.params.id, req.user.id, true);
+    if (!ctx)
+        return res.status(404).json({ message: 'Server not found' });
+    try {
+        const { data } = await ctx.client.delete(`/servers/${ctx.server.uuid}/players/${req.params.playerUuid}/inventory/${req.params.slot}`, { params: req.query, timeout: 10000 });
+        return res.json(data);
+    }
+    catch (err) {
+        const e = err;
+        return res.status(e.response?.status || 500).json(e.response?.data || { message: 'Failed to remove item' });
+    }
+});
 // POST /servers/:id/plugins/install - Proxy to Wings for plugin download
 router.post('/:id/plugins/install', auth_1.authenticate, async (req, res) => {
     const ctx = await getWingsClient(req.params.id, req.user.id, req.user.role === 'ADMIN');

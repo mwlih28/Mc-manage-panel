@@ -91,6 +91,154 @@ router.get('/:uuid/players', (req, res) => {
     const players = serverManager_1.serverManager.getOnlinePlayers(req.params.uuid);
     return res.json({ players, count: players.length });
 });
+// Get ALL players who ever joined (history + usercache.json)
+router.get('/:uuid/players/all', (req, res) => {
+    const { uuid } = req.params;
+    const cfg = (0, config_1.getConfig)();
+    const dataPath = path_1.default.join(cfg.system.data, uuid);
+    const history = serverManager_1.serverManager.getAllPlayerHistory(uuid);
+    const historyMap = new Map(history.map(e => [e.name, e]));
+    // Merge usercache.json so we also surface players who joined before this process started
+    const usercachePath = path_1.default.join(dataPath, 'usercache.json');
+    if (fs_1.default.existsSync(usercachePath)) {
+        try {
+            const cache = JSON.parse(fs_1.default.readFileSync(usercachePath, 'utf8'));
+            for (const entry of cache) {
+                if (!historyMap.has(entry.name)) {
+                    historyMap.set(entry.name, {
+                        name: entry.name, uuid: entry.uuid,
+                        firstSeen: new Date(0), lastSeen: new Date(0),
+                        joinCount: 0, online: false,
+                    });
+                }
+                else {
+                    const e = historyMap.get(entry.name);
+                    if (!e.uuid)
+                        e.uuid = entry.uuid;
+                }
+            }
+        }
+        catch { /* ignore */ }
+    }
+    const players = [...historyMap.values()].sort((a, b) => b.lastSeen.getTime() - a.lastSeen.getTime());
+    return res.json({ players, count: players.length });
+});
+// Get full player details: stats, location, inventory, ban status
+router.get('/:uuid/players/:playerUuid/details', (req, res) => {
+    const { uuid, playerUuid } = req.params;
+    const cfg = (0, config_1.getConfig)();
+    const dataPath = path_1.default.join(cfg.system.data, uuid);
+    const datFile = path_1.default.join(dataPath, 'world', 'playerdata', `${playerUuid}.dat`);
+    const statsFile = path_1.default.join(dataPath, 'world', 'stats', `${playerUuid}.json`);
+    const stats = (0, nbtReader_1.readPlayerStats)(statsFile);
+    const location = (0, nbtReader_1.readPlayerLocation)(datFile);
+    const inv = (0, nbtReader_1.readPlayerDat)(datFile);
+    let ban = null;
+    const bannedPath = path_1.default.join(dataPath, 'banned-players.json');
+    if (fs_1.default.existsSync(bannedPath)) {
+        try {
+            const bans = JSON.parse(fs_1.default.readFileSync(bannedPath, 'utf8'));
+            const entry = bans.find(b => b.uuid === playerUuid);
+            if (entry)
+                ban = { banned: true, reason: entry.reason, expires: entry.expires, bannedBy: entry.source };
+        }
+        catch { /* ignore */ }
+    }
+    return res.json({ stats, location, inventory: inv.inventory, enderChest: inv.enderChest, ban });
+});
+// Ban a player
+router.post('/:uuid/players/:playerUuid/ban', async (req, res) => {
+    const { uuid, playerUuid } = req.params;
+    const { reason = 'Banned by admin', name } = req.body;
+    const cfg = (0, config_1.getConfig)();
+    const dataPath = path_1.default.join(cfg.system.data, uuid);
+    const bannedPath = path_1.default.join(dataPath, 'banned-players.json');
+    let bans = [];
+    if (fs_1.default.existsSync(bannedPath)) {
+        try {
+            bans = JSON.parse(fs_1.default.readFileSync(bannedPath, 'utf8'));
+        }
+        catch { /* ignore */ }
+    }
+    bans = bans.filter(b => b.uuid !== playerUuid);
+    bans.push({
+        uuid: playerUuid, name: name || 'Unknown',
+        created: new Date().toISOString().replace('T', ' ').slice(0, 19) + ' +0000',
+        source: 'MC Manage Panel', expires: 'forever', reason,
+    });
+    fs_1.default.writeFileSync(bannedPath, JSON.stringify(bans, null, 2));
+    if (name && serverManager_1.serverManager.getStatus(uuid) === 'running') {
+        await serverManager_1.serverManager.sendCommand(uuid, `ban ${name} ${reason}`).catch(() => { });
+    }
+    return res.json({ message: 'Player banned' });
+});
+// Unban a player
+router.delete('/:uuid/players/:playerUuid/ban', (req, res) => {
+    const { uuid, playerUuid } = req.params;
+    const { name } = req.query;
+    const cfg = (0, config_1.getConfig)();
+    const bannedPath = path_1.default.join(cfg.system.data, uuid, 'banned-players.json');
+    if (!fs_1.default.existsSync(bannedPath))
+        return res.json({ message: 'Not banned' });
+    try {
+        const bans = JSON.parse(fs_1.default.readFileSync(bannedPath, 'utf8'));
+        fs_1.default.writeFileSync(bannedPath, JSON.stringify(bans.filter(b => b.uuid !== playerUuid), null, 2));
+        if (name && serverManager_1.serverManager.getStatus(uuid) === 'running') {
+            serverManager_1.serverManager.sendCommand(uuid, `pardon ${name}`).catch(() => { });
+        }
+        return res.json({ message: 'Player unbanned' });
+    }
+    catch {
+        return res.status(500).json({ message: 'Failed to unban' });
+    }
+});
+// Kick a player (must be online)
+router.post('/:uuid/players/:playerUuid/kick', async (req, res) => {
+    const { uuid } = req.params;
+    const { name, reason = 'Kicked by admin' } = req.body;
+    if (!name)
+        return res.status(422).json({ message: 'Player name required' });
+    if (serverManager_1.serverManager.getStatus(uuid) !== 'running')
+        return res.status(400).json({ message: 'Server not running' });
+    await serverManager_1.serverManager.sendCommand(uuid, `kick ${name} ${reason}`);
+    return res.json({ message: `${name} kicked` });
+});
+// IP ban
+router.post('/:uuid/players/:playerUuid/ipban', (req, res) => {
+    const { uuid } = req.params;
+    const { name, ip, reason = 'IP banned by admin' } = req.body;
+    const cfg = (0, config_1.getConfig)();
+    const dataPath = path_1.default.join(cfg.system.data, uuid);
+    if (ip) {
+        const ipBanPath = path_1.default.join(dataPath, 'banned-ips.json');
+        let bans = [];
+        if (fs_1.default.existsSync(ipBanPath)) {
+            try {
+                bans = JSON.parse(fs_1.default.readFileSync(ipBanPath, 'utf8'));
+            }
+            catch { /* ignore */ }
+        }
+        bans = bans.filter(b => b.ip !== ip);
+        bans.push({ ip, created: new Date().toISOString().replace('T', ' ').slice(0, 19) + ' +0000', source: 'MC Manage Panel', expires: 'forever', reason });
+        fs_1.default.writeFileSync(ipBanPath, JSON.stringify(bans, null, 2));
+    }
+    if (name && serverManager_1.serverManager.getStatus(uuid) === 'running') {
+        serverManager_1.serverManager.sendCommand(uuid, `ban-ip ${name} ${reason}`).catch(() => { });
+    }
+    return res.json({ message: 'IP banned' });
+});
+// Delete inventory item (NBT edit)
+router.delete('/:uuid/players/:playerUuid/inventory/:slot', (req, res) => {
+    const { uuid, playerUuid } = req.params;
+    const slot = parseInt(req.params.slot);
+    const fromEnderChest = req.query.from === 'ender';
+    const cfg = (0, config_1.getConfig)();
+    const datFile = path_1.default.join(cfg.system.data, uuid, 'world', 'playerdata', `${playerUuid}.dat`);
+    const removed = (0, nbtReader_1.removeInventoryItem)(datFile, slot, fromEnderChest);
+    if (!removed)
+        return res.status(404).json({ message: 'Item not found at slot' });
+    return res.json({ message: 'Item removed' });
+});
 // Install a plugin/mod by downloading from a URL
 router.post('/:uuid/plugins/install', async (req, res) => {
     const { uuid } = req.params;

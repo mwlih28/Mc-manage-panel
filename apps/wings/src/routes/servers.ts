@@ -8,7 +8,7 @@ import axios from 'axios';
 import { serverManager } from '../services/serverManager';
 import { logger } from '../utils/logger';
 import { getConfig } from '../config';
-import { readPlayerDat } from '../services/nbtReader';
+import { readPlayerDat, readPlayerLocation, readPlayerStats, removeInventoryItem } from '../services/nbtReader';
 import type { ServerConfig } from '../types';
 
 const execFileAsync = promisify(execFile);
@@ -95,6 +95,149 @@ router.delete('/:uuid', async (req: Request, res: Response) => {
 router.get('/:uuid/players', (req: Request, res: Response) => {
   const players = serverManager.getOnlinePlayers(req.params.uuid);
   return res.json({ players, count: players.length });
+});
+
+// Get ALL players who ever joined (history + usercache.json)
+router.get('/:uuid/players/all', (req: Request, res: Response) => {
+  const { uuid } = req.params;
+  const cfg = getConfig();
+  const dataPath = path.join(cfg.system.data, uuid);
+  const history = serverManager.getAllPlayerHistory(uuid);
+  const historyMap = new Map(history.map(e => [e.name, e]));
+
+  // Merge usercache.json so we also surface players who joined before this process started
+  const usercachePath = path.join(dataPath, 'usercache.json');
+  if (fs.existsSync(usercachePath)) {
+    try {
+      const cache: { name: string; uuid: string }[] = JSON.parse(fs.readFileSync(usercachePath, 'utf8'));
+      for (const entry of cache) {
+        if (!historyMap.has(entry.name)) {
+          historyMap.set(entry.name, {
+            name: entry.name, uuid: entry.uuid,
+            firstSeen: new Date(0), lastSeen: new Date(0),
+            joinCount: 0, online: false,
+          });
+        } else {
+          const e = historyMap.get(entry.name)!;
+          if (!e.uuid) e.uuid = entry.uuid;
+        }
+      }
+    } catch { /* ignore */ }
+  }
+
+  const players = [...historyMap.values()].sort((a, b) => b.lastSeen.getTime() - a.lastSeen.getTime());
+  return res.json({ players, count: players.length });
+});
+
+// Get full player details: stats, location, inventory, ban status
+router.get('/:uuid/players/:playerUuid/details', (req: Request, res: Response) => {
+  const { uuid, playerUuid } = req.params;
+  const cfg = getConfig();
+  const dataPath = path.join(cfg.system.data, uuid);
+  const datFile = path.join(dataPath, 'world', 'playerdata', `${playerUuid}.dat`);
+  const statsFile = path.join(dataPath, 'world', 'stats', `${playerUuid}.json`);
+
+  const stats    = readPlayerStats(statsFile);
+  const location = readPlayerLocation(datFile);
+  const inv      = readPlayerDat(datFile);
+
+  let ban: { banned: boolean; reason: string; expires: string; bannedBy: string } | null = null;
+  const bannedPath = path.join(dataPath, 'banned-players.json');
+  if (fs.existsSync(bannedPath)) {
+    try {
+      const bans: Array<{ uuid: string; source: string; expires: string; reason: string }> = JSON.parse(fs.readFileSync(bannedPath, 'utf8'));
+      const entry = bans.find(b => b.uuid === playerUuid);
+      if (entry) ban = { banned: true, reason: entry.reason, expires: entry.expires, bannedBy: entry.source };
+    } catch { /* ignore */ }
+  }
+
+  return res.json({ stats, location, inventory: inv.inventory, enderChest: inv.enderChest, ban });
+});
+
+// Ban a player
+router.post('/:uuid/players/:playerUuid/ban', async (req: Request, res: Response) => {
+  const { uuid, playerUuid } = req.params;
+  const { reason = 'Banned by admin', name } = req.body as { reason?: string; name?: string };
+  const cfg = getConfig();
+  const dataPath = path.join(cfg.system.data, uuid);
+  const bannedPath = path.join(dataPath, 'banned-players.json');
+
+  let bans: Array<{ uuid: string; name: string; created: string; source: string; expires: string; reason: string }> = [];
+  if (fs.existsSync(bannedPath)) {
+    try { bans = JSON.parse(fs.readFileSync(bannedPath, 'utf8')); } catch { /* ignore */ }
+  }
+  bans = bans.filter(b => b.uuid !== playerUuid);
+  bans.push({
+    uuid: playerUuid, name: name || 'Unknown',
+    created: new Date().toISOString().replace('T', ' ').slice(0, 19) + ' +0000',
+    source: 'MC Manage Panel', expires: 'forever', reason,
+  });
+  fs.writeFileSync(bannedPath, JSON.stringify(bans, null, 2));
+  if (name && serverManager.getStatus(uuid) === 'running') {
+    await serverManager.sendCommand(uuid, `ban ${name} ${reason}`).catch(() => {});
+  }
+  return res.json({ message: 'Player banned' });
+});
+
+// Unban a player
+router.delete('/:uuid/players/:playerUuid/ban', (req: Request, res: Response) => {
+  const { uuid, playerUuid } = req.params;
+  const { name } = req.query as { name?: string };
+  const cfg = getConfig();
+  const bannedPath = path.join(cfg.system.data, uuid, 'banned-players.json');
+  if (!fs.existsSync(bannedPath)) return res.json({ message: 'Not banned' });
+  try {
+    const bans: Array<{ uuid: string }> = JSON.parse(fs.readFileSync(bannedPath, 'utf8'));
+    fs.writeFileSync(bannedPath, JSON.stringify(bans.filter(b => b.uuid !== playerUuid), null, 2));
+    if (name && serverManager.getStatus(uuid) === 'running') {
+      serverManager.sendCommand(uuid, `pardon ${name}`).catch(() => {});
+    }
+    return res.json({ message: 'Player unbanned' });
+  } catch { return res.status(500).json({ message: 'Failed to unban' }); }
+});
+
+// Kick a player (must be online)
+router.post('/:uuid/players/:playerUuid/kick', async (req: Request, res: Response) => {
+  const { uuid } = req.params;
+  const { name, reason = 'Kicked by admin' } = req.body as { name: string; reason?: string };
+  if (!name) return res.status(422).json({ message: 'Player name required' });
+  if (serverManager.getStatus(uuid) !== 'running') return res.status(400).json({ message: 'Server not running' });
+  await serverManager.sendCommand(uuid, `kick ${name} ${reason}`);
+  return res.json({ message: `${name} kicked` });
+});
+
+// IP ban
+router.post('/:uuid/players/:playerUuid/ipban', (req: Request, res: Response) => {
+  const { uuid } = req.params;
+  const { name, ip, reason = 'IP banned by admin' } = req.body as { name?: string; ip?: string; reason?: string };
+  const cfg = getConfig();
+  const dataPath = path.join(cfg.system.data, uuid);
+  if (ip) {
+    const ipBanPath = path.join(dataPath, 'banned-ips.json');
+    let bans: Array<{ ip: string; created: string; source: string; expires: string; reason: string }> = [];
+    if (fs.existsSync(ipBanPath)) {
+      try { bans = JSON.parse(fs.readFileSync(ipBanPath, 'utf8')); } catch { /* ignore */ }
+    }
+    bans = bans.filter(b => b.ip !== ip);
+    bans.push({ ip, created: new Date().toISOString().replace('T', ' ').slice(0, 19) + ' +0000', source: 'MC Manage Panel', expires: 'forever', reason });
+    fs.writeFileSync(ipBanPath, JSON.stringify(bans, null, 2));
+  }
+  if (name && serverManager.getStatus(uuid) === 'running') {
+    serverManager.sendCommand(uuid, `ban-ip ${name} ${reason}`).catch(() => {});
+  }
+  return res.json({ message: 'IP banned' });
+});
+
+// Delete inventory item (NBT edit)
+router.delete('/:uuid/players/:playerUuid/inventory/:slot', (req: Request, res: Response) => {
+  const { uuid, playerUuid } = req.params;
+  const slot = parseInt(req.params.slot);
+  const fromEnderChest = req.query.from === 'ender';
+  const cfg = getConfig();
+  const datFile = path.join(cfg.system.data, uuid, 'world', 'playerdata', `${playerUuid}.dat`);
+  const removed = removeInventoryItem(datFile, slot, fromEnderChest);
+  if (!removed) return res.status(404).json({ message: 'Item not found at slot' });
+  return res.json({ message: 'Item removed' });
 });
 
 // Install a plugin/mod by downloading from a URL

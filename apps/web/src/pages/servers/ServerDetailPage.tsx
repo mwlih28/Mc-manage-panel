@@ -5,7 +5,8 @@ import {
   Play, Square, RotateCcw, Zap, Terminal, BarChart2,
   HardDrive, Archive, ChevronLeft, Cpu, MemoryStick,
   Folder, FolderOpen, File, ChevronRight, ArrowLeft, Pencil, Trash2, Plus, X, Check,
-  Package, Users, Search, Download, RefreshCw, Tag, AlertTriangle
+  Package, Users, Search, Download, RefreshCw, Tag, AlertTriangle, Shield, ShieldOff,
+  MapPin, Clock, Sword, Hammer, Footprints, Ban, LogOut, Wifi
 } from 'lucide-react';
 import { io as ioClient, Socket } from 'socket.io-client';
 import api from '@/lib/axios';
@@ -18,7 +19,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
-type Tab = 'console' | 'files' | 'plugins' | 'versions' | 'stats' | 'backups';
+type Tab = 'console' | 'files' | 'plugins' | 'versions' | 'stats' | 'backups' | 'players';
 
 interface ModrinthProject {
   project_id: string;
@@ -53,6 +54,26 @@ interface ConsoleLine {
 }
 
 interface NbtItem { slot: number; id: string; count: number; }
+
+interface PlayerHistoryEntry {
+  name: string;
+  uuid: string;
+  firstSeen: string;
+  lastSeen: string;
+  joinCount: number;
+  online: boolean;
+}
+
+interface PlayerDetails {
+  stats: {
+    playTimeTicks: number; deaths: number; walkOneCm: number; sprintOneCm: number;
+    jumps: number; playerKills: number; mobKills: number; blocksMinedTotal: number;
+  };
+  location: { x: number; y: number; z: number; dimension: string; health: number; xpLevel: number } | null;
+  inventory: NbtItem[];
+  enderChest: NbtItem[];
+  ban: { banned: boolean; reason: string; expires: string; bannedBy: string } | null;
+}
 
 export function ServerDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -96,17 +117,33 @@ export function ServerDetailPage() {
   const [versionLoading, setVersionLoading] = useState(false);
   const [installing_version, setInstallingVersion] = useState(false);
 
-  // Players
+  // Players (console widget)
   const [players, setPlayers] = useState<{ online: number; max: number; names: string[] }>({ online: 0, max: 0, names: [] });
   const [onlinePlayers, setOnlinePlayers] = useState<{ name: string; uuid: string }[]>([]);
   const [inventoryPlayer, setInventoryPlayer] = useState<{ name: string; uuid: string } | null>(null);
   const [playerInventory, setPlayerInventory] = useState<{ inventory: NbtItem[]; enderChest: NbtItem[] } | null>(null);
   const [inventoryLoading, setInventoryLoading] = useState(false);
 
+  // Players tab
+  const [playerSearch, setPlayerSearch] = useState('');
+  const [selectedPlayer, setSelectedPlayer] = useState<PlayerHistoryEntry | null>(null);
+  const [playerDetails, setPlayerDetails] = useState<PlayerDetails | null>(null);
+  const [playerDetailsLoading, setPlayerDetailsLoading] = useState(false);
+  const [banReason, setBanReason] = useState('');
+  const [kickReason, setKickReason] = useState('');
+  const [playerActionLoading, setPlayerActionLoading] = useState<string | null>(null);
+
   const { data: filesData, isLoading: filesLoading, refetch: refetchFiles } = useQuery({
     queryKey: ['server-files', id, currentDir],
     queryFn: () => api.get(`/servers/${id}/files`, { params: { directory: currentDir } }).then((r) => r.data),
     enabled: activeTab === 'files' && !!id,
+  });
+
+  const { data: allPlayersData, isLoading: allPlayersLoading, refetch: refetchAllPlayers } = useQuery({
+    queryKey: ['server-players-all', id],
+    queryFn: () => api.get(`/servers/${id}/players/all`).then((r) => r.data),
+    enabled: activeTab === 'players' && !!id,
+    refetchInterval: activeTab === 'players' ? 30000 : false,
   });
 
   const openFile = async (filePath: string) => {
@@ -398,6 +435,57 @@ export function ServerDetailPage() {
     consoleEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [consoleLines]);
 
+  const openPlayerDetail = async (player: PlayerHistoryEntry) => {
+    if (!player.uuid) { setSelectedPlayer(player); setPlayerDetails(null); return; }
+    setSelectedPlayer(player);
+    setPlayerDetailsLoading(true);
+    setBanReason(''); setKickReason('');
+    try {
+      const { data } = await api.get(`/servers/${id}/players/${player.uuid}/details`);
+      setPlayerDetails(data);
+    } catch { setPlayerDetails(null); }
+    finally { setPlayerDetailsLoading(false); }
+  };
+
+  const playerAction = async (action: 'ban' | 'unban' | 'kick' | 'ipban', player: PlayerHistoryEntry) => {
+    if (!player.uuid && action !== 'kick') { toast.error('Player UUID unknown'); return; }
+    setPlayerActionLoading(action);
+    try {
+      if (action === 'ban') {
+        await api.post(`/servers/${id}/players/${player.uuid}/ban`, { reason: banReason || 'Banned by admin', name: player.name });
+        toast.success(`${player.name} banned`);
+      } else if (action === 'unban') {
+        await api.delete(`/servers/${id}/players/${player.uuid}/ban`, { params: { name: player.name } });
+        toast.success(`${player.name} unbanned`);
+      } else if (action === 'kick') {
+        await api.post(`/servers/${id}/players/${player.uuid}/kick`, { name: player.name, reason: kickReason || 'Kicked by admin' });
+        toast.success(`${player.name} kicked`);
+      } else if (action === 'ipban') {
+        await api.post(`/servers/${id}/players/${player.uuid}/ipban`, { name: player.name, reason: banReason || 'IP banned by admin' });
+        toast.success(`${player.name} IP banned`);
+      }
+      // Refresh details
+      if (player.uuid) {
+        const { data } = await api.get(`/servers/${id}/players/${player.uuid}/details`);
+        setPlayerDetails(data);
+      }
+      refetchAllPlayers();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? `${action} failed`;
+      toast.error(msg);
+    } finally { setPlayerActionLoading(null); }
+  };
+
+  const deleteInventoryItem = async (player: PlayerHistoryEntry, slot: number, fromEnder = false) => {
+    if (!player.uuid) return;
+    try {
+      await api.delete(`/servers/${id}/players/${player.uuid}/inventory/${slot}`, { params: fromEnder ? { from: 'ender' } : {} });
+      toast.success('Item removed');
+      const { data } = await api.get(`/servers/${id}/players/${player.uuid}/details`);
+      setPlayerDetails(data);
+    } catch { toast.error('Failed to remove item'); }
+  };
+
   const openInventory = async (player: { name: string; uuid: string }) => {
     if (!player.uuid) return;
     setInventoryPlayer(player);
@@ -560,14 +648,14 @@ export function ServerDetailPage() {
       )}
 
       {/* Tabs */}
-      <div className="border-b border-dark-800">
-        <div className="flex gap-1">
-          {(['console', 'files', 'plugins', 'versions', 'stats', 'backups'] as Tab[]).map((tab) => (
+      <div className="border-b border-dark-800 overflow-x-auto">
+        <div className="flex gap-1 min-w-max">
+          {(['console', 'files', 'plugins', 'versions', 'stats', 'backups', 'players'] as Tab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={cn(
-                'px-4 py-2.5 text-sm font-medium capitalize border-b-2 transition-colors',
+                'px-4 py-2.5 text-sm font-medium capitalize border-b-2 transition-colors whitespace-nowrap',
                 activeTab === tab
                   ? 'border-panel-500 text-panel-400'
                   : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -579,6 +667,7 @@ export function ServerDetailPage() {
               {tab === 'versions' && <Tag size={14} className="inline mr-1.5" />}
               {tab === 'stats' && <BarChart2 size={14} className="inline mr-1.5" />}
               {tab === 'backups' && <Archive size={14} className="inline mr-1.5" />}
+              {tab === 'players' && <Users size={14} className="inline mr-1.5" />}
               {tab}
             </button>
           ))}
@@ -1037,8 +1126,96 @@ export function ServerDetailPage() {
         </div>
       )}
 
-      {/* Inventory Modal */}
-      {inventoryPlayer && (
+      {/* Players Tab */}
+      {activeTab === 'players' && (() => {
+        const allPlayers: PlayerHistoryEntry[] = allPlayersData?.players ?? [];
+        const filteredPlayers = allPlayers.filter(p =>
+          !playerSearch || p.name.toLowerCase().includes(playerSearch.toLowerCase())
+        );
+        const isAdmin = data?.user === undefined || true; // server owner or admin can see
+        return (
+          <div className="space-y-4">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input className="input pl-9" placeholder="Search players..." value={playerSearch} onChange={e => setPlayerSearch(e.target.value)} />
+              </div>
+              <button className="btn-secondary btn-sm" onClick={() => refetchAllPlayers()}>
+                <RefreshCw size={14} /> Refresh
+              </button>
+            </div>
+
+            <div className="card">
+              {allPlayersLoading ? (
+                <div className="flex justify-center py-12"><Spinner /></div>
+              ) : (
+                <div className="table-container">
+                  <table className="table">
+                    <thead><tr>
+                      <th>Player</th><th>Status</th><th>Last Seen</th><th>Joins</th><th></th>
+                    </tr></thead>
+                    <tbody>
+                      {filteredPlayers.length === 0 ? (
+                        <tr><td colSpan={5} className="text-center py-10 text-slate-500">
+                          {allPlayers.length === 0 ? 'No players have joined yet' : 'No players match your search'}
+                        </td></tr>
+                      ) : filteredPlayers.map(player => (
+                        <tr key={player.name} className="cursor-pointer hover:bg-dark-800/40" onClick={() => openPlayerDetail(player)}>
+                          <td>
+                            <div className="flex items-center gap-2.5">
+                              <img src={`https://mc-heads.net/avatar/${player.name}/32`} alt="" className="w-8 h-8 rounded pixelated shrink-0" onError={e => { (e.target as HTMLImageElement).style.display='none'; }} />
+                              <div>
+                                <p className="font-medium text-slate-200">{player.name}</p>
+                                <p className="text-xs font-mono text-slate-600 truncate max-w-[160px]">{player.uuid || '—'}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            {player.online
+                              ? <span className="badge-green flex items-center gap-1 w-fit"><span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />Online</span>
+                              : <span className="text-xs text-slate-500">Offline</span>
+                            }
+                          </td>
+                          <td className="text-xs text-slate-400">
+                            {player.lastSeen && new Date(player.lastSeen).getTime() > 0
+                              ? new Date(player.lastSeen).toLocaleString()
+                              : '—'}
+                          </td>
+                          <td className="text-slate-400 text-sm">{player.joinCount || '—'}</td>
+                          <td onClick={e => e.stopPropagation()}>
+                            <div className="flex items-center gap-1">
+                              {player.online && (
+                                <button
+                                  className="p-1.5 text-slate-500 hover:text-yellow-400 hover:bg-yellow-500/10 rounded transition-colors"
+                                  title="Kick"
+                                  onClick={async () => {
+                                    const reason = prompt(`Kick reason for ${player.name}:`, 'Kicked by admin');
+                                    if (reason === null) return;
+                                    setKickReason(reason);
+                                    await playerAction('kick', { ...player, name: player.name });
+                                  }}
+                                ><LogOut size={13} /></button>
+                              )}
+                              <button
+                                className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
+                                title="View / Ban"
+                                onClick={() => openPlayerDetail(player)}
+                              ><Shield size={13} /></button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Inventory Modal (console tab quick view) */}
+      {inventoryPlayer && !selectedPlayer && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => { setInventoryPlayer(null); setPlayerInventory(null); }}>
           <div className="bg-dark-800 border border-dark-600 rounded-xl w-full max-w-2xl mx-4 p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-3 mb-5">
@@ -1049,11 +1226,10 @@ export function ServerDetailPage() {
               </div>
               <button className="ml-auto text-slate-500 hover:text-slate-300" onClick={() => { setInventoryPlayer(null); setPlayerInventory(null); }}><X size={18} /></button>
             </div>
-
             {inventoryLoading ? (
               <div className="flex justify-center py-8"><Spinner /></div>
             ) : !playerInventory ? (
-              <p className="text-slate-500 text-sm text-center py-8">Could not read inventory. Player must be offline or data unavailable.</p>
+              <p className="text-slate-500 text-sm text-center py-8">Could not read inventory.</p>
             ) : (
               <div className="space-y-4">
                 <InventoryGrid title="Inventory" items={playerInventory.inventory} />
@@ -1063,11 +1239,162 @@ export function ServerDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Player Detail Modal (Players tab) */}
+      {selectedPlayer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => { setSelectedPlayer(null); setPlayerDetails(null); }}>
+          <div className="bg-dark-800 border border-dark-600 rounded-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+            {/* Modal header */}
+            <div className="sticky top-0 bg-dark-800 border-b border-dark-700 px-6 py-4 flex items-center gap-3 z-10">
+              <img src={`https://mc-heads.net/avatar/${selectedPlayer.name}/48`} alt="" className="w-12 h-12 rounded pixelated shrink-0" onError={e => { (e.target as HTMLImageElement).style.display='none'; }} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-lg font-bold text-slate-100">{selectedPlayer.name}</h2>
+                  {selectedPlayer.online
+                    ? <span className="badge-green text-xs">Online</span>
+                    : <span className="text-xs text-slate-500 bg-dark-700 px-2 py-0.5 rounded-full">Offline</span>
+                  }
+                  {playerDetails?.ban?.banned && (
+                    <span className="text-xs text-red-300 bg-red-500/15 border border-red-500/20 px-2 py-0.5 rounded-full flex items-center gap-1"><Ban size={10} />Banned</span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 font-mono truncate">{selectedPlayer.uuid || 'UUID unknown'}</p>
+              </div>
+              <button className="text-slate-500 hover:text-slate-200 shrink-0" onClick={() => { setSelectedPlayer(null); setPlayerDetails(null); }}><X size={20} /></button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {playerDetailsLoading ? (
+                <div className="flex justify-center py-10"><Spinner size="lg" /></div>
+              ) : (
+                <>
+                  {/* Stats grid */}
+                  {playerDetails?.stats && (
+                    <section>
+                      <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Statistics</h3>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {[
+                          { icon: <Clock size={13} />, label: 'Play Time', value: (() => { const h = Math.floor(playerDetails.stats.playTimeTicks / 72000); const m = Math.floor((playerDetails.stats.playTimeTicks % 72000) / 1200); return h > 0 ? `${h}h ${m}m` : `${m}m`; })() },
+                          { icon: <Sword size={13} />, label: 'Deaths', value: String(playerDetails.stats.deaths) },
+                          { icon: <Footprints size={13} />, label: 'Distance', value: (() => { const km = ((playerDetails.stats.walkOneCm + playerDetails.stats.sprintOneCm) / 100000); return km >= 1 ? `${km.toFixed(1)} km` : `${Math.round(km * 1000)} m`; })() },
+                          { icon: <Hammer size={13} />, label: 'Blocks Mined', value: playerDetails.stats.blocksMinedTotal.toLocaleString() },
+                        ].map(s => (
+                          <div key={s.label} className="bg-dark-700/60 border border-dark-600 rounded-lg p-3">
+                            <div className="flex items-center gap-1.5 text-slate-500 mb-1">{s.icon}<span className="text-xs">{s.label}</span></div>
+                            <p className="text-sm font-semibold text-slate-100">{s.value}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  )}
+
+                  {/* Location */}
+                  {playerDetails?.location && (
+                    <section>
+                      <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Last Known Location</h3>
+                      <div className="bg-dark-700/60 border border-dark-600 rounded-lg p-4 flex items-center gap-4 flex-wrap">
+                        <MapPin size={16} className="text-panel-400 shrink-0" />
+                        <div className="flex gap-4 text-sm flex-wrap">
+                          <span className="text-slate-300">X: <span className="font-mono text-slate-100">{playerDetails.location.x}</span></span>
+                          <span className="text-slate-300">Y: <span className="font-mono text-slate-100">{playerDetails.location.y}</span></span>
+                          <span className="text-slate-300">Z: <span className="font-mono text-slate-100">{playerDetails.location.z}</span></span>
+                          <span className="text-slate-300">Dim: <span className="font-mono text-slate-100 capitalize">{playerDetails.location.dimension}</span></span>
+                        </div>
+                        <div className="flex gap-3 text-sm ml-auto">
+                          <span className="text-slate-400">❤️ <span className="text-slate-100">{playerDetails.location.health}/20</span></span>
+                          <span className="text-slate-400">⭐ <span className="text-slate-100">Lv {playerDetails.location.xpLevel}</span></span>
+                        </div>
+                      </div>
+                    </section>
+                  )}
+
+                  {/* Ban status */}
+                  <section>
+                    <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Ban Status</h3>
+                    {playerDetails?.ban?.banned ? (
+                      <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-medium text-red-300 flex items-center gap-1.5"><Ban size={14} />Currently Banned</p>
+                            <p className="text-xs text-slate-400 mt-1">Reason: <span className="text-slate-200">{playerDetails.ban.reason}</span></p>
+                            <p className="text-xs text-slate-500 mt-0.5">By: {playerDetails.ban.bannedBy} · Expires: {playerDetails.ban.expires}</p>
+                          </div>
+                          <button
+                            className="btn-secondary btn-sm shrink-0"
+                            disabled={playerActionLoading === 'unban'}
+                            onClick={() => playerAction('unban', selectedPlayer)}
+                          >
+                            {playerActionLoading === 'unban' ? <Spinner size="sm" /> : <><ShieldOff size={13} />Unban</>}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-slate-500">Player is not banned.</p>
+                    )}
+                  </section>
+
+                  {/* Inventory */}
+                  {playerDetails && (
+                    <section>
+                      <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Inventory</h3>
+                      <InventoryGrid title="Inventory" items={playerDetails.inventory} onDelete={slot => deleteInventoryItem(selectedPlayer, slot, false)} />
+                      <div className="mt-4">
+                        <InventoryGrid title="Ender Chest" items={playerDetails.enderChest} onDelete={slot => deleteInventoryItem(selectedPlayer, slot, true)} />
+                      </div>
+                    </section>
+                  )}
+
+                  {/* Actions */}
+                  <section>
+                    <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Actions</h3>
+                    <div className="space-y-3">
+                      {/* Kick */}
+                      {selectedPlayer.online && (
+                        <div className="flex gap-2">
+                          <input className="input flex-1 text-sm" placeholder="Kick reason..." value={kickReason} onChange={e => setKickReason(e.target.value)} />
+                          <button
+                            className="btn-secondary btn-sm shrink-0"
+                            disabled={playerActionLoading === 'kick'}
+                            onClick={() => playerAction('kick', selectedPlayer)}
+                          >
+                            {playerActionLoading === 'kick' ? <Spinner size="sm" /> : <><LogOut size={13} />Kick</>}
+                          </button>
+                        </div>
+                      )}
+                      {/* Ban */}
+                      {!playerDetails?.ban?.banned && (
+                        <div className="flex gap-2">
+                          <input className="input flex-1 text-sm" placeholder="Ban reason..." value={banReason} onChange={e => setBanReason(e.target.value)} />
+                          <button
+                            className="btn-danger btn-sm shrink-0"
+                            disabled={playerActionLoading === 'ban'}
+                            onClick={() => playerAction('ban', selectedPlayer)}
+                          >
+                            {playerActionLoading === 'ban' ? <Spinner size="sm" /> : <><Ban size={13} />Ban</>}
+                          </button>
+                          <button
+                            className="btn-danger btn-sm shrink-0"
+                            title="IP Ban"
+                            disabled={playerActionLoading === 'ipban'}
+                            onClick={() => playerAction('ipban', selectedPlayer)}
+                          >
+                            {playerActionLoading === 'ipban' ? <Spinner size="sm" /> : <><Wifi size={13} />IP Ban</>}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </section>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function InventoryGrid({ title, items }: { title: string; items: NbtItem[] }) {
+function InventoryGrid({ title, items, onDelete }: { title: string; items: NbtItem[]; onDelete?: (slot: number) => void }) {
   if (items.length === 0) return (
     <div>
       <p className="text-xs font-semibold text-slate-400 mb-2">{title}</p>
@@ -1076,17 +1403,26 @@ function InventoryGrid({ title, items }: { title: string; items: NbtItem[] }) {
   );
   return (
     <div>
-      <p className="text-xs font-semibold text-slate-400 mb-2">{title} ({items.length} items)</p>
+      <p className="text-xs font-semibold text-slate-400 mb-2">{title} <span className="text-slate-600">({items.length} items)</span></p>
       <div className="flex flex-wrap gap-1.5">
         {items.map((item, i) => (
           <div key={i} className="relative group">
             <div
-              className="w-10 h-10 bg-dark-700 border border-dark-600 rounded flex flex-col items-center justify-center hover:border-panel-500/40 transition-colors cursor-default"
+              className="w-11 h-11 bg-dark-700 border border-dark-600 rounded flex flex-col items-center justify-center hover:border-panel-500/40 transition-colors cursor-default"
               title={`${item.id} ×${item.count} (slot ${item.slot})`}
             >
-              <span className="text-[8px] text-slate-400 leading-tight text-center px-0.5 truncate w-full">{item.id.replace(/_/g, ' ')}</span>
-              {item.count > 1 && <span className="text-[9px] font-bold text-yellow-400 leading-none">{item.count}</span>}
+              <span className="text-[7px] text-slate-400 leading-tight text-center px-0.5 truncate w-full">{item.id.replace(/_/g, ' ')}</span>
+              {item.count > 1 && <span className="text-[9px] font-bold text-yellow-400 leading-none">×{item.count}</span>}
             </div>
+            {onDelete && (
+              <button
+                onClick={() => onDelete(item.slot)}
+                className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 hover:bg-red-400 text-white rounded-full hidden group-hover:flex items-center justify-center transition-all shadow"
+                title="Remove item"
+              >
+                <X size={8} />
+              </button>
+            )}
           </div>
         ))}
       </div>

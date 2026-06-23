@@ -17,6 +17,7 @@ class ServerManager extends events_1.EventEmitter {
         super(...arguments);
         this.servers = new Map();
         this.playerSessions = new Map(); // serverUuid -> Map<playerName, playerUuid>
+        this.allPlayerHistory = new Map(); // serverUuid -> Map<playerName, entry>
     }
     setSocketServer(io) {
         this.io = io;
@@ -479,6 +480,10 @@ class ServerManager extends events_1.EventEmitter {
         server.status = status;
         if (status === 'offline') {
             this.playerSessions.delete(uuid);
+            const hist = this.allPlayerHistory.get(uuid);
+            if (hist)
+                for (const e of hist.values())
+                    e.online = false;
         }
         this.emit('status', { uuid, status });
         this.io?.to(`server:${uuid}`).emit('server:status', { uuid, state: status });
@@ -488,26 +493,50 @@ class ServerManager extends events_1.EventEmitter {
         const map = this.playerSessions.get(uuid) ?? new Map();
         return [...map.entries()].map(([name, playerUuid]) => ({ name, uuid: playerUuid }));
     }
+    getAllPlayerHistory(serverUuid) {
+        const hist = this.allPlayerHistory.get(serverUuid) ?? new Map();
+        const onlineMap = this.playerSessions.get(serverUuid) ?? new Map();
+        for (const [name] of onlineMap) {
+            const e = hist.get(name);
+            if (e)
+                e.online = true;
+        }
+        return [...hist.values()].sort((a, b) => b.lastSeen.getTime() - a.lastSeen.getTime());
+    }
     getLogBuffer(uuid) {
         return this.servers.get(uuid)?.logBuffer ?? [];
     }
     trackPlayerEvents(uuid, line) {
+        if (!this.allPlayerHistory.has(uuid))
+            this.allPlayerHistory.set(uuid, new Map());
+        const hist = this.allPlayerHistory.get(uuid);
         const uuidMatch = line.match(/UUID of player (\S+) is ([0-9a-f-]{36})/i);
         if (uuidMatch) {
             const [, name, playerUuid] = uuidMatch;
             if (!this.playerSessions.has(uuid))
                 this.playerSessions.set(uuid, new Map());
             this.playerSessions.get(uuid).set(name, playerUuid);
+            const e = hist.get(name);
+            if (e)
+                e.uuid = playerUuid;
         }
         const joinMatch = line.match(/\]: (\w[\w ]*?) joined the game\s*$/);
         if (joinMatch) {
             const name = joinMatch[1];
             if (!this.playerSessions.has(uuid))
                 this.playerSessions.set(uuid, new Map());
-            // Ensure player entry exists even if UUID hasn't been logged yet
             const map = this.playerSessions.get(uuid);
             if (!map.has(name))
                 map.set(name, '');
+            const existing = hist.get(name);
+            if (existing) {
+                existing.lastSeen = new Date();
+                existing.joinCount++;
+                existing.online = true;
+            }
+            else {
+                hist.set(name, { name, uuid: map.get(name) || '', firstSeen: new Date(), lastSeen: new Date(), joinCount: 1, online: true });
+            }
             const players = this.getOnlinePlayers(uuid);
             this.io?.to(`server:${uuid}`).emit('server:players', { uuid, players });
         }
@@ -515,6 +544,11 @@ class ServerManager extends events_1.EventEmitter {
         if (leaveMatch) {
             const name = leaveMatch[1];
             this.playerSessions.get(uuid)?.delete(name);
+            const e = hist.get(name);
+            if (e) {
+                e.online = false;
+                e.lastSeen = new Date();
+            }
             const players = this.getOnlinePlayers(uuid);
             this.io?.to(`server:${uuid}`).emit('server:players', { uuid, players });
         }
