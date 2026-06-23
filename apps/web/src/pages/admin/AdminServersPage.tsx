@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Plus, Search, Trash2, ExternalLink, Pencil } from 'lucide-react';
@@ -195,6 +195,8 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
     name: '', description: '', userId: '', nodeId: '', eggId: '',
     memory: '1024', disk: '5120', cpu: '100', backupLimit: '3',
   });
+  const [paperVersion, setPaperVersion] = useState('latest');
+  const [paperVersions, setPaperVersions] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   const { data: usersData } = useQuery({
@@ -210,12 +212,31 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
     queryFn: () => api.get('/eggs').then((r) => r.data.data),
   });
 
+  // Fetch Paper versions from PaperMC API
+  useEffect(() => {
+    fetch('https://api.papermc.io/v2/projects/paper', { signal: AbortSignal.timeout(10000) })
+      .then((r) => r.json())
+      .then((d) => { if (d.versions) setPaperVersions([...d.versions].reverse()); })
+      .catch(() => {/* ignore, user can still type */});
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     try {
-      await api.post('/servers', form);
-      toast.success('Server created');
+      const res = await api.post('/servers', form);
+      const serverId: string = res.data?.data?.id;
+      // Install selected Paper version right after creation (skip if "latest" — Wings downloads on first start)
+      if (serverId && paperVersion && paperVersion !== 'latest') {
+        try {
+          await api.post(`/servers/${serverId}/version`, { version: paperVersion }, { timeout: 180000 });
+          toast.success(`Server created with Paper ${paperVersion}`);
+        } catch {
+          toast.success('Server created (version install failed — use Versions tab to install manually)');
+        }
+      } else {
+        toast.success('Server created');
+      }
       onSuccess();
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } } };
@@ -265,6 +286,19 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
                 <option key={egg.id} value={egg.id}>{egg.name}</option>
               ))}
             </select>
+          </div>
+
+          <div className="col-span-2">
+            <label className="label">Paper Version</label>
+            <select className="input" value={paperVersion} onChange={(e) => setPaperVersion(e.target.value)}>
+              <option value="latest">Latest (auto-download on first start)</option>
+              {paperVersions.map((v) => (
+                <option key={v} value={v}>{v}</option>
+              ))}
+            </select>
+            <p className="text-xs text-slate-500 mt-1">
+              Specific version downloads the Paper JAR immediately after server creation.
+            </p>
           </div>
 
           <div>

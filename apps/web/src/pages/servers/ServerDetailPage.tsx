@@ -5,7 +5,7 @@ import {
   Play, Square, RotateCcw, Zap, Terminal, BarChart2,
   HardDrive, Archive, ChevronLeft, Cpu, MemoryStick,
   Folder, FolderOpen, File, ChevronRight, ArrowLeft, Pencil, Trash2, Plus, X, Check,
-  Package, Users, Search, Download, RefreshCw, Tag
+  Package, Users, Search, Download, RefreshCw, Tag, AlertTriangle
 } from 'lucide-react';
 import { io as ioClient, Socket } from 'socket.io-client';
 import api from '@/lib/axios';
@@ -870,6 +870,11 @@ export function ServerDetailPage() {
               Stop the server before changing versions.
             </div>
           )}
+
+          <div className="flex items-start gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
+            <AlertTriangle size={13} className="shrink-0 mt-0.5" />
+            <span><strong>Downgrade uyarısı:</strong> Dünyayı daha yeni bir sürümde açtıysanız eski sürüme geçmek chunk verilerini bozar ve sunucu çöker. Sürüm değiştirmeden önce mutlaka yedek alın. Yukarı sürüm geçişi (upgrade) güvenlidir.</span>
+          </div>
 
           <div className="flex items-center gap-2 p-3 rounded-lg bg-dark-800/60 text-slate-500 text-xs">
             <Tag size={13} />
