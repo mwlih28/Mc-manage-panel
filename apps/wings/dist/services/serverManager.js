@@ -150,6 +150,14 @@ class ServerManager extends events_1.EventEmitter {
             server.containerId = container.id;
             server.startedAt = new Date();
             this.setStatus(uuid, 'running');
+            // Discard any lingering stream from the previous run before attaching fresh
+            if (server.logStream) {
+                try {
+                    server.logStream.destroy?.();
+                }
+                catch { /* ignore */ }
+                server.logStream = undefined;
+            }
             this.attachLogStream(uuid, container.id);
             this.startStatsInterval(uuid);
             this.attachStdinStream(uuid, container.id);
@@ -170,13 +178,6 @@ class ServerManager extends events_1.EventEmitter {
             return;
         this.setStatus(uuid, 'stopping');
         clearInterval(server.statsInterval);
-        if (server.logStream) {
-            try {
-                server.logStream.destroy?.();
-            }
-            catch { /* ignore */ }
-            server.logStream = undefined;
-        }
         if (server.containerId) {
             try {
                 const d = (0, dockerService_1.getDocker)();
@@ -225,6 +226,14 @@ class ServerManager extends events_1.EventEmitter {
             catch (err) {
                 logger_1.logger.error(`Error stopping container for ${uuid}:`, err);
             }
+        }
+        // Destroy logStream only after the container is gone so shutdown logs flow through
+        if (server.logStream) {
+            try {
+                server.logStream.destroy?.();
+            }
+            catch { /* ignore */ }
+            server.logStream = undefined;
         }
         // Clean up streams after the stop command was sent and container is gone
         if (server.stdinStream) {
@@ -464,8 +473,13 @@ class ServerManager extends events_1.EventEmitter {
                 });
             });
             stream.on('end', () => {
+                // Flush any remaining buffered output
+                if (buffer.trim()) {
+                    this.sendConsole(uuid, buffer);
+                    buffer = '';
+                }
                 const server = this.servers.get(uuid);
-                if (server?.status === 'running') {
+                if (server?.status === 'running' || server?.status === 'stopping') {
                     this.setStatus(uuid, 'offline');
                 }
             });
