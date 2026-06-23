@@ -92,12 +92,25 @@ async function main() {
             description: 'Minecraft - the classical game',
         },
     });
+    // Aikar's optimized JVM flags for Paper/Spigot servers.
+    // G1GC with tuned region sizes eliminates the stop-the-world GC pauses
+    // that cause multi-second ping spikes. Xms=Xmx prevents heap resize GC.
+    const AIKAR_STARTUP = 'java -Xms{{SERVER_MEMORY}}M -Xmx{{SERVER_MEMORY}}M' +
+        ' -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200' +
+        ' -XX:+UnlockExperimentalVMOptions -XX:+DisableExplicitGC -XX:+AlwaysPreTouch' +
+        ' -XX:G1NewSizePercent=30 -XX:G1MaxNewSizePercent=40 -XX:G1HeapRegionSize=8M' +
+        ' -XX:G1ReservePercent=20 -XX:G1HeapWastePercent=5 -XX:G1MixedGCCountTarget=4' +
+        ' -XX:InitiatingHeapOccupancyPercent=15 -XX:G1MixedGCLiveThresholdPercent=90' +
+        ' -XX:G1RSetUpdatingPauseTimePercent=5 -XX:SurvivorRatio=32' +
+        ' -XX:+PerfDisableSharedMem -XX:MaxTenuringThreshold=1' +
+        ' -Dusing.aikars.flags=https://mcflags.emc.gs -Daikars.new.flags=true' +
+        ' -jar {{SERVER_JARFILE}} nogui';
     // Create Egg
     const paperEgg = await prisma.egg.upsert({
         where: { uuid: '00000000-0000-0000-0000-000000000002' },
         update: {
             dockerImage: 'ghcr.io/pterodactyl/yolks:java_21',
-            startup: 'java -Xms128M -Xmx{{SERVER_MEMORY}}M -jar {{SERVER_JARFILE}}',
+            startup: AIKAR_STARTUP,
         },
         create: {
             uuid: '00000000-0000-0000-0000-000000000002',
@@ -106,7 +119,7 @@ async function main() {
             name: 'Paper',
             description: 'High performance Minecraft server based on Spigot',
             dockerImage: 'ghcr.io/pterodactyl/yolks:java_21',
-            startup: 'java -Xms128M -Xmx{{SERVER_MEMORY}}M -jar {{SERVER_JARFILE}}',
+            startup: AIKAR_STARTUP,
             configStop: '^C',
         },
     });
@@ -118,6 +131,12 @@ async function main() {
         data: { image: 'ghcr.io/pterodactyl/yolks:java_21' },
     });
     console.log('Migrated servers to java_21 image');
+    // Migrate existing servers using the old -Xms128M startup to Aikar's flags
+    const migratedStartup = await prisma.server.updateMany({
+        where: { startup: { contains: '-Xms128M' } },
+        data: { startup: AIKAR_STARTUP },
+    });
+    console.log(`Migrated ${migratedStartup.count} server(s) to Aikar JVM flags`);
     // Create demo server
     const shortUuid = (0, uuid_1.v4)().replace(/-/g, '').slice(0, 8);
     await prisma.server.upsert({
@@ -136,7 +155,7 @@ async function main() {
             memory: 1024,
             disk: 5120,
             cpu: 100,
-            startup: 'java -Xms128M -Xmx1024M -jar server.jar',
+            startup: AIKAR_STARTUP.replace('{{SERVER_MEMORY}}', '1024').replace('{{SERVER_JARFILE}}', 'server.jar'),
             image: 'ghcr.io/pterodactyl/yolks:java_21',
             env: JSON.stringify({ SERVER_MEMORY: '1024', SERVER_JARFILE: 'server.jar' }),
             backupLimit: 3,

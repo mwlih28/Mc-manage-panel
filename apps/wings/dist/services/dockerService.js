@@ -94,8 +94,14 @@ async function createContainer(serverUuid, image, cmd, env, limits, dataPath) {
         ...Object.entries(env).map(([k, v]) => `${k}=${v}`),
         `STARTUP=${startupCmd}`,
     ];
-    const memBytes = limits.memory * 1024 * 1024;
-    const swapBytes = limits.swap > 0 ? (limits.memory + limits.swap) * 1024 * 1024 : -1;
+    // Xmx is set to SERVER_MEMORY in the JVM flags. The container limit must be
+    // larger so the JVM has room for non-heap memory (Metaspace, code cache,
+    // thread stacks, off-heap buffers). Without this headroom the JVM fights the
+    // cgroup limit and triggers constant GC, causing multi-second ping spikes.
+    const heapMb = limits.memory;
+    const containerMb = heapMb + 512;
+    const memBytes = containerMb * 1024 * 1024;
+    const swapBytes = limits.swap > 0 ? (containerMb + limits.swap) * 1024 * 1024 : -1;
     const cpuQuota = limits.cpu > 0 ? Math.floor(limits.cpu * 1000) : -1;
     const serverPort = parseInt(env['SERVER_PORT'] || env['PORT'] || '25565', 10);
     const exposedPorts = {
