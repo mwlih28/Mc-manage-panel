@@ -168,6 +168,14 @@ async function main() {
   }
   console.log(`Fixed SERVER_MEMORY/SERVER_JARFILE in env for ${envFixed} server(s)`);
 
+  // Unlock CPU for existing servers — cpu=100 (1 core) causes severe TPS lag on Paper.
+  // Set to 0 (unlimited) so all host cores are available to Paper's thread pool.
+  const cpuUnlocked = await prisma.server.updateMany({
+    where: { cpu: 100 },
+    data: { cpu: 0 },
+  });
+  console.log(`Unlocked CPU for ${cpuUnlocked.count} server(s) (was 100 → 0/unlimited)`);
+
   // Create demo server
   const shortUuid = uuidv4().replace(/-/g, '').slice(0, 8);
   await prisma.server.upsert({

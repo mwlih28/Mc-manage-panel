@@ -141,6 +141,55 @@ class ServerManager extends EventEmitter {
       }
       this.sendConsole(uuid, '[Wings] Prepared server directories.');
 
+      // Write optimized server.properties on first start (before Paper generates defaults).
+      // view-distance=7 and simulation-distance=4 reduce chunk loading pressure by ~50%
+      // vs the Paper default of 10, eliminating the main source of TPS lag.
+      const propsFile = path.join(dataPath, 'server.properties');
+      if (!fs.existsSync(propsFile)) {
+        const serverPort = parseInt(
+          config.environment['SERVER_PORT'] || config.environment['PORT'] || '25565', 10
+        );
+        const props = [
+          '#Minecraft server properties — optimized defaults by MC Manage Panel',
+          `server-port=${serverPort}`,
+          'online-mode=false',
+          'view-distance=7',
+          'simulation-distance=4',
+          'max-tick-time=60000',
+          'max-players=20',
+          'motd=A Minecraft Server',
+          'spawn-protection=16',
+          'allow-flight=false',
+          'enable-rcon=false',
+          'level-name=world',
+          'gamemode=survival',
+          'difficulty=normal',
+        ].join('\n') + '\n';
+        try {
+          fs.writeFileSync(propsFile, props, 'utf8');
+          this.sendConsole(uuid, '[Wings] Wrote optimized server.properties (view-distance=7, simulation-distance=4)');
+        } catch { /* non-fatal — Paper will create its own */ }
+      } else {
+        // Patch view-distance and simulation-distance in existing server.properties
+        // if they are still at the heavy Paper default of 10.
+        try {
+          let props = fs.readFileSync(propsFile, 'utf8');
+          let changed = false;
+          if (/^view-distance=10$/m.test(props)) {
+            props = props.replace(/^view-distance=10$/m, 'view-distance=7');
+            changed = true;
+          }
+          if (/^simulation-distance=10$/m.test(props)) {
+            props = props.replace(/^simulation-distance=10$/m, 'simulation-distance=4');
+            changed = true;
+          }
+          if (changed) {
+            fs.writeFileSync(propsFile, props, 'utf8');
+            this.sendConsole(uuid, '[Wings] Patched server.properties: view-distance=7, simulation-distance=4');
+          }
+        } catch { /* non-fatal */ }
+      }
+
       // Ensure all files in the volume are owned by UID 1000 so the container
       // user can write them (Wings writes eula.txt etc. as the mcwings OS user,
       // which has a different UID). This also fixes server.properties being

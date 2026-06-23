@@ -193,7 +193,7 @@ export function AdminServersPage() {
 function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const [form, setForm] = useState({
     name: '', description: '', userId: '', nodeId: '', eggId: '',
-    memory: '1024', disk: '5120', cpu: '100', backupLimit: '3',
+    memory: '1024', disk: '5120', cpu: '0', backupLimit: '3',
   });
   const [paperVersion, setPaperVersion] = useState('latest');
   const [paperVersions, setPaperVersions] = useState<string[]>([]);
@@ -314,8 +314,8 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
           </div>
 
           <div>
-            <label className="label">CPU Limit (%)</label>
-            <input type="number" className="input" value={form.cpu} onChange={f('cpu')} />
+            <label className="label">CPU Limit <span className="text-slate-500 font-normal">(% of 1 core, 0 = unlimited)</span></label>
+            <input type="number" className="input" value={form.cpu} onChange={f('cpu')} placeholder="0" />
           </div>
 
           <div>
