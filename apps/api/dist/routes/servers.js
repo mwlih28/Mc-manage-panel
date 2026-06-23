@@ -462,17 +462,30 @@ router.put('/:id/files/rename', auth_1.authenticate, async (req, res) => {
         return res.status(e.response?.status || 500).json(e.response?.data || { message: 'Wings error' });
     }
 });
-// GET /servers/:id/players - Proxy to Wings for Minecraft server list ping
+// GET /servers/:id/players - Proxy to Wings for log-based player tracking
 router.get('/:id/players', auth_1.authenticate, async (req, res) => {
     const ctx = await getWingsClient(req.params.id, req.user.id, req.user.role === 'ADMIN');
     if (!ctx)
         return res.status(404).json({ message: 'Server not found' });
     try {
-        const { data } = await ctx.client.get(`/servers/${ctx.server.uuid}/players`);
+        const { data } = await ctx.client.get(`/servers/${ctx.server.uuid}/players`, { timeout: 5000 });
         return res.json(data);
     }
     catch {
-        return res.json({ online: 0, max: 0, players: [] });
+        return res.json({ players: [], count: 0 });
+    }
+});
+// GET /servers/:id/players/:playerUuid/inventory
+router.get('/:id/players/:playerUuid/inventory', auth_1.authenticate, async (req, res) => {
+    const ctx = await getWingsClient(req.params.id, req.user.id, req.user.role === 'ADMIN');
+    if (!ctx)
+        return res.status(404).json({ message: 'Server not found' });
+    try {
+        const { data } = await ctx.client.get(`/servers/${ctx.server.uuid}/players/${req.params.playerUuid}/inventory`, { timeout: 10000 });
+        return res.json(data);
+    }
+    catch {
+        return res.status(500).json({ message: 'Could not read inventory' });
     }
 });
 // POST /servers/:id/plugins/install - Proxy to Wings for plugin download

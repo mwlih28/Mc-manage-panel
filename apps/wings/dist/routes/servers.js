@@ -13,7 +13,7 @@ const axios_1 = __importDefault(require("axios"));
 const serverManager_1 = require("../services/serverManager");
 const logger_1 = require("../utils/logger");
 const config_1 = require("../config");
-const mcPing_1 = require("../services/mcPing");
+const nbtReader_1 = require("../services/nbtReader");
 const execFileAsync = (0, util_1.promisify)(child_process_1.execFile);
 const router = (0, express_1.Router)();
 // Load/register a server
@@ -86,18 +86,10 @@ router.delete('/:uuid', async (req, res) => {
         return res.status(500).json({ message: err.message });
     }
 });
-// Get online players via Minecraft Server List Ping
-router.get('/:uuid/players', async (req, res) => {
-    const { uuid } = req.params;
-    const env = serverManager_1.serverManager.getServerEnvironment(uuid);
-    const port = parseInt(env['SERVER_PORT'] || env['PORT'] || '25565', 10);
-    try {
-        const result = await (0, mcPing_1.pingServer)('127.0.0.1', port, 4000);
-        return res.json(result);
-    }
-    catch {
-        return res.json({ online: 0, max: 0, players: [] });
-    }
+// Get online players via log-based session tracking
+router.get('/:uuid/players', (req, res) => {
+    const players = serverManager_1.serverManager.getOnlinePlayers(req.params.uuid);
+    return res.json({ players, count: players.length });
 });
 // Install a plugin/mod by downloading from a URL
 router.post('/:uuid/plugins/install', async (req, res) => {
@@ -254,6 +246,19 @@ router.post('/:uuid/version', async (req, res) => {
             fs_1.default.rmSync(tmpDir, { recursive: true, force: true });
         }
         catch { /* ignore */ }
+    }
+});
+// Get player inventory / ender chest (NBT reader)
+router.get('/:uuid/players/:playerUuid/inventory', (req, res) => {
+    const { uuid, playerUuid } = req.params;
+    const cfg = (0, config_1.getConfig)();
+    const dataPath = path_1.default.join(cfg.system.data, uuid);
+    try {
+        const result = (0, nbtReader_1.readPlayerDat)(path_1.default.join(dataPath, 'world', 'playerdata', `${playerUuid}.dat`));
+        return res.json(result);
+    }
+    catch (err) {
+        return res.status(500).json({ message: err.message });
     }
 });
 exports.default = router;

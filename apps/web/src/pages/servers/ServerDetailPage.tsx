@@ -52,6 +52,8 @@ interface ConsoleLine {
   timestamp: number;
 }
 
+interface NbtItem { slot: number; id: string; count: number; }
+
 export function ServerDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { accessToken } = useAuthStore();
@@ -96,6 +98,10 @@ export function ServerDetailPage() {
 
   // Players
   const [players, setPlayers] = useState<{ online: number; max: number; names: string[] }>({ online: 0, max: 0, names: [] });
+  const [onlinePlayers, setOnlinePlayers] = useState<{ name: string; uuid: string }[]>([]);
+  const [inventoryPlayer, setInventoryPlayer] = useState<{ name: string; uuid: string } | null>(null);
+  const [playerInventory, setPlayerInventory] = useState<{ inventory: NbtItem[]; enderChest: NbtItem[] } | null>(null);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
 
   const { data: filesData, isLoading: filesLoading, refetch: refetchFiles } = useQuery({
     queryKey: ['server-files', id, currentDir],
@@ -147,19 +153,21 @@ export function ServerDetailPage() {
     if (data) setCurrentStatus(data.status);
   }, [data]);
 
-  // Poll players every 30s when server is running
+  // Poll players every 15s when console tab is active
   useEffect(() => {
-    if (!id) return;
-    const fetchPlayers = async () => {
+    if (activeTab !== 'console' || !id) return;
+    const load = async () => {
       try {
         const { data: pd } = await api.get(`/servers/${id}/players`);
-        setPlayers({ online: pd.online ?? 0, max: pd.max ?? 0, names: (pd.players ?? []).map((p: { name: string }) => p.name) });
+        const playerList: { name: string; uuid: string }[] = pd.players || [];
+        setOnlinePlayers(playerList);
+        setPlayers({ online: playerList.length, max: pd.max ?? 0, names: playerList.map((p) => p.name) });
       } catch { /* ignore */ }
     };
-    fetchPlayers();
-    const interval = setInterval(fetchPlayers, 30000);
+    load();
+    const interval = setInterval(load, 15000);
     return () => clearInterval(interval);
-  }, [id]);
+  }, [activeTab, id]);
 
   useEffect(() => {
     if (activeTab === 'plugins' && id) loadInstalledPlugins();
@@ -373,6 +381,13 @@ export function ServerDetailPage() {
       }]);
     });
 
+    socket.on('server:players', (msg: { uuid: string; players: { name: string; uuid: string }[] }) => {
+      if (msg.uuid === id) {
+        setOnlinePlayers(msg.players);
+        setPlayers({ online: msg.players.length, max: 0, names: msg.players.map((p) => p.name) });
+      }
+    });
+
     return () => {
       socket.emit('server:unsubscribe', id);
       socket.disconnect();
@@ -382,6 +397,20 @@ export function ServerDetailPage() {
   useEffect(() => {
     consoleEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [consoleLines]);
+
+  const openInventory = async (player: { name: string; uuid: string }) => {
+    if (!player.uuid) return;
+    setInventoryPlayer(player);
+    setInventoryLoading(true);
+    try {
+      const { data } = await api.get(`/servers/${id}/players/${player.uuid}/inventory`);
+      setPlayerInventory(data);
+    } catch {
+      setPlayerInventory(null);
+    } finally {
+      setInventoryLoading(false);
+    }
+  };
 
   const sendCommand = (e: React.FormEvent) => {
     e.preventDefault();
@@ -609,21 +638,35 @@ export function ServerDetailPage() {
           </div>
 
           {/* Players widget */}
-          <div className="card w-48 shrink-0 self-start">
+          <div className="card w-52 shrink-0 self-start">
             <div className="card-header flex items-center gap-2">
               <Users size={13} className="text-slate-400" />
               <span className="text-xs font-semibold text-slate-200">
-                Players {isRunning ? `${players.online}/${players.max}` : '—'}
+                Players ({onlinePlayers.length})
               </span>
             </div>
-            <div className="p-3 space-y-1 max-h-80 overflow-y-auto">
+            <div className="p-3 space-y-1.5 max-h-80 overflow-y-auto">
               {!isRunning ? (
                 <p className="text-xs text-slate-600">Server offline</p>
-              ) : players.names.length === 0 ? (
+              ) : onlinePlayers.length === 0 ? (
                 <p className="text-xs text-slate-600">No players online</p>
               ) : (
-                players.names.map((name) => (
-                  <p key={name} className="text-xs text-slate-300 font-mono truncate">{name}</p>
+                onlinePlayers.map((p) => (
+                  <button
+                    key={p.name}
+                    onClick={() => openInventory(p)}
+                    className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg bg-dark-700 hover:bg-dark-600 border border-dark-600 hover:border-panel-500/40 transition-all group"
+                    title="Click to view inventory"
+                  >
+                    <img
+                      src={`https://mc-heads.net/avatar/${p.name}/24`}
+                      alt={p.name}
+                      className="w-6 h-6 rounded pixelated"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                    <span className="text-xs font-medium text-slate-300 group-hover:text-slate-100 flex-1 text-left truncate">{p.name}</span>
+                    <Package size={10} className="text-slate-600 group-hover:text-panel-400 shrink-0" />
+                  </button>
                 ))
               )}
             </div>
@@ -993,6 +1036,60 @@ export function ServerDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Inventory Modal */}
+      {inventoryPlayer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => { setInventoryPlayer(null); setPlayerInventory(null); }}>
+          <div className="bg-dark-800 border border-dark-600 rounded-xl w-full max-w-2xl mx-4 p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-5">
+              <img src={`https://mc-heads.net/avatar/${inventoryPlayer.name}/40`} alt="" className="w-10 h-10 rounded pixelated" />
+              <div>
+                <h3 className="text-slate-100 font-semibold">{inventoryPlayer.name}</h3>
+                <p className="text-xs text-slate-500 font-mono">{inventoryPlayer.uuid}</p>
+              </div>
+              <button className="ml-auto text-slate-500 hover:text-slate-300" onClick={() => { setInventoryPlayer(null); setPlayerInventory(null); }}><X size={18} /></button>
+            </div>
+
+            {inventoryLoading ? (
+              <div className="flex justify-center py-8"><Spinner /></div>
+            ) : !playerInventory ? (
+              <p className="text-slate-500 text-sm text-center py-8">Could not read inventory. Player must be offline or data unavailable.</p>
+            ) : (
+              <div className="space-y-4">
+                <InventoryGrid title="Inventory" items={playerInventory.inventory} />
+                <InventoryGrid title="Ender Chest" items={playerInventory.enderChest} />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InventoryGrid({ title, items }: { title: string; items: NbtItem[] }) {
+  if (items.length === 0) return (
+    <div>
+      <p className="text-xs font-semibold text-slate-400 mb-2">{title}</p>
+      <p className="text-xs text-slate-600">Empty</p>
+    </div>
+  );
+  return (
+    <div>
+      <p className="text-xs font-semibold text-slate-400 mb-2">{title} ({items.length} items)</p>
+      <div className="flex flex-wrap gap-1.5">
+        {items.map((item, i) => (
+          <div key={i} className="relative group">
+            <div
+              className="w-10 h-10 bg-dark-700 border border-dark-600 rounded flex flex-col items-center justify-center hover:border-panel-500/40 transition-colors cursor-default"
+              title={`${item.id} ×${item.count} (slot ${item.slot})`}
+            >
+              <span className="text-[8px] text-slate-400 leading-tight text-center px-0.5 truncate w-full">{item.id.replace(/_/g, ' ')}</span>
+              {item.count > 1 && <span className="text-[9px] font-bold text-yellow-400 leading-none">{item.count}</span>}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

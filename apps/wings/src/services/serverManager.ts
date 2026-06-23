@@ -28,6 +28,7 @@ interface ManagedServer {
 
 class ServerManager extends EventEmitter {
   private servers = new Map<string, ManagedServer>();
+  private playerSessions = new Map<string, Map<string, string>>(); // serverUuid -> Map<playerName, playerUuid>
   private io?: SocketServer;
 
   setSocketServer(io: SocketServer) {
@@ -499,13 +500,49 @@ class ServerManager extends EventEmitter {
     const server = this.servers.get(uuid);
     if (!server) return;
     server.status = status;
+    if (status === 'offline') {
+      this.playerSessions.delete(uuid);
+    }
     this.emit('status', { uuid, status });
     this.io?.to(`server:${uuid}`).emit('server:status', { uuid, state: status });
     panelClient.reportStatus(uuid, status).catch(() => { /* best effort */ });
   }
 
+  getOnlinePlayers(uuid: string): { name: string; uuid: string }[] {
+    const map = this.playerSessions.get(uuid) ?? new Map();
+    return [...map.entries()].map(([name, playerUuid]) => ({ name, uuid: playerUuid }));
+  }
+
   getLogBuffer(uuid: string): string[] {
     return this.servers.get(uuid)?.logBuffer ?? [];
+  }
+
+  private trackPlayerEvents(uuid: string, line: string) {
+    const uuidMatch = line.match(/UUID of player (\S+) is ([0-9a-f-]{36})/i);
+    if (uuidMatch) {
+      const [, name, playerUuid] = uuidMatch;
+      if (!this.playerSessions.has(uuid)) this.playerSessions.set(uuid, new Map());
+      this.playerSessions.get(uuid)!.set(name, playerUuid);
+    }
+
+    const joinMatch = line.match(/\]: (\w[\w ]*?) joined the game\s*$/);
+    if (joinMatch) {
+      const name = joinMatch[1];
+      if (!this.playerSessions.has(uuid)) this.playerSessions.set(uuid, new Map());
+      // Ensure player entry exists even if UUID hasn't been logged yet
+      const map = this.playerSessions.get(uuid)!;
+      if (!map.has(name)) map.set(name, '');
+      const players = this.getOnlinePlayers(uuid);
+      this.io?.to(`server:${uuid}`).emit('server:players', { uuid, players });
+    }
+
+    const leaveMatch = line.match(/\]: (\w[\w ]*?) left the game\s*$/);
+    if (leaveMatch) {
+      const name = leaveMatch[1];
+      this.playerSessions.get(uuid)?.delete(name);
+      const players = this.getOnlinePlayers(uuid);
+      this.io?.to(`server:${uuid}`).emit('server:players', { uuid, players });
+    }
   }
 
   private sendConsole(uuid: string, line: string) {
@@ -516,6 +553,7 @@ class ServerManager extends EventEmitter {
     }
     this.io?.to(`server:${uuid}`).emit('server:console', { uuid, data: line });
     this.emit('console', { uuid, line });
+    this.trackPlayerEvents(uuid, line);
   }
 
   private attachLogStream(uuid: string, containerId: string) {
