@@ -8,7 +8,7 @@ import axios from 'axios';
 import { serverManager } from '../services/serverManager';
 import { logger } from '../utils/logger';
 import { getConfig } from '../config';
-import { pingServer } from '../services/mcPing';
+import { readPlayerDat } from '../services/nbtReader';
 import type { ServerConfig } from '../types';
 
 const execFileAsync = promisify(execFile);
@@ -91,17 +91,10 @@ router.delete('/:uuid', async (req: Request, res: Response) => {
   }
 });
 
-// Get online players via Minecraft Server List Ping
-router.get('/:uuid/players', async (req: Request, res: Response) => {
-  const { uuid } = req.params;
-  const env = serverManager.getServerEnvironment(uuid);
-  const port = parseInt(env['SERVER_PORT'] || env['PORT'] || '25565', 10);
-  try {
-    const result = await pingServer('127.0.0.1', port, 4000);
-    return res.json(result);
-  } catch {
-    return res.json({ online: 0, max: 0, players: [] });
-  }
+// Get online players via log-based session tracking
+router.get('/:uuid/players', (req: Request, res: Response) => {
+  const players = serverManager.getOnlinePlayers(req.params.uuid);
+  return res.json({ players, count: players.length });
 });
 
 // Install a plugin/mod by downloading from a URL
@@ -264,6 +257,19 @@ router.post('/:uuid/version', async (req: Request, res: Response) => {
     return res.status(500).json({ message: (err as Error).message });
   } finally {
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
+  }
+});
+
+// Get player inventory / ender chest (NBT reader)
+router.get('/:uuid/players/:playerUuid/inventory', (req: Request, res: Response) => {
+  const { uuid, playerUuid } = req.params;
+  const cfg = getConfig();
+  const dataPath = path.join(cfg.system.data, uuid);
+  try {
+    const result = readPlayerDat(path.join(dataPath, 'world', 'playerdata', `${playerUuid}.dat`));
+    return res.json(result);
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
   }
 });
 

@@ -265,3 +265,18 @@
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* Pixelated image rendering for MC heads */
+.pixelated { image-rendering: pixelated; }
+
+/* Better card hover states */
+.card { transition: border-color 0.15s; }
+
+/* Improved console styling */
+.console-output {
+  background: #0a0e12;
+  font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+}
+
+/* Player head border glow on hover */
+.player-card:hover { border-color: rgba(34, 197, 94, 0.4); }

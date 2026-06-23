@@ -202,6 +202,203 @@ async function main() {
   });
   console.log('Demo server created');
 
+  // Vanilla Minecraft
+  await prisma.egg.upsert({
+    where: { uuid: '00000000-0000-0000-0000-000000000004' },
+    update: { startup: 'java -Xms{{SERVER_MEMORY}}M -Xmx{{SERVER_MEMORY}}M -jar {{SERVER_JARFILE}} nogui' },
+    create: {
+      uuid: '00000000-0000-0000-0000-000000000004',
+      nestId: minecraftNest.id,
+      author: 'support@pterodactyl.io',
+      name: 'Vanilla Minecraft',
+      description: 'Standard Mojang vanilla server',
+      dockerImage: 'ghcr.io/pterodactyl/yolks:java_21',
+      startup: 'java -Xms{{SERVER_MEMORY}}M -Xmx{{SERVER_MEMORY}}M -jar {{SERVER_JARFILE}} nogui',
+      configStop: 'stop',
+      scriptInstall: `#!/bin/bash
+cd /mnt/server
+VERSION="\${MC_VERSION:-latest}"
+if [ "$VERSION" = "latest" ]; then
+  VERSION=$(curl -sS https://launchermeta.mojang.com/mc/game/version_manifest.json | python3 -c "import sys,json;print(json.load(sys.stdin)['latest']['release'])")
+fi
+MANIFEST_URL=$(curl -sS https://launchermeta.mojang.com/mc/game/version_manifest.json | python3 -c "import sys,json;d=json.load(sys.stdin);v=[x for x in d['versions'] if x['id']==\"$VERSION\"];print(v[0]['url'] if v else '')")
+[ -z "$MANIFEST_URL" ] && { echo "Version $VERSION not found"; exit 1; }
+JAR_URL=$(curl -sS "$MANIFEST_URL" | python3 -c "import sys,json;print(json.load(sys.stdin)['downloads']['server']['url'])")
+curl -sSL -o server.jar "$JAR_URL"
+echo "eula=true" > eula.txt
+echo "Vanilla $VERSION installed."`,
+      scriptContainer: 'ghcr.io/pterodactyl/installers:alpine',
+    },
+  });
+
+  // BungeeCord
+  await prisma.egg.upsert({
+    where: { uuid: '00000000-0000-0000-0000-000000000005' },
+    update: {},
+    create: {
+      uuid: '00000000-0000-0000-0000-000000000005',
+      nestId: minecraftNest.id,
+      author: 'support@pterodactyl.io',
+      name: 'BungeeCord',
+      description: 'Minecraft proxy server by md-5',
+      dockerImage: 'ghcr.io/pterodactyl/yolks:java_21',
+      startup: 'java -Xms{{SERVER_MEMORY}}M -Xmx{{SERVER_MEMORY}}M -jar {{SERVER_JARFILE}}',
+      configStop: 'end',
+      scriptInstall: `#!/bin/bash
+cd /mnt/server
+curl -sSL -o bungeecord.jar "https://ci.md-5.net/job/BungeeCord/lastSuccessfulBuild/artifact/bootstrap/target/BungeeCord.jar"
+echo "BungeeCord installed."`,
+      scriptContainer: 'ghcr.io/pterodactyl/installers:alpine',
+    },
+  });
+
+  // Velocity
+  await prisma.egg.upsert({
+    where: { uuid: '00000000-0000-0000-0000-000000000006' },
+    update: {},
+    create: {
+      uuid: '00000000-0000-0000-0000-000000000006',
+      nestId: minecraftNest.id,
+      author: 'support@pterodactyl.io',
+      name: 'Velocity',
+      description: 'High performance Minecraft proxy by PaperMC',
+      dockerImage: 'ghcr.io/pterodactyl/yolks:java_21',
+      startup: 'java -Xms{{SERVER_MEMORY}}M -Xmx{{SERVER_MEMORY}}M -XX:+UseG1GC -XX:G1HeapRegionSize=4M -XX:+UnlockExperimentalVMOptions -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch -jar {{SERVER_JARFILE}}',
+      configStop: 'shutdown',
+      scriptInstall: `#!/bin/bash
+cd /mnt/server
+VELOCITY_VERSION=$(curl -sSL https://api.papermc.io/v2/projects/velocity | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['versions'][-1])")
+VELOCITY_BUILD=$(curl -sSL "https://api.papermc.io/v2/projects/velocity/versions/$VELOCITY_VERSION" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['builds'][-1])")
+JAR="velocity-$VELOCITY_VERSION-$VELOCITY_BUILD.jar"
+curl -sSL -o velocity.jar "https://api.papermc.io/v2/projects/velocity/versions/$VELOCITY_VERSION/builds/$VELOCITY_BUILD/downloads/$JAR"
+echo "Velocity $VELOCITY_VERSION-$VELOCITY_BUILD installed."`,
+      scriptContainer: 'ghcr.io/pterodactyl/installers:alpine',
+    },
+  });
+
+  // Create Games nest
+  const gamesNest = await prisma.nest.upsert({
+    where: { uuid: '00000000-0000-0000-0001-000000000001' },
+    update: {},
+    create: {
+      uuid: '00000000-0000-0000-0001-000000000001',
+      author: 'support@pterodactyl.io',
+      name: 'Game Servers',
+      description: 'Non-Minecraft game servers',
+    },
+  });
+
+  // Rust
+  await prisma.egg.upsert({
+    where: { uuid: '00000000-0000-0000-0001-000000000001' },
+    update: {},
+    create: {
+      uuid: '00000000-0000-0000-0001-000000000001',
+      nestId: gamesNest.id,
+      author: 'support@pterodactyl.io',
+      name: 'Rust',
+      description: 'Rust survival game server (requires SteamCMD)',
+      dockerImage: 'ghcr.io/pterodactyl/games:rust',
+      startup: './RustDedicated -batchmode +server.ip 0.0.0.0 +server.port {{SERVER_PORT}} +server.queryport {{QUERY_PORT}} +rcon.ip 0.0.0.0 +rcon.port {{RCON_PORT}} +rcon.password "{{RCON_PASSWORD}}" +server.maxplayers {{MAX_PLAYERS}} +server.hostname "{{SERVER_NAME}}" +server.identity "{{SERVER_IDENT}}" +server.seed {{SERVER_SEED}} +server.worldsize {{WORLD_SIZE}} -logfile /dev/stdout',
+      configStop: 'quit',
+      scriptInstall: `#!/bin/bash
+cd /mnt/server
+steamcmd +force_install_dir /mnt/server +login anonymous +app_update 258550 validate +quit
+echo "Rust server installed."`,
+      scriptContainer: 'ghcr.io/pterodactyl/installers:steam',
+    },
+  });
+
+  // Garry's Mod
+  await prisma.egg.upsert({
+    where: { uuid: '00000000-0000-0000-0001-000000000002' },
+    update: {},
+    create: {
+      uuid: '00000000-0000-0000-0001-000000000002',
+      nestId: gamesNest.id,
+      author: 'support@pterodactyl.io',
+      name: "Garry's Mod",
+      description: 'Source Engine sandbox game',
+      dockerImage: 'ghcr.io/pterodactyl/games:source',
+      startup: './srcds_run -game garrysmod -console -port {{SERVER_PORT}} +maxplayers {{MAX_PLAYERS}} +map {{DEFAULT_MAP}} -strictportbind -norestart',
+      configStop: 'quit',
+      scriptInstall: `#!/bin/bash
+cd /mnt/server
+steamcmd +force_install_dir /mnt/server +login anonymous +app_update 4020 validate +quit
+echo "Garry's Mod installed."`,
+      scriptContainer: 'ghcr.io/pterodactyl/installers:steam',
+    },
+  });
+
+  // CS2
+  await prisma.egg.upsert({
+    where: { uuid: '00000000-0000-0000-0001-000000000003' },
+    update: {},
+    create: {
+      uuid: '00000000-0000-0000-0001-000000000003',
+      nestId: gamesNest.id,
+      author: 'support@pterodactyl.io',
+      name: 'Counter-Strike 2',
+      description: 'CS2 dedicated server',
+      dockerImage: 'ghcr.io/pterodactyl/games:source',
+      startup: './game/bin/linuxsteamrt64/cs2 -dedicated -console -port {{SERVER_PORT}} +map {{DEFAULT_MAP}} +maxplayers_override {{MAX_PLAYERS}} +sv_setsteamaccount {{STEAM_ACC}}',
+      configStop: 'quit',
+      scriptInstall: `#!/bin/bash
+cd /mnt/server
+steamcmd +force_install_dir /mnt/server +login anonymous +app_update 730 validate +quit
+echo "CS2 dedicated server installed."`,
+      scriptContainer: 'ghcr.io/pterodactyl/installers:steam',
+    },
+  });
+
+  // ARK: Survival Evolved
+  await prisma.egg.upsert({
+    where: { uuid: '00000000-0000-0000-0001-000000000004' },
+    update: {},
+    create: {
+      uuid: '00000000-0000-0000-0001-000000000004',
+      nestId: gamesNest.id,
+      author: 'support@pterodactyl.io',
+      name: 'ARK: Survival Evolved',
+      description: 'ARK dedicated server',
+      dockerImage: 'ghcr.io/pterodactyl/games:source',
+      startup: './ShooterGame/Binaries/Linux/ShooterGameServer {{MAP}}?listen?ServerPassword={{SERVER_PASSWORD}}?ServerAdminPassword={{ADMIN_PASSWORD}}?RCONEnabled=True?RCONPort={{RCON_PORT}} -port={{SERVER_PORT}} -queryport={{QUERY_PORT}} -NoBattlEye',
+      configStop: 'DoExit',
+      scriptInstall: `#!/bin/bash
+cd /mnt/server
+steamcmd +force_install_dir /mnt/server +login anonymous +app_update 376030 validate +quit
+echo "ARK server installed."`,
+      scriptContainer: 'ghcr.io/pterodactyl/installers:steam',
+    },
+  });
+
+  // Terraria / TShock
+  await prisma.egg.upsert({
+    where: { uuid: '00000000-0000-0000-0001-000000000005' },
+    update: {},
+    create: {
+      uuid: '00000000-0000-0000-0001-000000000005',
+      nestId: gamesNest.id,
+      author: 'support@pterodactyl.io',
+      name: 'Terraria (TShock)',
+      description: 'Terraria server with TShock plugin API',
+      dockerImage: 'ghcr.io/pterodactyl/yolks:dotnet_6',
+      startup: './TShock.Server -port {{SERVER_PORT}} -maxplayers {{MAX_PLAYERS}} -world {{WORLD_NAME}}.wld -autocreate {{WORLD_SIZE}} -worldname {{WORLD_NAME}}',
+      configStop: 'exit',
+      scriptInstall: `#!/bin/bash
+cd /mnt/server
+TSHOCK=$(curl -sS https://api.github.com/repos/Pryaxis/TShock/releases/latest | python3 -c "import sys,json;d=json.load(sys.stdin);[print(a['browser_download_url']) for a in d['assets'] if 'TShock-' in a['name'] and a['name'].endswith('.zip')]" | head -1)
+curl -sSL -o tshock.zip "$TSHOCK"
+unzip -o tshock.zip
+rm tshock.zip
+chmod +x TShock.Server
+echo "TShock installed."`,
+      scriptContainer: 'ghcr.io/pterodactyl/installers:alpine',
+    },
+  });
+
+  console.log('Eggs created/updated');
+
   // Create settings
   const settings = [
     { key: 'app:name', value: 'MC Manage Panel' },
