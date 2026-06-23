@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -17,8 +17,14 @@ model User {
   role         String    @default("USER")
   rootAdmin    Boolean   @default(false)
   language     String    @default("en")
-  twoFactor    Boolean   @default(false)
-  avatarUrl    String?
+  twoFactor        Boolean   @default(false)
+  twoFactorSecret  String?
+  smtpHost         String?
+  smtpPort         Int?
+  smtpUser         String?
+  smtpPass         String?
+  smtpFrom         String?
+  avatarUrl        String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   lastLogin    DateTime?

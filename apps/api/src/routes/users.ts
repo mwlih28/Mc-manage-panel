@@ -4,6 +4,8 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '../utils/prisma';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import { AuthRequest } from '../types';
+import { generateSecret, verify, generateURI } from 'otplib';
+import QRCode from 'qrcode';
 
 const router = Router();
 
@@ -193,6 +195,96 @@ router.patch('/profile/me', authenticate, async (req: AuthRequest, res: Response
   });
 
   return res.json({ data: updated });
+});
+
+// ── 2FA setup & management ────────────────────────────────────────────────────
+
+router.post('/profile/2fa/setup', authenticate, async (req: AuthRequest, res: Response) => {
+  const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+  if (!user) return res.status(404).json({ message: 'User not found' });
+  if (user.twoFactor) return res.status(400).json({ message: '2FA is already enabled' });
+
+  const secret = generateSecret();
+  const otpauthUrl = generateURI({ issuer: 'MC Manage Panel', label: user.email, secret });
+  const qrCode = await QRCode.toDataURL(otpauthUrl);
+
+  // Store secret temporarily (unconfirmed)
+  await prisma.user.update({ where: { id: user.id }, data: { twoFactorSecret: secret } });
+  return res.json({ secret, qrCode, otpauthUrl });
+});
+
+router.post('/profile/2fa/enable', authenticate, async (req: AuthRequest, res: Response) => {
+  const { code } = req.body;
+  if (!code) return res.status(422).json({ message: 'Code required' });
+  const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+  if (!user || !user.twoFactorSecret) return res.status(400).json({ message: 'Run /setup first' });
+  if (user.twoFactor) return res.status(400).json({ message: '2FA already enabled' });
+
+  const result = await verify({ secret: user.twoFactorSecret, token: code });
+  if (!result.valid) return res.status(401).json({ message: 'Invalid code' });
+
+  await prisma.user.update({ where: { id: user.id }, data: { twoFactor: true } });
+  return res.json({ message: '2FA enabled' });
+});
+
+router.delete('/profile/2fa', authenticate, async (req: AuthRequest, res: Response) => {
+  const { code } = req.body;
+  const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+  if (!user || !user.twoFactor || !user.twoFactorSecret) return res.status(400).json({ message: '2FA not enabled' });
+
+  const result = await verify({ secret: user.twoFactorSecret, token: code });
+  if (!result.valid) return res.status(401).json({ message: 'Invalid code' });
+
+  await prisma.user.update({ where: { id: user.id }, data: { twoFactor: false, twoFactorSecret: null } });
+  return res.json({ message: '2FA disabled' });
+});
+
+// ── SMTP config ───────────────────────────────────────────────────────────────
+router.get('/profile/smtp', authenticate, async (req: AuthRequest, res: Response) => {
+  const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+  if (!user) return res.status(404).json({ message: 'Not found' });
+  return res.json({
+    host: user.smtpHost ?? '',
+    port: user.smtpPort ?? 587,
+    user: user.smtpUser ?? '',
+    from: user.smtpFrom ?? '',
+    configured: !!user.smtpHost,
+  });
+});
+
+router.put('/profile/smtp', authenticate, async (req: AuthRequest, res: Response) => {
+  const { host, port, user: smtpUser, pass, from } = req.body;
+  const data: Record<string, unknown> = {};
+  if (host !== undefined) data.smtpHost = host || null;
+  if (port !== undefined) data.smtpPort = port ? Number(port) : null;
+  if (smtpUser !== undefined) data.smtpUser = smtpUser || null;
+  if (pass !== undefined && pass !== '') data.smtpPass = pass;
+  if (from !== undefined) data.smtpFrom = from || null;
+  await prisma.user.update({ where: { id: req.user!.id }, data });
+  return res.json({ message: 'SMTP settings saved' });
+});
+
+router.post('/profile/smtp/test', authenticate, async (req: AuthRequest, res: Response) => {
+  const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+  if (!user?.smtpHost) return res.status(400).json({ message: 'SMTP not configured' });
+  try {
+    const nodemailer = await import('nodemailer');
+    const transporter = nodemailer.createTransport({
+      host: user.smtpHost,
+      port: user.smtpPort ?? 587,
+      secure: (user.smtpPort ?? 587) === 465,
+      auth: user.smtpUser && user.smtpPass ? { user: user.smtpUser, pass: user.smtpPass } : undefined,
+    });
+    await transporter.sendMail({
+      from: user.smtpFrom || user.smtpUser || 'noreply@example.com',
+      to: user.email,
+      subject: 'MC Manage Panel - SMTP Test',
+      text: 'Your SMTP configuration is working correctly.',
+    });
+    return res.json({ message: `Test email sent to ${user.email}` });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
+  }
 });
 
 export default router;

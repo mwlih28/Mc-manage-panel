@@ -1,12 +1,22 @@
 import { Router, Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import { prisma } from '../utils/prisma';
-import { generateTokenPair, verifyRefreshToken } from '../utils/jwt';
+import { generateTokenPair } from '../utils/jwt';
 import { authenticate } from '../middleware/auth';
 import { AuthRequest } from '../types';
+import { verify } from 'otplib';
 
 const router = Router();
+
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
+
+function safeUser(user: Record<string, unknown>) {
+  const { password, twoFactorSecret, smtpPass, ...rest } = user;
+  void password; void twoFactorSecret; void smtpPass;
+  return rest;
+}
 
 router.post(
   '/login',
@@ -43,7 +53,13 @@ router.post(
         event: 'auth:login',
         ip: req.ip,
       },
-    });
+    }).catch(() => {});
+
+    // 2FA check
+    if (user.twoFactor && user.twoFactorSecret) {
+      const pendingToken = jwt.sign({ userId: user.id, pending: true }, JWT_SECRET, { expiresIn: '5m' });
+      return res.json({ requiresTwoFactor: true, pendingToken });
+    }
 
     const tokens = generateTokenPair({
       userId: user.id,
@@ -51,10 +67,32 @@ router.post(
       role: user.role,
     });
 
-    const { password: _pw, ...userWithoutPassword } = user;
-    return res.json({ user: userWithoutPassword, ...tokens });
+    return res.json({ ...tokens, user: safeUser(user as unknown as Record<string, unknown>) });
   }
 );
+
+router.post('/2fa/verify', async (req: Request, res: Response) => {
+  const { pendingToken, code } = req.body;
+  if (!pendingToken || !code) return res.status(422).json({ message: 'pendingToken and code required' });
+  try {
+    const payload = jwt.verify(pendingToken, JWT_SECRET) as { userId: string; pending: boolean };
+    if (!payload.pending) return res.status(401).json({ message: 'Invalid token' });
+    const user = await prisma.user.findUnique({ where: { id: payload.userId } });
+    if (!user || !user.twoFactor || !user.twoFactorSecret) return res.status(401).json({ message: 'Invalid state' });
+    const result = await verify({ secret: user.twoFactorSecret, token: code });
+    const valid = result.valid;
+    if (!valid) return res.status(401).json({ message: 'Invalid 2FA code' });
+
+    const tokens = generateTokenPair({
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+    });
+    return res.json({ ...tokens, user: safeUser(user as unknown as Record<string, unknown>) });
+  } catch {
+    return res.status(401).json({ message: 'Invalid or expired token' });
+  }
+});
 
 router.post(
   '/register',
@@ -99,8 +137,7 @@ router.post(
       role: user.role,
     });
 
-    const { password: _pw, ...userWithoutPassword } = user;
-    return res.status(201).json({ user: userWithoutPassword, ...tokens });
+    return res.status(201).json({ ...tokens, user: safeUser(user as unknown as Record<string, unknown>) });
   }
 );
 
@@ -111,7 +148,8 @@ router.post('/refresh', async (req: Request, res: Response) => {
   }
 
   try {
-    const payload = verifyRefreshToken(refreshToken);
+    const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'fallback-refresh-secret';
+    const payload = jwt.verify(refreshToken, JWT_REFRESH_SECRET) as { userId: string };
     const user = await prisma.user.findUnique({ where: { id: payload.userId } });
 
     if (!user) {
@@ -131,8 +169,9 @@ router.post('/refresh', async (req: Request, res: Response) => {
 });
 
 router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
-  const { password: _pw, ...user } = req.user!;
-  return res.json({ user });
+  const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+  if (!user) return res.status(404).json({ message: 'User not found' });
+  return res.json({ user: safeUser(user as unknown as Record<string, unknown>) });
 });
 
 router.post('/logout', authenticate, async (req: AuthRequest, res: Response) => {
@@ -142,7 +181,7 @@ router.post('/logout', authenticate, async (req: AuthRequest, res: Response) => 
       event: 'auth:logout',
       ip: req.ip,
     },
-  });
+  }).catch(() => {});
   return res.json({ message: 'Logged out successfully' });
 });
 
@@ -194,8 +233,7 @@ router.post(
       role: user.role,
     });
 
-    const { password: _pw, ...userWithoutPassword } = user;
-    return res.status(201).json({ user: userWithoutPassword, ...tokens });
+    return res.status(201).json({ ...tokens, user: safeUser(user as unknown as Record<string, unknown>) });
   }
 );
 

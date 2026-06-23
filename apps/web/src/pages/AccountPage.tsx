@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { User, Lock, Key } from 'lucide-react';
+import { User, Lock, Key, ShieldCheck, Mail } from 'lucide-react';
 import api from '@/lib/axios';
 import { useAuthStore } from '@/store/authStore';
 import { Spinner } from '@/components/ui/Spinner';
@@ -18,6 +18,29 @@ export function AccountPage() {
     newPassword: '',
     confirmPassword: '',
   });
+
+  // ── 2FA state ────────────────────────────────────────────────────────────────
+  const [twoFaSetup, setTwoFaSetup] = useState<{ qrCode: string; secret: string } | null>(null);
+  const [twoFaCode, setTwoFaCode] = useState('');
+  const [twoFaDisableCode, setTwoFaDisableCode] = useState('');
+  const [twoFaLoading, setTwoFaLoading] = useState(false);
+
+  // ── SMTP state ───────────────────────────────────────────────────────────────
+  const [smtpForm, setSmtpForm] = useState({ host: '', port: '587', user: '', pass: '', from: '' });
+  const [smtpLoading, setSmtpLoading] = useState(false);
+  const [smtpTesting, setSmtpTesting] = useState(false);
+
+  useEffect(() => {
+    api.get('/users/profile/smtp').then(({ data }) => {
+      setSmtpForm({
+        host: data.host || '',
+        port: String(data.port || 587),
+        user: data.user || '',
+        pass: '',
+        from: data.from || '',
+      });
+    }).catch(() => {});
+  }, []);
 
   const profileMutation = useMutation({
     mutationFn: (data: typeof profileForm) => api.patch('/users/profile/me', data),
@@ -53,29 +76,104 @@ export function AccountPage() {
     });
   };
 
+  // ── 2FA handlers ─────────────────────────────────────────────────────────────
+  const setup2fa = async () => {
+    setTwoFaLoading(true);
+    try {
+      const { data } = await api.post('/users/profile/2fa/setup');
+      setTwoFaSetup({ qrCode: data.qrCode, secret: data.secret });
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string } } };
+      toast.error(error.response?.data?.message || 'Failed to setup 2FA');
+    } finally {
+      setTwoFaLoading(false);
+    }
+  };
+
+  const enable2fa = async () => {
+    setTwoFaLoading(true);
+    try {
+      await api.post('/users/profile/2fa/enable', { code: twoFaCode });
+      toast.success('2FA enabled successfully');
+      setTwoFaSetup(null);
+      setTwoFaCode('');
+      // Refresh user to get updated twoFactor flag
+      const { data } = await api.get('/users/profile/me');
+      setUser(data.data);
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string } } };
+      toast.error(error.response?.data?.message || 'Invalid code');
+    } finally {
+      setTwoFaLoading(false);
+    }
+  };
+
+  const disable2fa = async () => {
+    setTwoFaLoading(true);
+    try {
+      await api.delete('/users/profile/2fa', { data: { code: twoFaDisableCode } });
+      toast.success('2FA disabled');
+      setTwoFaDisableCode('');
+      // Refresh user
+      const { data } = await api.get('/users/profile/me');
+      setUser(data.data);
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string } } };
+      toast.error(error.response?.data?.message || 'Invalid code');
+    } finally {
+      setTwoFaLoading(false);
+    }
+  };
+
+  // ── SMTP handlers ─────────────────────────────────────────────────────────────
+  const saveSmtp = async () => {
+    setSmtpLoading(true);
+    try {
+      await api.put('/users/profile/smtp', smtpForm);
+      toast.success('SMTP settings saved');
+    } catch {
+      toast.error('Failed to save SMTP settings');
+    } finally {
+      setSmtpLoading(false);
+    }
+  };
+
+  const testSmtp = async () => {
+    setSmtpTesting(true);
+    try {
+      const { data } = await api.post('/users/profile/smtp/test');
+      toast.success(data.message || 'Test email sent');
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string } } };
+      toast.error(error.response?.data?.message || 'SMTP test failed');
+    } finally {
+      setSmtpTesting(false);
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-2xl animate-fade-in">
       <div>
-        <h1 className="text-2xl font-bold text-slate-100">Account Settings</h1>
-        <p className="text-slate-400 text-sm mt-1">Manage your account preferences</p>
+        <h1 className="text-xl font-bold text-white">Account Settings</h1>
+        <p className="text-zinc-500 text-sm mt-1">Manage your account preferences</p>
       </div>
 
       {/* Profile info */}
       <div className="card">
         <div className="card-header flex items-center gap-2">
-          <User size={16} className="text-panel-400" />
-          <h2 className="text-sm font-semibold text-slate-100">Profile Information</h2>
+          <User size={14} className="text-zinc-400" />
+          <h2 className="text-sm font-semibold text-zinc-100">Profile Information</h2>
         </div>
         <div className="card-body">
           {/* Avatar */}
           <div className="flex items-center gap-4 mb-6">
-            <div className="h-16 w-16 rounded-xl bg-gradient-to-br from-panel-400 to-panel-600 flex items-center justify-center text-white text-2xl font-bold">
+            <div className="h-14 w-14 rounded-xl bg-white/[0.06] border border-white/[0.08] flex items-center justify-center text-white text-xl font-bold">
               {user?.firstName?.[0]}{user?.lastName?.[0]}
             </div>
             <div>
-              <p className="font-semibold text-slate-100">{user?.firstName} {user?.lastName}</p>
-              <p className="text-sm text-slate-400">{user?.email}</p>
-              <p className="text-xs text-slate-500">@{user?.username}</p>
+              <p className="font-semibold text-zinc-100">{user?.firstName} {user?.lastName}</p>
+              <p className="text-sm text-zinc-400">{user?.email}</p>
+              <p className="text-xs text-zinc-600">@{user?.username}</p>
             </div>
           </div>
 
@@ -128,8 +226,8 @@ export function AccountPage() {
       {/* Password */}
       <div className="card">
         <div className="card-header flex items-center gap-2">
-          <Lock size={16} className="text-panel-400" />
-          <h2 className="text-sm font-semibold text-slate-100">Change Password</h2>
+          <Lock size={14} className="text-zinc-400" />
+          <h2 className="text-sm font-semibold text-zinc-100">Change Password</h2>
         </div>
         <div className="card-body">
           <form onSubmit={handlePasswordSubmit} className="space-y-4">
@@ -175,14 +273,157 @@ export function AccountPage() {
         </div>
       </div>
 
+      {/* Two-Factor Authentication */}
+      <div className="card">
+        <div className="card-header flex items-center gap-2">
+          <ShieldCheck size={14} className="text-zinc-400" />
+          <h2 className="text-sm font-semibold text-zinc-100">Two-Factor Authentication</h2>
+        </div>
+        <div className="p-6">
+          {user?.twoFactor ? (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-emerald-400 text-sm">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
+                2FA is enabled
+              </div>
+              <p className="text-xs text-zinc-500">Enter your authenticator code to disable 2FA.</p>
+              <div className="flex gap-2">
+                <input
+                  className="input"
+                  placeholder="6-digit code"
+                  maxLength={6}
+                  value={twoFaDisableCode}
+                  onChange={e => setTwoFaDisableCode(e.target.value.replace(/\D/g, ''))}
+                />
+                <button
+                  className="btn-danger btn-sm shrink-0"
+                  disabled={twoFaLoading || twoFaDisableCode.length < 6}
+                  onClick={disable2fa}
+                >
+                  {twoFaLoading ? <Spinner size="sm" /> : 'Disable 2FA'}
+                </button>
+              </div>
+            </div>
+          ) : !twoFaSetup ? (
+            <div className="space-y-3">
+              <p className="text-sm text-zinc-400">Protect your account with a time-based one-time password.</p>
+              <button className="btn-secondary btn-sm" onClick={setup2fa} disabled={twoFaLoading}>
+                {twoFaLoading ? <Spinner size="sm" /> : 'Enable 2FA'}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-sm text-zinc-400">Scan the QR code with your authenticator app (Google Authenticator, Authy, etc.)</p>
+              <img src={twoFaSetup.qrCode} alt="QR Code" className="w-40 h-40 rounded-lg bg-white p-2" />
+              <p className="text-xs text-zinc-500">
+                Or enter manually:{' '}
+                <code className="text-zinc-300 font-mono bg-zinc-900 px-1 rounded">{twoFaSetup.secret}</code>
+              </p>
+              <div className="flex gap-2">
+                <input
+                  className="input"
+                  placeholder="Enter 6-digit code to verify"
+                  maxLength={6}
+                  value={twoFaCode}
+                  onChange={e => setTwoFaCode(e.target.value.replace(/\D/g, ''))}
+                  autoFocus
+                />
+                <button
+                  className="btn-primary btn-sm shrink-0"
+                  disabled={twoFaLoading || twoFaCode.length < 6}
+                  onClick={enable2fa}
+                >
+                  {twoFaLoading ? <Spinner size="sm" /> : 'Verify & Enable'}
+                </button>
+              </div>
+              <button
+                className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+                onClick={() => setTwoFaSetup(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* SMTP Settings */}
+      <div className="card">
+        <div className="card-header flex items-center gap-2">
+          <Mail size={14} className="text-zinc-400" />
+          <h2 className="text-sm font-semibold text-zinc-100">SMTP Settings</h2>
+        </div>
+        <div className="p-6 space-y-4">
+          <p className="text-sm text-zinc-400">Configure email delivery for notifications and alerts.</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">SMTP Host</label>
+              <input
+                className="input"
+                placeholder="smtp.example.com"
+                value={smtpForm.host}
+                onChange={e => setSmtpForm(f => ({ ...f, host: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="label">Port</label>
+              <input
+                className="input"
+                placeholder="587"
+                value={smtpForm.port}
+                onChange={e => setSmtpForm(f => ({ ...f, port: e.target.value }))}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Username</label>
+              <input
+                className="input"
+                placeholder="user@example.com"
+                value={smtpForm.user}
+                onChange={e => setSmtpForm(f => ({ ...f, user: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="label">Password</label>
+              <input
+                type="password"
+                className="input"
+                placeholder="••••••••"
+                value={smtpForm.pass}
+                onChange={e => setSmtpForm(f => ({ ...f, pass: e.target.value }))}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="label">From Address</label>
+            <input
+              className="input"
+              placeholder="noreply@example.com"
+              value={smtpForm.from}
+              onChange={e => setSmtpForm(f => ({ ...f, from: e.target.value }))}
+            />
+          </div>
+          <div className="flex gap-2">
+            <button className="btn-primary btn-sm" onClick={saveSmtp} disabled={smtpLoading}>
+              {smtpLoading ? <Spinner size="sm" /> : 'Save SMTP'}
+            </button>
+            <button className="btn-secondary btn-sm" onClick={testSmtp} disabled={smtpTesting}>
+              {smtpTesting ? <Spinner size="sm" /> : 'Send Test Email'}
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* API Key section */}
       <div className="card">
         <div className="card-header flex items-center gap-2">
-          <Key size={16} className="text-panel-400" />
-          <h2 className="text-sm font-semibold text-slate-100">API Keys</h2>
+          <Key size={14} className="text-zinc-400" />
+          <h2 className="text-sm font-semibold text-zinc-100">API Keys</h2>
         </div>
         <div className="card-body">
-          <p className="text-sm text-slate-400 mb-3">
+          <p className="text-sm text-zinc-400 mb-3">
             API keys allow external applications to interact with the panel.
           </p>
           <button className="btn-secondary btn-sm">

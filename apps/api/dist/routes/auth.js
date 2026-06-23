@@ -6,10 +6,20 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const express_validator_1 = require("express-validator");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
+const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const prisma_1 = require("../utils/prisma");
 const jwt_1 = require("../utils/jwt");
 const auth_1 = require("../middleware/auth");
+const otplib_1 = require("otplib");
 const router = (0, express_1.Router)();
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
+function safeUser(user) {
+    const { password, twoFactorSecret, smtpPass, ...rest } = user;
+    void password;
+    void twoFactorSecret;
+    void smtpPass;
+    return rest;
+}
 router.post('/login', [
     (0, express_validator_1.body)('email').isEmail().normalizeEmail(),
     (0, express_validator_1.body)('password').notEmpty(),
@@ -37,14 +47,44 @@ router.post('/login', [
             event: 'auth:login',
             ip: req.ip,
         },
-    });
+    }).catch(() => { });
+    // 2FA check
+    if (user.twoFactor && user.twoFactorSecret) {
+        const pendingToken = jsonwebtoken_1.default.sign({ userId: user.id, pending: true }, JWT_SECRET, { expiresIn: '5m' });
+        return res.json({ requiresTwoFactor: true, pendingToken });
+    }
     const tokens = (0, jwt_1.generateTokenPair)({
         userId: user.id,
         email: user.email,
         role: user.role,
     });
-    const { password: _pw, ...userWithoutPassword } = user;
-    return res.json({ user: userWithoutPassword, ...tokens });
+    return res.json({ ...tokens, user: safeUser(user) });
+});
+router.post('/2fa/verify', async (req, res) => {
+    const { pendingToken, code } = req.body;
+    if (!pendingToken || !code)
+        return res.status(422).json({ message: 'pendingToken and code required' });
+    try {
+        const payload = jsonwebtoken_1.default.verify(pendingToken, JWT_SECRET);
+        if (!payload.pending)
+            return res.status(401).json({ message: 'Invalid token' });
+        const user = await prisma_1.prisma.user.findUnique({ where: { id: payload.userId } });
+        if (!user || !user.twoFactor || !user.twoFactorSecret)
+            return res.status(401).json({ message: 'Invalid state' });
+        const result = await (0, otplib_1.verify)({ secret: user.twoFactorSecret, token: code });
+        const valid = result.valid;
+        if (!valid)
+            return res.status(401).json({ message: 'Invalid 2FA code' });
+        const tokens = (0, jwt_1.generateTokenPair)({
+            userId: user.id,
+            email: user.email,
+            role: user.role,
+        });
+        return res.json({ ...tokens, user: safeUser(user) });
+    }
+    catch {
+        return res.status(401).json({ message: 'Invalid or expired token' });
+    }
 });
 router.post('/register', [
     (0, express_validator_1.body)('email').isEmail().normalizeEmail(),
@@ -79,8 +119,7 @@ router.post('/register', [
         email: user.email,
         role: user.role,
     });
-    const { password: _pw, ...userWithoutPassword } = user;
-    return res.status(201).json({ user: userWithoutPassword, ...tokens });
+    return res.status(201).json({ ...tokens, user: safeUser(user) });
 });
 router.post('/refresh', async (req, res) => {
     const { refreshToken } = req.body;
@@ -88,7 +127,8 @@ router.post('/refresh', async (req, res) => {
         return res.status(401).json({ message: 'Refresh token required' });
     }
     try {
-        const payload = (0, jwt_1.verifyRefreshToken)(refreshToken);
+        const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'fallback-refresh-secret';
+        const payload = jsonwebtoken_1.default.verify(refreshToken, JWT_REFRESH_SECRET);
         const user = await prisma_1.prisma.user.findUnique({ where: { id: payload.userId } });
         if (!user) {
             return res.status(401).json({ message: 'User not found' });
@@ -105,8 +145,10 @@ router.post('/refresh', async (req, res) => {
     }
 });
 router.get('/me', auth_1.authenticate, async (req, res) => {
-    const { password: _pw, ...user } = req.user;
-    return res.json({ user });
+    const user = await prisma_1.prisma.user.findUnique({ where: { id: req.user.id } });
+    if (!user)
+        return res.status(404).json({ message: 'User not found' });
+    return res.json({ user: safeUser(user) });
 });
 router.post('/logout', auth_1.authenticate, async (req, res) => {
     await prisma_1.prisma.activity.create({
@@ -115,7 +157,7 @@ router.post('/logout', auth_1.authenticate, async (req, res) => {
             event: 'auth:logout',
             ip: req.ip,
         },
-    });
+    }).catch(() => { });
     return res.json({ message: 'Logged out successfully' });
 });
 // GET /auth/setup/status - check if initial setup is needed
@@ -157,8 +199,7 @@ router.post('/setup', [
         email: user.email,
         role: user.role,
     });
-    const { password: _pw, ...userWithoutPassword } = user;
-    return res.status(201).json({ user: userWithoutPassword, ...tokens });
+    return res.status(201).json({ ...tokens, user: safeUser(user) });
 });
 exports.default = router;
 //# sourceMappingURL=auth.js.map

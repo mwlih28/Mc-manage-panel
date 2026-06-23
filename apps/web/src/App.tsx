@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { LoginPage } from '@/pages/auth/LoginPage';
 import { RegisterPage } from '@/pages/auth/RegisterPage';
@@ -12,10 +13,18 @@ import { AdminNodesPage } from '@/pages/admin/AdminNodesPage';
 import { AdminServersPage } from '@/pages/admin/AdminServersPage';
 import { AdminEggsPage } from '@/pages/admin/AdminEggsPage';
 import { AdminActivityPage } from '@/pages/admin/AdminActivityPage';
+import { AdminSettingsPage } from '@/pages/admin/AdminSettingsPage';
 import { PanelLayout } from '@/components/layout/PanelLayout';
 import { RequireAuth } from '@/components/layout/RequireAuth';
+import api from '@/lib/axios';
 
 export default function App() {
+  useEffect(() => {
+    api.get('/settings').then(({ data }) => {
+      if (data['app.title']) document.title = data['app.title'];
+    }).catch(() => {});
+  }, []);
+
   return (
     <Routes>
       {/* Public routes */}
@@ -40,6 +49,7 @@ export default function App() {
             <Route path="/admin/nodes" element={<AdminNodesPage />} />
             <Route path="/admin/eggs" element={<AdminEggsPage />} />
             <Route path="/admin/activity" element={<AdminActivityPage />} />
+            <Route path="/admin/settings" element={<AdminSettingsPage />} />
           </Route>
         </Route>
       </Route>
