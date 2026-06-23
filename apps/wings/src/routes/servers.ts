@@ -186,4 +186,85 @@ router.post('/:uuid/plugins/install', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/servers/:uuid/versions — list Paper MC versions
+router.get('/:uuid/versions', async (_req: Request, res: Response) => {
+  try {
+    const { data } = await axios.get('https://api.papermc.io/v2/projects/paper', { timeout: 10000 });
+    return res.json({ versions: (data.versions as string[]).reverse() });
+  } catch {
+    return res.status(500).json({ message: 'Failed to fetch Paper versions' });
+  }
+});
+
+// GET /api/servers/:uuid/versions/:version/builds
+router.get('/:uuid/versions/:version/builds', async (req: Request, res: Response) => {
+  const { version } = req.params;
+  try {
+    const { data } = await axios.get(`https://api.papermc.io/v2/projects/paper/versions/${version}`, { timeout: 10000 });
+    const builds: number[] = data.builds;
+    return res.json({ builds: builds.reverse(), latestBuild: builds[0] });
+  } catch {
+    return res.status(500).json({ message: 'Failed to fetch builds' });
+  }
+});
+
+// POST /api/servers/:uuid/version — download and install specific Paper version
+router.post('/:uuid/version', async (req: Request, res: Response) => {
+  const { uuid } = req.params;
+  const { version, build } = req.body as { version: string; build?: number };
+  if (!version) return res.status(422).json({ message: 'version required' });
+
+  const cfg = getConfig();
+  const dataPath = path.join(cfg.system.data, uuid);
+  const tmpDir = path.join(os.tmpdir(), `mc_ver_${Date.now()}_${uuid}`);
+  const tmpFile = path.join(tmpDir, 'paper.jar');
+
+  try {
+    let targetBuild = build;
+    if (!targetBuild) {
+      const { data: bd } = await axios.get(`https://api.papermc.io/v2/projects/paper/versions/${version}`, { timeout: 10000 });
+      const builds: number[] = bd.builds;
+      targetBuild = builds[builds.length - 1];
+    }
+
+    const jarName = `paper-${version}-${targetBuild}.jar`;
+    const downloadUrl = `https://api.papermc.io/v2/projects/paper/versions/${version}/builds/${targetBuild}/downloads/${jarName}`;
+    logger.info(`Downloading Paper ${version}-${targetBuild} for ${uuid}`);
+
+    fs.mkdirSync(tmpDir, { recursive: true });
+    const response = await axios.get<NodeJS.ReadableStream>(downloadUrl, {
+      responseType: 'stream',
+      timeout: 120000,
+      maxContentLength: 200 * 1024 * 1024,
+    });
+    await new Promise<void>((resolve, reject) => {
+      const writer = fs.createWriteStream(tmpFile);
+      (response.data as NodeJS.ReadableStream).pipe(writer);
+      writer.on('finish', resolve);
+      writer.on('error', reject);
+    });
+
+    const containerName = `mc_${uuid}`;
+    try {
+      await execFileAsync('docker', ['cp', tmpFile, `${containerName}:/home/container/server.jar`]);
+      await execFileAsync('docker', ['exec', containerName, 'chown', '1000:1000', '/home/container/server.jar']).catch(() => {});
+    } catch {
+      await execFileAsync('docker', [
+        'run', '--rm',
+        '-v', `${dataPath}:/vol`,
+        '-v', `${tmpDir}:/src:ro`,
+        'alpine', 'sh', '-c',
+        'cp /src/paper.jar /vol/server.jar && chown 1000:1000 /vol/server.jar && chmod 666 /vol/server.jar',
+      ]);
+    }
+
+    logger.info(`Paper ${version}-${targetBuild} installed for ${uuid}`);
+    return res.json({ message: `Paper ${version} build ${targetBuild} installed`, version, build: targetBuild });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
+  } finally {
+    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
+  }
+});
+
 export default router;

@@ -469,5 +469,58 @@ router.post('/:id/plugins/install', auth_1.authenticate, async (req, res) => {
         return res.status(e.response?.status || 500).json(e.response?.data || { message: 'Wings error' });
     }
 });
+// GET /servers/:id/versions
+router.get('/:id/versions', auth_1.authenticate, async (req, res) => {
+    const ctx = await getWingsClient(req.params.id, req.user.id, req.user.role === 'ADMIN');
+    if (!ctx)
+        return res.status(404).json({ message: 'Server not found' });
+    try {
+        const { data } = await ctx.client.get(`/servers/${ctx.server.uuid}/versions`, { timeout: 15000 });
+        return res.json(data);
+    }
+    catch {
+        try {
+            const { data } = await axios_1.default.get('https://api.papermc.io/v2/projects/paper', { timeout: 10000 });
+            return res.json({ versions: data.versions.reverse() });
+        }
+        catch {
+            return res.status(500).json({ message: 'Failed to fetch versions' });
+        }
+    }
+});
+// GET /servers/:id/versions/:version/builds
+router.get('/:id/versions/:version/builds', auth_1.authenticate, async (req, res) => {
+    const ctx = await getWingsClient(req.params.id, req.user.id, req.user.role === 'ADMIN');
+    if (!ctx)
+        return res.status(404).json({ message: 'Server not found' });
+    try {
+        const { data } = await ctx.client.get(`/servers/${ctx.server.uuid}/versions/${req.params.version}/builds`, { timeout: 15000 });
+        return res.json(data);
+    }
+    catch {
+        try {
+            const { data } = await axios_1.default.get(`https://api.papermc.io/v2/projects/paper/versions/${req.params.version}`, { timeout: 10000 });
+            const builds = data.builds;
+            return res.json({ builds: builds.reverse(), latestBuild: builds[0] });
+        }
+        catch {
+            return res.status(500).json({ message: 'Failed to fetch builds' });
+        }
+    }
+});
+// POST /servers/:id/version — install specific Paper version
+router.post('/:id/version', auth_1.authenticate, async (req, res) => {
+    const ctx = await getWingsClient(req.params.id, req.user.id, req.user.role === 'ADMIN');
+    if (!ctx)
+        return res.status(404).json({ message: 'Server not found' });
+    try {
+        const { data } = await ctx.client.post(`/servers/${ctx.server.uuid}/version`, req.body, { timeout: 180000 });
+        return res.json(data);
+    }
+    catch (err) {
+        const e = err;
+        return res.status(e.response?.status || 500).json(e.response?.data || { message: 'Version change failed' });
+    }
+});
 exports.default = router;
 //# sourceMappingURL=servers.js.map

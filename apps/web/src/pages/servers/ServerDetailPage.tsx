@@ -5,7 +5,7 @@ import {
   Play, Square, RotateCcw, Zap, Terminal, BarChart2,
   HardDrive, Archive, ChevronLeft, Cpu, MemoryStick,
   Folder, FolderOpen, File, ChevronRight, ArrowLeft, Pencil, Trash2, Plus, X, Check,
-  Package, Users, Search, Download
+  Package, Users, Search, Download, RefreshCw, Tag
 } from 'lucide-react';
 import { io as ioClient, Socket } from 'socket.io-client';
 import api from '@/lib/axios';
@@ -18,7 +18,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
-type Tab = 'console' | 'files' | 'plugins' | 'stats' | 'backups';
+type Tab = 'console' | 'files' | 'plugins' | 'versions' | 'stats' | 'backups';
 
 interface ModrinthProject {
   project_id: string;
@@ -79,6 +79,19 @@ export function ServerDetailPage() {
   const [pluginResults, setPluginResults] = useState<ModrinthProject[]>([]);
   const [pluginLoading, setPluginLoading] = useState(false);
   const [installing, setInstalling] = useState<string | null>(null);
+
+  // Installed plugins
+  const [installedPlugins, setInstalledPlugins] = useState<FileEntry[]>([]);
+  const [pluginsLoading, setPluginsLoading] = useState(false);
+  const [deletingPlugin, setDeletingPlugin] = useState<string | null>(null);
+
+  // Version management
+  const [versions, setVersions] = useState<string[]>([]);
+  const [selectedVersion, setSelectedVersion] = useState('');
+  const [builds, setBuilds] = useState<number[]>([]);
+  const [selectedBuild, setSelectedBuild] = useState<number | 'latest'>('latest');
+  const [versionLoading, setVersionLoading] = useState(false);
+  const [installing_version, setInstallingVersion] = useState(false);
 
   // Players
   const [players, setPlayers] = useState<{ online: number; max: number; names: string[] }>({ online: 0, max: 0, names: [] });
@@ -147,6 +160,18 @@ export function ServerDetailPage() {
     return () => clearInterval(interval);
   }, [id]);
 
+  useEffect(() => {
+    if (activeTab === 'plugins' && id) loadInstalledPlugins();
+  }, [activeTab, id]);
+
+  useEffect(() => {
+    if (activeTab === 'versions' && id && versions.length === 0) loadVersions();
+  }, [activeTab, id]);
+
+  useEffect(() => {
+    if (selectedVersion) loadBuilds(selectedVersion);
+  }, [selectedVersion]);
+
   const searchPlugins = async () => {
     if (!pluginQuery.trim()) return;
     setPluginLoading(true);
@@ -160,6 +185,71 @@ export function ServerDetailPage() {
       toast.error('Failed to search Modrinth');
     } finally {
       setPluginLoading(false);
+    }
+  };
+
+  const loadInstalledPlugins = async () => {
+    setPluginsLoading(true);
+    try {
+      const { data } = await api.get(`/servers/${id}/files`, { params: { directory: '/plugins' } });
+      const jars = ((data.files as FileEntry[]) || []).filter((f) => f.isFile && f.name.endsWith('.jar'));
+      setInstalledPlugins(jars);
+    } catch {
+      setInstalledPlugins([]);
+    } finally {
+      setPluginsLoading(false);
+    }
+  };
+
+  const deletePlugin = async (filename: string) => {
+    setDeletingPlugin(filename);
+    try {
+      await api.post(`/servers/${id}/files/delete`, { files: [`/plugins/${filename}`] });
+      toast.success(`${filename} deleted`);
+      setInstalledPlugins((prev) => prev.filter((p) => p.name !== filename));
+    } catch {
+      toast.error('Failed to delete plugin');
+    } finally {
+      setDeletingPlugin(null);
+    }
+  };
+
+  const loadVersions = async () => {
+    setVersionLoading(true);
+    try {
+      const { data } = await api.get(`/servers/${id}/versions`);
+      setVersions(data.versions || []);
+      if (data.versions?.length > 0) setSelectedVersion(data.versions[0]);
+    } catch {
+      toast.error('Failed to load versions');
+    } finally {
+      setVersionLoading(false);
+    }
+  };
+
+  const loadBuilds = async (version: string) => {
+    if (!version) return;
+    try {
+      const { data } = await api.get(`/servers/${id}/versions/${version}/builds`);
+      setBuilds(data.builds || []);
+      setSelectedBuild('latest');
+    } catch {
+      setBuilds([]);
+    }
+  };
+
+  const installVersion = async () => {
+    if (!selectedVersion) return;
+    setInstallingVersion(true);
+    try {
+      const payload = { version: selectedVersion, build: selectedBuild === 'latest' ? undefined : selectedBuild };
+      const { data } = await api.post(`/servers/${id}/version`, payload, { timeout: 180000 });
+      toast.success(data.message || 'Version installed! Restart the server to apply.');
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Version change failed';
+      toast.error(msg);
+    } finally {
+      setInstallingVersion(false);
     }
   };
 
@@ -400,7 +490,7 @@ export function ServerDetailPage() {
       {/* Tabs */}
       <div className="border-b border-dark-800">
         <div className="flex gap-1">
-          {(['console', 'files', 'plugins', 'stats', 'backups'] as Tab[]).map((tab) => (
+          {(['console', 'files', 'plugins', 'versions', 'stats', 'backups'] as Tab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -414,6 +504,7 @@ export function ServerDetailPage() {
               {tab === 'console' && <Terminal size={14} className="inline mr-1.5" />}
               {tab === 'files' && <Folder size={14} className="inline mr-1.5" />}
               {tab === 'plugins' && <Package size={14} className="inline mr-1.5" />}
+              {tab === 'versions' && <Tag size={14} className="inline mr-1.5" />}
               {tab === 'stats' && <BarChart2 size={14} className="inline mr-1.5" />}
               {tab === 'backups' && <Archive size={14} className="inline mr-1.5" />}
               {tab}
@@ -623,61 +714,166 @@ export function ServerDetailPage() {
 
       {/* Plugins Tab */}
       {activeTab === 'plugins' && (
-        <div className="card">
-          <div className="card-header">
-            <h3 className="text-sm font-semibold text-slate-100">Plugin Installer</h3>
-            <p className="text-xs text-slate-500 mt-0.5">Search Modrinth and install plugins directly to your server</p>
-          </div>
-          <div className="p-4 border-b border-dark-800">
-            <form
-              onSubmit={(e) => { e.preventDefault(); searchPlugins(); }}
-              className="flex gap-2"
-            >
-              <input
-                type="text"
-                className="input flex-1"
-                placeholder="Search plugins (e.g. WorldEdit, EssentialsX)..."
-                value={pluginQuery}
-                onChange={(e) => setPluginQuery(e.target.value)}
-              />
-              <button type="submit" className="btn-primary btn-sm" disabled={pluginLoading || !pluginQuery.trim()}>
-                {pluginLoading ? <Spinner size="sm" /> : <><Search size={14} /> Search</>}
+        <div className="space-y-4">
+          {/* Installed plugins */}
+          <div className="card">
+            <div className="card-header flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-100">Installed Plugins</h3>
+                <p className="text-xs text-slate-500 mt-0.5">{installedPlugins.length} plugin(s) in /plugins</p>
+              </div>
+              <button className="btn-secondary btn-sm" onClick={loadInstalledPlugins}>
+                <RefreshCw size={13} /> Refresh
               </button>
-            </form>
+            </div>
+            <div className="divide-y divide-dark-800/50">
+              {pluginsLoading ? (
+                <div className="flex justify-center py-6"><Spinner /></div>
+              ) : installedPlugins.length === 0 ? (
+                <div className="p-8 text-center text-slate-500">
+                  <Package size={28} className="mx-auto mb-2 opacity-20" />
+                  <p className="text-sm">No plugins installed</p>
+                </div>
+              ) : (
+                installedPlugins.map((plugin) => (
+                  <div key={plugin.name} className="flex items-center gap-3 px-4 py-3">
+                    <Package size={15} className="text-slate-500 shrink-0" />
+                    <span className="flex-1 text-sm text-slate-300 font-mono truncate">{plugin.name}</span>
+                    <span className="text-xs text-slate-600">{formatBytes(plugin.size)}</span>
+                    <button
+                      className="p-1.5 text-slate-500 hover:text-red-400 transition-colors"
+                      onClick={() => deletePlugin(plugin.name)}
+                      disabled={deletingPlugin === plugin.name}
+                      title="Delete"
+                    >
+                      {deletingPlugin === plugin.name ? <Spinner size="sm" /> : <Trash2 size={13} />}
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
 
-          <div className="divide-y divide-dark-800/50">
-            {pluginResults.length === 0 && !pluginLoading && (
-              <div className="p-10 text-center text-slate-500">
-                <Package size={36} className="mx-auto mb-3 opacity-20" />
-                <p className="text-sm">Search for plugins to install</p>
-              </div>
-            )}
-            {pluginResults.map((project) => (
-              <div key={project.project_id} className="flex items-start gap-4 px-5 py-4">
-                {project.icon_url ? (
-                  <img src={project.icon_url} alt="" className="w-10 h-10 rounded-lg shrink-0 object-cover" />
-                ) : (
-                  <div className="w-10 h-10 rounded-lg bg-dark-800 flex items-center justify-center shrink-0">
-                    <Package size={18} className="text-slate-500" />
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-slate-200">{project.title}</p>
-                  <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{project.description}</p>
-                  <p className="text-xs text-slate-600 mt-1">{project.downloads.toLocaleString()} downloads</p>
-                </div>
-                <button
-                  className="btn-primary btn-sm shrink-0"
-                  disabled={installing === project.project_id}
-                  onClick={() => installPlugin(project)}
-                >
-                  {installing === project.project_id
-                    ? <Spinner size="sm" />
-                    : <><Download size={13} /> Install</>}
+          {/* Modrinth search */}
+          <div className="card">
+            <div className="card-header">
+              <h3 className="text-sm font-semibold text-slate-100">Install from Modrinth</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Search and install plugins directly to your server</p>
+            </div>
+            <div className="p-4 border-b border-dark-800">
+              <form
+                onSubmit={(e) => { e.preventDefault(); searchPlugins(); }}
+                className="flex gap-2"
+              >
+                <input
+                  type="text"
+                  className="input flex-1"
+                  placeholder="Search plugins (e.g. WorldEdit, EssentialsX)..."
+                  value={pluginQuery}
+                  onChange={(e) => setPluginQuery(e.target.value)}
+                />
+                <button type="submit" className="btn-primary btn-sm" disabled={pluginLoading || !pluginQuery.trim()}>
+                  {pluginLoading ? <Spinner size="sm" /> : <><Search size={14} /> Search</>}
                 </button>
-              </div>
-            ))}
+              </form>
+            </div>
+            <div className="divide-y divide-dark-800/50">
+              {pluginResults.length === 0 && !pluginLoading && (
+                <div className="p-8 text-center text-slate-500">
+                  <Package size={32} className="mx-auto mb-3 opacity-20" />
+                  <p className="text-sm">Search for plugins to install</p>
+                </div>
+              )}
+              {pluginResults.map((project) => (
+                <div key={project.project_id} className="flex items-start gap-4 px-5 py-4">
+                  {project.icon_url ? (
+                    <img src={project.icon_url} alt="" className="w-10 h-10 rounded-lg shrink-0 object-cover" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-lg bg-dark-800 flex items-center justify-center shrink-0">
+                      <Package size={18} className="text-slate-500" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-200">{project.title}</p>
+                    <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{project.description}</p>
+                    <p className="text-xs text-slate-600 mt-1">{project.downloads.toLocaleString()} downloads</p>
+                  </div>
+                  <button
+                    className="btn-primary btn-sm shrink-0"
+                    disabled={installing === project.project_id}
+                    onClick={() => installPlugin(project)}
+                  >
+                    {installing === project.project_id ? <Spinner size="sm" /> : <><Download size={13} /> Install</>}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Versions Tab */}
+      {activeTab === 'versions' && (
+        <div className="card card-body space-y-5">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-100 mb-1">Paper Version Manager</h3>
+            <p className="text-xs text-slate-500">Download and install a specific Paper version. Stop the server before changing versions.</p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1.5">Minecraft Version</label>
+              {versionLoading ? (
+                <div className="flex items-center gap-2 text-slate-500 text-sm"><Spinner size="sm" /> Loading versions...</div>
+              ) : (
+                <select
+                  className="input w-full"
+                  value={selectedVersion}
+                  onChange={(e) => setSelectedVersion(e.target.value)}
+                >
+                  {versions.length === 0 && <option value="">No versions available</option>}
+                  {versions.map((v) => <option key={v} value={v}>{v}</option>)}
+                </select>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1.5">Build</label>
+              <select
+                className="input w-full"
+                value={selectedBuild === 'latest' ? 'latest' : String(selectedBuild)}
+                onChange={(e) => setSelectedBuild(e.target.value === 'latest' ? 'latest' : parseInt(e.target.value))}
+              >
+                <option value="latest">Latest</option>
+                {builds.map((b) => <option key={b} value={b}>{b}</option>)}
+              </select>
+            </div>
+
+            <div className="flex items-end">
+              <button
+                className="btn-primary w-full"
+                disabled={!selectedVersion || installing_version || currentStatus !== 'OFFLINE'}
+                onClick={installVersion}
+              >
+                {installing_version ? (
+                  <><Spinner size="sm" /> Downloading...</>
+                ) : (
+                  <><Download size={14} /> Install Version</>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {currentStatus !== 'OFFLINE' && (
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-xs">
+              <Square size={13} />
+              Stop the server before changing versions.
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-dark-800/60 text-slate-500 text-xs">
+            <Tag size={13} />
+            After installing, start the server — Paper will automatically remap and launch with the new version.
           </div>
         </div>
       )}
