@@ -106,6 +106,16 @@ export async function createContainer(
   const swapBytes = limits.swap > 0 ? (limits.memory + limits.swap) * 1024 * 1024 : -1;
   const cpuQuota = limits.cpu > 0 ? Math.floor(limits.cpu * 1000) : -1;
 
+  const serverPort = parseInt(env['SERVER_PORT'] || env['PORT'] || '25565', 10);
+  const exposedPorts: Record<string, object> = {
+    [`${serverPort}/tcp`]: {},
+    [`${serverPort}/udp`]: {},
+  };
+  const portBindings: Record<string, { HostIp: string; HostPort: string }[]> = {
+    [`${serverPort}/tcp`]: [{ HostIp: '0.0.0.0', HostPort: `${serverPort}` }],
+    [`${serverPort}/udp`]: [{ HostIp: '0.0.0.0', HostPort: `${serverPort}` }],
+  };
+
   const container = await d.createContainer({
     name: containerName,
     Image: image,
@@ -118,6 +128,7 @@ export async function createContainer(
     OpenStdin: true,
     Tty: true,
     WorkingDir: '/home/container',
+    ExposedPorts: exposedPorts,
     HostConfig: {
       Binds: [`${dataPath}:/home/container`],
       Memory: memBytes,
@@ -128,6 +139,7 @@ export async function createContainer(
       BlkioWeight: limits.io,
       PidsLimit: cfg.docker.container_pid_limit,
       NetworkMode: cfg.docker.network || 'mc-wings',
+      PortBindings: portBindings,
       RestartPolicy: { Name: 'no' },
       LogConfig: {
         Type: 'json-file',

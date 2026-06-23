@@ -97,6 +97,15 @@ async function createContainer(serverUuid, image, cmd, env, limits, dataPath) {
     const memBytes = limits.memory * 1024 * 1024;
     const swapBytes = limits.swap > 0 ? (limits.memory + limits.swap) * 1024 * 1024 : -1;
     const cpuQuota = limits.cpu > 0 ? Math.floor(limits.cpu * 1000) : -1;
+    const serverPort = parseInt(env['SERVER_PORT'] || env['PORT'] || '25565', 10);
+    const exposedPorts = {
+        [`${serverPort}/tcp`]: {},
+        [`${serverPort}/udp`]: {},
+    };
+    const portBindings = {
+        [`${serverPort}/tcp`]: [{ HostIp: '0.0.0.0', HostPort: `${serverPort}` }],
+        [`${serverPort}/udp`]: [{ HostIp: '0.0.0.0', HostPort: `${serverPort}` }],
+    };
     const container = await d.createContainer({
         name: containerName,
         Image: image,
@@ -109,6 +118,7 @@ async function createContainer(serverUuid, image, cmd, env, limits, dataPath) {
         OpenStdin: true,
         Tty: true,
         WorkingDir: '/home/container',
+        ExposedPorts: exposedPorts,
         HostConfig: {
             Binds: [`${dataPath}:/home/container`],
             Memory: memBytes,
@@ -119,6 +129,7 @@ async function createContainer(serverUuid, image, cmd, env, limits, dataPath) {
             BlkioWeight: limits.io,
             PidsLimit: cfg.docker.container_pid_limit,
             NetworkMode: cfg.docker.network || 'mc-wings',
+            PortBindings: portBindings,
             RestartPolicy: { Name: 'no' },
             LogConfig: {
                 Type: 'json-file',
