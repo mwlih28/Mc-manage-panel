@@ -79,6 +79,8 @@ class ServerManager extends EventEmitter {
       this.attachLogStream(config.uuid, containerId);
       this.startStatsInterval(config.uuid);
       this.attachStdinStream(config.uuid, containerId);
+      // Query existing online players after Wings attaches to a running server
+      setTimeout(() => this.sendCommand(config.uuid, 'list').catch(() => {}), 3000);
     }
 
     logger.info(`Server loaded: ${config.uuid} (${status})`);
@@ -526,11 +528,21 @@ class ServerManager extends EventEmitter {
   }
 
   getAllPlayerHistory(serverUuid: string): PlayerHistoryEntry[] {
-    const hist = this.allPlayerHistory.get(serverUuid) ?? new Map<string, PlayerHistoryEntry>();
+    if (!this.allPlayerHistory.has(serverUuid)) {
+      this.allPlayerHistory.set(serverUuid, new Map());
+    }
+    const hist = this.allPlayerHistory.get(serverUuid)!;
     const onlineMap = this.playerSessions.get(serverUuid) ?? new Map<string, string>();
-    for (const [name] of onlineMap) {
+    // Ensure every currently-online player is in history with correct online flag
+    // This handles Wings restarts where session was already in progress
+    for (const [name, playerUuid] of onlineMap) {
       const e = hist.get(name);
-      if (e) e.online = true;
+      if (e) {
+        e.online = true;
+        if (!e.uuid && playerUuid) e.uuid = playerUuid;
+      } else {
+        hist.set(name, { name, uuid: playerUuid, firstSeen: new Date(0), lastSeen: new Date(), joinCount: 0, online: true });
+      }
     }
     return [...hist.values()].sort((a, b) => b.lastSeen.getTime() - a.lastSeen.getTime());
   }
@@ -574,6 +586,24 @@ class ServerManager extends EventEmitter {
       this.playerSessions.get(uuid)?.delete(name);
       const e = hist.get(name);
       if (e) { e.online = false; e.lastSeen = new Date(); }
+      const players = this.getOnlinePlayers(uuid);
+      this.io?.to(`server:${uuid}`).emit('server:players', { uuid, players });
+    }
+
+    // Parse "list" command response to seed online players on Wings startup/reattach
+    const listMatch = line.match(/There are \d+ of a max of \d+ players online:\s*(.+)$/);
+    if (listMatch && listMatch[1].trim()) {
+      const names = listMatch[1].split(',').map(n => n.trim()).filter(n => n);
+      if (!this.playerSessions.has(uuid)) this.playerSessions.set(uuid, new Map());
+      const map = this.playerSessions.get(uuid)!;
+      for (const name of names) {
+        if (!map.has(name)) map.set(name, '');
+        if (!hist.has(name)) {
+          hist.set(name, { name, uuid: '', firstSeen: new Date(0), lastSeen: new Date(), joinCount: 0, online: true });
+        } else {
+          hist.get(name)!.online = true;
+        }
+      }
       const players = this.getOnlinePlayers(uuid);
       this.io?.to(`server:${uuid}`).emit('server:players', { uuid, players });
     }

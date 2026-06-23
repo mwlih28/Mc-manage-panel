@@ -125,6 +125,18 @@ router.get('/:uuid/players/all', (req: Request, res: Response) => {
     } catch { /* ignore */ }
   }
 
+  // Final pass: mark currently-online players (handles case where usercache added them without online flag)
+  const onlineNow = serverManager.getOnlinePlayers(uuid);
+  for (const op of onlineNow) {
+    const entry = historyMap.get(op.name);
+    if (entry) {
+      entry.online = true;
+      if (!entry.uuid && op.uuid) entry.uuid = op.uuid;
+    } else {
+      historyMap.set(op.name, { name: op.name, uuid: op.uuid, firstSeen: new Date(0), lastSeen: new Date(), joinCount: 0, online: true });
+    }
+  }
+
   const players = [...historyMap.values()].sort((a, b) => b.lastSeen.getTime() - a.lastSeen.getTime());
   return res.json({ players, count: players.length });
 });
