@@ -230,6 +230,8 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
       if (serverId && paperVersion && paperVersion !== 'latest') {
         try {
           await api.post(`/servers/${serverId}/version`, { version: paperVersion }, { timeout: 180000 });
+          // Store MC_VERSION so plugin installer picks the right build
+          await api.patch(`/servers/${serverId}`, { mcVersion: paperVersion }).catch(() => {});
           toast.success(`Server created with Paper ${paperVersion}`);
         } catch {
           toast.success('Server created (version install failed — use Versions tab to install manually)');

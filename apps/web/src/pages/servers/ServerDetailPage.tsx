@@ -32,6 +32,7 @@ interface ModrinthProject {
 interface ModrinthVersion {
   id: string;
   loaders: string[];
+  game_versions: string[];
   files: { url: string; filename: string; primary: boolean }[];
 }
 
@@ -243,8 +244,11 @@ export function ServerDetailPage() {
     setInstallingVersion(true);
     try {
       const payload = { version: selectedVersion, build: selectedBuild === 'latest' ? undefined : selectedBuild };
-      const { data } = await api.post(`/servers/${id}/version`, payload, { timeout: 180000 });
-      toast.success(data.message || 'Version installed! Restart the server to apply.');
+      const { data: versionData } = await api.post(`/servers/${id}/version`, payload, { timeout: 180000 });
+      // Persist the installed MC version so plugin installer can pick the right build
+      await api.patch(`/servers/${id}`, { mcVersion: selectedVersion }).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: ['server', id] });
+      toast.success(versionData.message || 'Version installed! Restart the server to apply.');
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Version change failed';
       toast.error(msg);
@@ -256,16 +260,55 @@ export function ServerDetailPage() {
   const installPlugin = async (project: ModrinthProject) => {
     setInstalling(project.project_id);
     try {
+      // Determine the server's MC version from its stored env (set when version is installed)
+      let mcVersion: string | undefined;
+      try {
+        const env = JSON.parse((data as unknown as { env?: string })?.env || '{}') as Record<string, string>;
+        mcVersion = env['MC_VERSION'];
+      } catch { /* no env, proceed without version filter */ }
+
       const versRes = await fetch(`https://api.modrinth.com/v2/project/${project.project_id}/version`);
       if (!versRes.ok) { toast.error('Could not fetch version list'); return; }
-      const versions: ModrinthVersion[] = await versRes.json();
-      if (!versions || versions.length === 0) { toast.error('No versions found'); return; }
+      const allVersions: ModrinthVersion[] = await versRes.json();
+      if (!allVersions || allVersions.length === 0) { toast.error('No versions found'); return; }
 
-      // Prefer Bukkit-compatible loaders; fall back to first version
       const preferredLoaders = ['paper', 'purpur', 'folia', 'spigot', 'bukkit'];
+
+      // Progressively relax version matching until we find something
+      // 1. Exact match (e.g. "1.21.1")
+      // 2. Minor-only match (e.g. "1.21.x")
+      // 3. Any version (last resort)
+      let candidates = allVersions;
+      if (mcVersion) {
+        const exactMatch = allVersions.filter((v) =>
+          v.game_versions?.includes(mcVersion!)
+        );
+        if (exactMatch.length > 0) {
+          candidates = exactMatch;
+        } else {
+          // Try matching major.minor (e.g. "1.21" matches "1.21", "1.21.1", "1.21.4")
+          const majorMinor = mcVersion.split('.').slice(0, 2).join('.');
+          const minorMatch = allVersions.filter((v) =>
+            v.game_versions?.some((gv) => gv === majorMinor || gv.startsWith(majorMinor + '.'))
+          );
+          if (minorMatch.length > 0) {
+            candidates = minorMatch;
+          }
+          // else fall back to all versions (plugin might not tag versions properly)
+        }
+      }
+
+      // Among candidates, prefer Bukkit-compatible loaders
       const bestVersion =
-        versions.find((v) => v.loaders?.some((l) => preferredLoaders.includes(l.toLowerCase()))) ??
-        versions[0];
+        candidates.find((v) => v.loaders?.some((l) => preferredLoaders.includes(l.toLowerCase()))) ??
+        candidates[0];
+
+      if (!mcVersion) {
+        // Warn if we couldn't determine server version
+        toast('Tip: Install a Paper version first so plugins are downloaded for the correct MC version.', { icon: 'ℹ️' });
+      } else if (!bestVersion.game_versions?.includes(mcVersion)) {
+        toast(`No exact ${mcVersion} build found — installed closest compatible version.`, { icon: '⚠️' });
+      }
 
       const primaryFile = bestVersion.files.find((f) => f.primary) ?? bestVersion.files[0];
       if (!primaryFile) { toast.error('No downloadable file found'); return; }

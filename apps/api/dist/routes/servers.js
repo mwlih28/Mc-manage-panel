@@ -198,12 +198,17 @@ router.patch('/:id', auth_1.authenticate, async (req, res) => {
     });
     if (!server)
         return res.status(404).json({ message: 'Server not found' });
-    const { name, description } = req.body;
+    const { name, description, mcVersion } = req.body;
     const updateData = {};
     if (name)
         updateData.name = name;
     if (description !== undefined)
         updateData.description = description;
+    // Any authenticated user can update MC version (needed for plugin compatibility filtering)
+    if (mcVersion) {
+        const currentEnv = JSON.parse(server.env || '{}');
+        updateData.env = JSON.stringify({ ...currentEnv, MC_VERSION: mcVersion });
+    }
     if (isAdmin) {
         const { memory, swap, disk, io, cpu, startup, image, suspended } = req.body;
         if (memory)
