@@ -9,37 +9,45 @@ const uuid_1 = require("uuid");
 const prisma = new client_1.PrismaClient();
 async function main() {
     console.log('Seeding database...');
-    // Create admin user
+    // Create admin user — skip gracefully if username or email already taken
     const hashedPassword = await bcryptjs_1.default.hash('Admin123!', 12);
-    const admin = await prisma.user.upsert({
-        where: { email: 'admin@example.com' },
-        update: {},
-        create: {
-            email: 'admin@example.com',
-            username: 'admin',
-            password: hashedPassword,
-            firstName: 'Panel',
-            lastName: 'Admin',
-            role: 'ADMIN',
-            rootAdmin: true,
-        },
-    });
-    console.log('Admin user created:', admin.email);
-    // Create a demo user
+    let admin = await prisma.user.findFirst({ where: { OR: [{ email: 'admin@example.com' }, { username: 'admin' }] } });
+    if (!admin) {
+        admin = await prisma.user.create({
+            data: {
+                email: 'admin@example.com',
+                username: 'admin',
+                password: hashedPassword,
+                firstName: 'Panel',
+                lastName: 'Admin',
+                role: 'ADMIN',
+                rootAdmin: true,
+            },
+        });
+        console.log('Admin user created:', admin.email);
+    }
+    else {
+        console.log('Admin user already exists, skipping');
+    }
+    // Create a demo user — skip gracefully if username or email already taken
     const userPassword = await bcryptjs_1.default.hash('User123!', 12);
-    const user = await prisma.user.upsert({
-        where: { email: 'user@example.com' },
-        update: {},
-        create: {
-            email: 'user@example.com',
-            username: 'demouser',
-            password: userPassword,
-            firstName: 'Demo',
-            lastName: 'User',
-            role: 'USER',
-        },
-    });
-    console.log('Demo user created:', user.email);
+    let user = await prisma.user.findFirst({ where: { OR: [{ email: 'user@example.com' }, { username: 'demouser' }] } });
+    if (!user) {
+        user = await prisma.user.create({
+            data: {
+                email: 'user@example.com',
+                username: 'demouser',
+                password: userPassword,
+                firstName: 'Demo',
+                lastName: 'User',
+                role: 'USER',
+            },
+        });
+        console.log('Demo user created:', user.email);
+    }
+    else {
+        console.log('Demo user already exists, skipping');
+    }
     // Create demo node
     const nodeToken = (0, uuid_1.v4)().replace(/-/g, '');
     const node = await prisma.node.upsert({
