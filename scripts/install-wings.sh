@@ -9,7 +9,7 @@
 
 set -euo pipefail
 
-# ────────────────────────────── Colors ──────────────────────────────
+# ── Colors & helpers ──────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 BLUE='\033[0;34m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 
@@ -19,7 +19,7 @@ warn()    { echo -e "  ${YELLOW}⚠${NC} $*"; }
 error()   { echo -e "\n  ${RED}✖ ERROR:${NC} $*\n" >&2; exit 1; }
 step()    { echo -e "\n${BOLD}${BLUE}┌─ $* ${NC}"; }
 
-# ────────────────────────────── Defaults ──────────────────────────────
+# ── Defaults ──────────────────────────────────────────────────────────
 WINGS_DIR="/opt/mc-wings"
 WINGS_USER="mcwings"
 CONFIG_DIR="/etc/mc-wings"
@@ -31,50 +31,60 @@ BRANCH="main"
 MIN_DISK_GB=10
 MIN_RAM_MB=512
 
-# ────────────────────────────── Banner ──────────────────────────────
+# ── Lock file ─────────────────────────────────────────────────────────
+LOCKFILE="/tmp/mc-wings-install.lock"
+if [[ -f "$LOCKFILE" ]]; then
+  error "Another install may be in progress.\n  If it crashed, remove the lock: rm -f $LOCKFILE"
+fi
+touch "$LOCKFILE"
+trap "rm -f $LOCKFILE" EXIT INT TERM
+
+# ── Install log ───────────────────────────────────────────────────────
+LOGFILE="/var/log/mc-wings-install.log"
+mkdir -p /var/log
+exec > >(tee -a "$LOGFILE") 2>&1
+echo "──── Wings install started: $(date) ────"
+
+# ── Banner ────────────────────────────────────────────────────────────
 echo -e "\n${BOLD}"
 echo "  ╔═══════════════════════════════════════════════════╗"
 echo "  ║     MC Manage Panel — Wings Installer v1.0        ║"
 echo "  ║          Game Server Node Daemon                  ║"
 echo "  ╚═══════════════════════════════════════════════════╝"
 echo -e "${NC}"
+echo -e "  Install log: ${CYAN}${LOGFILE}${NC}"
 
-# ────────────────────────────── Pre-flight ──────────────────────────────
-[[ $EUID -ne 0 ]] && error "This script must be run as root.\n  Try: sudo bash $0"
+# ── Root check ────────────────────────────────────────────────────────
+[[ $EUID -ne 0 ]] && error "Run as root: sudo bash $0"
 
+# ── OS check ──────────────────────────────────────────────────────────
 [[ -f /etc/os-release ]] || error "Cannot detect OS."
 . /etc/os-release
 OS_ID="$ID"
 OS_VER="$VERSION_ID"
-
 case "$OS_ID" in
   ubuntu|debian) ;;
-  *) error "Unsupported OS: $OS_ID. Use Ubuntu 20/22/24 or Debian 11/12." ;;
+  *) error "Unsupported OS: $OS_ID (supports Ubuntu 20/22/24, Debian 11/12)" ;;
 esac
-
 info "OS: ${OS_ID} ${OS_VER}"
 
-# Disk and RAM pre-flight
-AVAIL_DISK_GB=$(df / --output=avail -BG | tail -1 | tr -d 'G ')
-if [[ "$AVAIL_DISK_GB" -lt "$MIN_DISK_GB" ]]; then
+# ── Disk & RAM pre-flight ─────────────────────────────────────────────
+AVAIL_DISK_GB=$(df -BG / | awk 'NR==2{gsub(/G/,"",$4); print $4}')
+[[ "${AVAIL_DISK_GB:-0}" -lt "$MIN_DISK_GB" ]] && \
   error "Not enough disk space: ${AVAIL_DISK_GB}GB available, ${MIN_DISK_GB}GB required (game servers need room)."
-fi
 info "Disk: ${AVAIL_DISK_GB}GB available"
 
-AVAIL_RAM_MB=$(awk '/MemAvailable/ { printf "%d", $2/1024 }' /proc/meminfo)
-if [[ "$AVAIL_RAM_MB" -lt "$MIN_RAM_MB" ]]; then
+AVAIL_RAM_MB=$(awk '/MemAvailable/{ printf "%d", $2/1024 }' /proc/meminfo)
+[[ "${AVAIL_RAM_MB:-0}" -lt "$MIN_RAM_MB" ]] && \
   warn "Low RAM: ${AVAIL_RAM_MB}MB available. Game servers typically need 512MB+ each."
-fi
 info "RAM: ${AVAIL_RAM_MB}MB available"
 
-# ────────────────────────────── Collect inputs ──────────────────────────────
+# ── Collect inputs ────────────────────────────────────────────────────
 step "Configuration"
-
 echo ""
 echo -e "  ${BOLD}Where to find the token:${NC}"
-echo "    1. Open your panel → Admin → Nodes → New Node"
-echo "    2. Fill in the node details (FQDN = this server's IP or domain)"
-echo "    3. After creating the node, copy the Token from the Configuration tab"
+echo "    1. Open your panel → Admin → Nodes → your node"
+echo "    2. Click the Configuration tab → copy the Token"
 echo ""
 
 read -rp "  Panel URL (e.g. https://panel.yourdomain.com): " PANEL_URL
@@ -91,6 +101,10 @@ read -rp "  This server's FQDN or public IP: " NODE_FQDN
 read -rp "  Wings listen port [8080]: " WINGS_PORT
 WINGS_PORT="${WINGS_PORT:-8080}"
 
+# Validate port is numeric
+[[ "$WINGS_PORT" =~ ^[0-9]+$ ]] || error "Port must be a number."
+[[ "$WINGS_PORT" -ge 1 && "$WINGS_PORT" -le 65535 ]] || error "Port must be between 1 and 65535."
+
 read -rp "  Enable HTTPS on Wings? Requires a domain for this node. [y/N]: " WINGS_SSL
 WINGS_SSL="${WINGS_SSL:-n}"
 
@@ -104,17 +118,17 @@ echo ""
 read -rp "  Proceed? [Y/n]: " CONFIRM
 [[ "${CONFIRM,,}" == "n" ]] && { echo "Aborted."; exit 0; }
 
-# Verify panel is reachable before spending time installing
+# ── Verify panel is reachable before spending time installing ─────────
 info "Verifying panel connectivity..."
-if ! curl -sf --max-time 10 "${PANEL_URL}/health" >/dev/null 2>&1; then
+if curl -sf --max-time 10 "${PANEL_URL}/health" >/dev/null 2>&1; then
+  success "Panel reachable at ${PANEL_URL}"
+else
   warn "Cannot reach panel at ${PANEL_URL}/health"
   read -rp "  Continue anyway? [y/N]: " FORCE_CONTINUE
-  [[ "${FORCE_CONTINUE,,}" != "y" ]] && { echo "Aborted. Fix panel connectivity first."; exit 1; }
-else
-  success "Panel reachable at ${PANEL_URL}"
+  [[ "${FORCE_CONTINUE,,}" == "y" ]] || { echo "Aborted. Fix panel connectivity first."; exit 1; }
 fi
 
-# ────────────────────────────── System packages ──────────────────────────────
+# ── System packages ───────────────────────────────────────────────────
 step "Installing system packages"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -q
@@ -124,7 +138,7 @@ apt-get install -y -q \
   ca-certificates gnupg lsb-release
 success "System packages installed"
 
-# ────────────────────────────── Docker ──────────────────────────────
+# ── Docker ────────────────────────────────────────────────────────────
 step "Installing Docker"
 if command -v docker &>/dev/null; then
   info "Docker already installed: $(docker --version)"
@@ -134,20 +148,17 @@ else
   curl -fsSL "https://download.docker.com/linux/${OS_ID}/gpg" \
     | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
   chmod a+r /etc/apt/keyrings/docker.gpg
-
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
 https://download.docker.com/linux/${OS_ID} $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
     | tee /etc/apt/sources.list.d/docker.list > /dev/null
-
   apt-get update -q
   apt-get install -y docker-ce docker-ce-cli containerd.io \
     docker-buildx-plugin docker-compose-plugin >/dev/null
 fi
-
 systemctl enable docker --now
 success "Docker ready: $(docker --version | cut -d' ' -f3 | tr -d ',')"
 
-# ────────────────────────────── Node.js 20 ──────────────────────────────
+# ── Node.js ───────────────────────────────────────────────────────────
 step "Installing Node.js ${NODE_VERSION}+"
 CURRENT_NODE_MAJOR=0
 if command -v node &>/dev/null; then
@@ -162,29 +173,23 @@ else
 fi
 success "Node $(node --version), npm $(npm --version)"
 
-# ────────────────────────────── Wings user ──────────────────────────────
+# ── Wings user ────────────────────────────────────────────────────────
 step "Setting up Wings user"
 if ! id -u "$WINGS_USER" &>/dev/null; then
   useradd -r -m -d "$WINGS_DIR" -s /usr/sbin/nologin "$WINGS_USER"
 fi
-# Must be in docker group to access /var/run/docker.sock
 usermod -aG docker "$WINGS_USER"
 success "User '${WINGS_USER}' in docker group"
 
-# ────────────────────────────── Directories ──────────────────────────────
+# ── Directories ───────────────────────────────────────────────────────
 step "Creating directories"
-mkdir -p \
-  "$WINGS_DIR" \
-  "$CONFIG_DIR" \
-  "$DATA_DIR/volumes" \
-  "$DATA_DIR/tmp" \
-  "$LOG_DIR"
+mkdir -p "$WINGS_DIR" "$CONFIG_DIR" "$DATA_DIR/volumes" "$DATA_DIR/tmp" "$LOG_DIR"
 chown -R "${WINGS_USER}:${WINGS_USER}" "$WINGS_DIR" "$DATA_DIR" "$LOG_DIR"
 chown root:"${WINGS_USER}" "$CONFIG_DIR"
 chmod 750 "$CONFIG_DIR"
 success "Directories created"
 
-# ────────────────────────────── Clone / update source ──────────────────────────────
+# ── Clone / update source ─────────────────────────────────────────────
 step "Fetching Wings source"
 git config --global --add safe.directory "$WINGS_DIR" 2>/dev/null || true
 if [[ -d "${WINGS_DIR}/.git" ]]; then
@@ -196,24 +201,26 @@ elif [[ -d "${WINGS_DIR}" ]]; then
   rm -rf "$WINGS_DIR"
   git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$WINGS_DIR" --quiet
 else
-  info "Cloning from ${REPO_URL} ..."
+  info "Cloning from ${REPO_URL}..."
   git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$WINGS_DIR" --quiet
 fi
 success "Source at ${WINGS_DIR}"
 
-# ────────────────────────────── Build Wings ──────────────────────────────
+# ── Build Wings (with npm retry) ──────────────────────────────────────
 step "Installing and building Wings"
 cd "${WINGS_DIR}/apps/wings"
-info "npm install..."
-npm install --no-fund --no-audit --quiet
-info "Compiling TypeScript..."
+NPM_OK=false
+for attempt in 1 2 3; do
+  if npm install --no-fund --no-audit --quiet; then NPM_OK=true; break; fi
+  warn "npm install failed (attempt ${attempt}/3). Retrying in 10s..."
+  sleep 10
+done
+$NPM_OK || error "npm install failed after 3 attempts."
 npm run build
 success "Wings built → ${WINGS_DIR}/apps/wings/dist"
-
-# Set ownership after build
 chown -R "${WINGS_USER}:${WINGS_USER}" "$WINGS_DIR"
 
-# ────────────────────────────── SSL certificate (optional) ──────────────────────────────
+# ── SSL certificate (optional) ────────────────────────────────────────
 SSL_ENABLED="false"
 SSL_CERT=""
 SSL_KEY=""
@@ -223,11 +230,9 @@ if [[ "${WINGS_SSL,,}" == "y" ]]; then
   step "Setting up SSL for Wings"
   apt-get install -y certbot >/dev/null
 
-  # Port 80 might be in use (e.g. panel on same server).
-  # Prefer webroot if nginx is running, otherwise standalone.
   CERTBOT_METHOD="--standalone"
   if systemctl is-active --quiet nginx 2>/dev/null; then
-    warn "Nginx is running on this server. Using nginx plugin for certbot."
+    warn "Nginx is running on this server — using nginx plugin for certbot."
     apt-get install -y python3-certbot-nginx >/dev/null
     CERTBOT_METHOD="--nginx"
   fi
@@ -242,14 +247,6 @@ if [[ "${WINGS_SSL,,}" == "y" ]]; then
     SSL_ENABLED="true"
     SCHEME="https"
     success "SSL certificate obtained for ${NODE_FQDN}"
-    # Restart wings after every cert renewal so it picks up the new cert
-    mkdir -p /etc/letsencrypt/renewal-hooks/deploy
-    cat > "/etc/letsencrypt/renewal-hooks/deploy/restart-mc-wings.sh" <<'HOOK'
-#!/bin/sh
-systemctl restart mc-wings
-HOOK
-    chmod +x "/etc/letsencrypt/renewal-hooks/deploy/restart-mc-wings.sh"
-
     # Allow Wings user to read certs
     chmod 755 "/etc/letsencrypt/live" "/etc/letsencrypt/archive"
     chgrp -R "${WINGS_USER}" "/etc/letsencrypt/live/${NODE_FQDN}" \
@@ -257,13 +254,21 @@ HOOK
     chmod g+rx "/etc/letsencrypt/live/${NODE_FQDN}" \
                "/etc/letsencrypt/archive/${NODE_FQDN}" 2>/dev/null || true
     chmod g+r "${SSL_CERT}" "${SSL_KEY}" 2>/dev/null || true
+    # Auto-renewal hook
+    mkdir -p /etc/letsencrypt/renewal-hooks/deploy
+    cat > "/etc/letsencrypt/renewal-hooks/deploy/restart-mc-wings.sh" <<'HOOK'
+#!/bin/sh
+systemctl restart mc-wings
+HOOK
+    chmod +x "/etc/letsencrypt/renewal-hooks/deploy/restart-mc-wings.sh"
+    success "Certbot auto-renewal hook installed"
   else
-    warn "Certbot failed. Make sure ${NODE_FQDN} resolves to this server."
-    warn "Wings will start without SSL (HTTP mode)."
+    warn "Certbot failed — Wings will run without SSL (HTTP mode)."
+    warn "Make sure ${NODE_FQDN} resolves to this server's IP."
   fi
 fi
 
-# ────────────────────────────── Write config.yml ──────────────────────────────
+# ── Write config.yml ──────────────────────────────────────────────────
 step "Writing Wings configuration"
 cat > "${CONFIG_DIR}/config.yml" <<YAML
 # MC Manage Panel — Wings Configuration
@@ -310,7 +315,7 @@ chown "${WINGS_USER}:${WINGS_USER}" "${CONFIG_DIR}/config.yml"
 chmod 600 "${CONFIG_DIR}/config.yml"
 success "Config → ${CONFIG_DIR}/config.yml"
 
-# ────────────────────────────── Systemd service ──────────────────────────────
+# ── Systemd service ───────────────────────────────────────────────────
 step "Creating systemd service"
 NODE_BIN="$(which node)"
 cat > /etc/systemd/system/mc-wings.service <<SERVICE
@@ -344,40 +349,49 @@ SERVICE
 systemctl daemon-reload
 systemctl enable mc-wings --quiet
 systemctl restart mc-wings
-sleep 3
 
-if systemctl is-active --quiet mc-wings; then
-  success "mc-wings service running"
+# Wait for Wings to start (up to 20s)
+info "Waiting for Wings to start..."
+WINGS_READY=false
+for i in {1..20}; do
+  if curl -sf --max-time 2 "http://127.0.0.1:${WINGS_PORT}/api/system" >/dev/null 2>&1; then
+    WINGS_READY=true; break
+  fi
+  sleep 1
+done
+if $WINGS_READY; then
+  success "Wings is up and responding"
+elif systemctl is-active --quiet mc-wings; then
+  success "mc-wings service running (health endpoint not checked)"
 else
   warn "mc-wings failed to start. Check: journalctl -u mc-wings -n 50"
 fi
 
-# ────────────────────────────── Firewall ──────────────────────────────
+# ── Firewall ──────────────────────────────────────────────────────────
 step "Configuring firewall (UFW)"
 if command -v ufw &>/dev/null; then
   ufw allow 22/tcp                  comment "SSH"          >/dev/null 2>&1 || true
   ufw allow "${WINGS_PORT}/tcp"     comment "Wings daemon" >/dev/null 2>&1 || true
   ufw allow 2022/tcp                comment "Wings SFTP"   >/dev/null 2>&1 || true
-  # Game server ports
   ufw allow 25565:25600/tcp         comment "Game servers" >/dev/null 2>&1 || true
   ufw allow 25565:25600/udp         comment "Game servers" >/dev/null 2>&1 || true
   ufw --force enable >/dev/null 2>&1 || true
   success "UFW: ports 22, ${WINGS_PORT}, 2022, 25565-25600 open"
 else
-  info "UFW not found — skipping firewall config"
+  info "UFW not found — skipping firewall"
 fi
 
-# ────────────────────────────── Done ──────────────────────────────
+# ── Done ──────────────────────────────────────────────────────────────
 echo ""
 echo -e "${GREEN}${BOLD}"
 echo "  ╔═══════════════════════════════════════════════════╗"
-echo "  ║        Wings Installation Complete! 🎉            ║"
+echo "  ║        Wings Installation Complete!               ║"
 echo "  ╚═══════════════════════════════════════════════════╝"
 echo -e "${NC}"
 echo -e "  ${BOLD}Daemon URL:${NC}    ${SCHEME}://${NODE_FQDN}:${WINGS_PORT}"
 echo -e "  ${BOLD}Config:${NC}        ${CONFIG_DIR}/config.yml"
 echo -e "  ${BOLD}Data:${NC}          ${DATA_DIR}/volumes/"
-echo -e "  ${BOLD}Logs:${NC}          journalctl -u mc-wings -f"
+echo -e "  ${BOLD}Install log:${NC}   ${LOGFILE}"
 echo ""
 echo -e "  ${BOLD}Service commands:${NC}"
 echo "    systemctl status  mc-wings"
@@ -385,11 +399,12 @@ echo "    systemctl restart mc-wings"
 echo "    journalctl -u mc-wings -f"
 echo ""
 echo -e "  ${BOLD}Next steps in your panel:${NC}"
-echo "    1. Go to Admin → Nodes → your node → Edit"
-echo "    2. Set FQDN  : ${NODE_FQDN}"
-echo "    3. Set Port  : ${WINGS_PORT}"
-echo "    4. Set Scheme: ${SCHEME}"
-echo "    5. Save, then test the connection (it should turn green)"
-echo "    6. Add Allocations (IPs + ports for game servers)"
-echo "    7. Create your first server in Admin → Servers → New Server"
+echo "  1. Go to Admin → Nodes → your node → Edit"
+echo "  2. Set FQDN  : ${NODE_FQDN}"
+echo "  3. Set Port  : ${WINGS_PORT}"
+echo "  4. Set Scheme: ${SCHEME}"
+echo "  5. Save — node status should turn green"
+echo "  6. Add Allocations (IPs + ports for game servers)"
+echo "  7. Create your first server in Admin → Servers → New Server"
 echo ""
+echo "──── Wings install finished: $(date) ────"

@@ -7,7 +7,7 @@
 
 set -euo pipefail
 
-# ────────────────────────────── Colors ──────────────────────────────
+# ── Colors & helpers ──────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 BLUE='\033[0;34m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 
@@ -17,7 +17,7 @@ warn()    { echo -e "  ${YELLOW}⚠${NC} $*"; }
 error()   { echo -e "\n  ${RED}✖ ERROR:${NC} $*\n" >&2; exit 1; }
 step()    { echo -e "\n${BOLD}${BLUE}┌─ $* ${NC}"; }
 
-# ────────────────────────────── Defaults ──────────────────────────────
+# ── Defaults ──────────────────────────────────────────────────────────
 PANEL_DIR="/var/www/mc-panel"
 PANEL_USER="mcpanel"
 NODE_VERSION="20"
@@ -25,61 +25,75 @@ REPO_URL="https://github.com/mwlih28/mc-manage-panel"
 BRANCH="main"
 MIN_DISK_GB=5
 MIN_RAM_MB=512
-SERVER_IP=""
+DB_NAME="mcpanel"
+DB_USER="mcpanel"
+SSL_OK="false"
+SSL_ATTEMPTED="false"
+SCHEME="http"
 
-# ────────────────────────────── Banner ──────────────────────────────
+# ── Lock file (prevent parallel installs) ────────────────────────────
+LOCKFILE="/tmp/mc-panel-install.lock"
+if [[ -f "$LOCKFILE" ]]; then
+  error "Another install may be in progress.\n  If it crashed, remove the lock and retry: rm -f $LOCKFILE"
+fi
+touch "$LOCKFILE"
+trap "rm -f $LOCKFILE" EXIT INT TERM
+
+# ── Install log ───────────────────────────────────────────────────────
+LOGFILE="/var/log/mc-panel-install.log"
+mkdir -p /var/log
+exec > >(tee -a "$LOGFILE") 2>&1
+echo "──── Install started: $(date) ────"
+
+# ── Banner ────────────────────────────────────────────────────────────
 echo -e "\n${BOLD}"
 echo "  ╔═══════════════════════════════════════════════════╗"
 echo "  ║       MC Manage Panel — Installer v1.0            ║"
 echo "  ║        Game Server Management Platform            ║"
 echo "  ╚═══════════════════════════════════════════════════╝"
 echo -e "${NC}"
+echo -e "  Install log: ${CYAN}${LOGFILE}${NC}"
 
-# ────────────────────────────── Pre-flight ──────────────────────────────
-[[ $EUID -ne 0 ]] && error "This script must be run as root.\n  Try: sudo bash $0"
+# ── Root check ────────────────────────────────────────────────────────
+[[ $EUID -ne 0 ]] && error "Run as root: sudo bash $0"
 
+# ── OS check ──────────────────────────────────────────────────────────
 [[ -f /etc/os-release ]] || error "Cannot detect OS."
 . /etc/os-release
 OS_ID="$ID"
 OS_VER="$VERSION_ID"
-
 case "$OS_ID" in
   ubuntu|debian) ;;
-  *) error "Unsupported OS: $OS_ID. This installer supports Ubuntu 20/22/24 and Debian 11/12." ;;
+  *) error "Unsupported OS: $OS_ID (supports Ubuntu 20/22/24, Debian 11/12)" ;;
 esac
-
 info "OS: ${OS_ID} ${OS_VER}"
 
-# Detect public IP early (used as fallback if SSL fails)
+# ── Detect public IP ──────────────────────────────────────────────────
 SERVER_IP=$(curl -4 -sf --max-time 5 https://api.ipify.org 2>/dev/null \
   || curl -4 -sf --max-time 5 https://ifconfig.me 2>/dev/null \
-  || hostname -I | awk '{print $1}')
+  || hostname -I | awk '{print $1}' || echo "unknown")
 info "Server IP: ${SERVER_IP}"
 
-# Disk space check
-AVAIL_DISK_GB=$(df / --output=avail -BG | tail -1 | tr -d 'G ')
-if [[ "$AVAIL_DISK_GB" -lt "$MIN_DISK_GB" ]]; then
+# ── Disk & RAM pre-flight ─────────────────────────────────────────────
+AVAIL_DISK_GB=$(df -BG / | awk 'NR==2{gsub(/G/,"",$4); print $4}')
+[[ "${AVAIL_DISK_GB:-0}" -lt "$MIN_DISK_GB" ]] && \
   error "Not enough disk space: ${AVAIL_DISK_GB}GB available, ${MIN_DISK_GB}GB required."
-fi
 info "Disk: ${AVAIL_DISK_GB}GB available"
 
-# RAM check
-AVAIL_RAM_MB=$(awk '/MemAvailable/ { printf "%d", $2/1024 }' /proc/meminfo)
-if [[ "$AVAIL_RAM_MB" -lt "$MIN_RAM_MB" ]]; then
-  warn "Low RAM: ${AVAIL_RAM_MB}MB available (recommended: ${MIN_RAM_MB}MB+). Proceeding anyway."
-fi
+AVAIL_RAM_MB=$(awk '/MemAvailable/{ printf "%d", $2/1024 }' /proc/meminfo)
+[[ "${AVAIL_RAM_MB:-0}" -lt "$MIN_RAM_MB" ]] && \
+  warn "Low RAM: ${AVAIL_RAM_MB}MB available (${MIN_RAM_MB}MB+ recommended). Continuing."
 info "RAM: ${AVAIL_RAM_MB}MB available"
 
-# Port check (80/443 must be available or at least nginx-controlled)
+# ── Port conflict check ───────────────────────────────────────────────
 for PORT_CHECK in 80 443 3001; do
-  if ss -tlnp "sport = :${PORT_CHECK}" 2>/dev/null | grep -q LISTEN; then
-    warn "Port ${PORT_CHECK} is already in use. This may conflict."
+  if ss -tlnp | grep -q ":${PORT_CHECK} "; then
+    warn "Port ${PORT_CHECK} is already in use — may conflict."
   fi
 done
 
-# ────────────────────────────── Collect inputs ──────────────────────────────
+# ── Collect inputs ────────────────────────────────────────────────────
 step "Configuration"
-
 echo ""
 read -rp "  Panel domain (e.g. panel.yourdomain.com): " PANEL_DOMAIN
 [[ -z "$PANEL_DOMAIN" ]] && error "Domain is required."
@@ -107,10 +121,11 @@ SETUP_SSL="${SETUP_SSL:-y}"
 
 echo ""
 echo -e "  ${BOLD}Summary:${NC}"
-echo "    Domain  : $PANEL_DOMAIN"
-echo "    Email   : $ADMIN_EMAIL"
-echo "    Username: $ADMIN_USERNAME"
-echo "    SSL     : $SETUP_SSL"
+echo "    Domain    : $PANEL_DOMAIN"
+echo "    Email     : $ADMIN_EMAIL"
+echo "    Username  : $ADMIN_USERNAME"
+echo "    Server IP : $SERVER_IP"
+echo "    SSL       : $SETUP_SSL"
 echo ""
 read -rp "  Proceed? [Y/n]: " CONFIRM
 [[ "${CONFIRM,,}" == "n" ]] && { echo "Aborted."; exit 0; }
@@ -119,20 +134,18 @@ read -rp "  Proceed? [Y/n]: " CONFIRM
 DB_PASSWORD=$(openssl rand -hex 24)
 JWT_SECRET=$(openssl rand -hex 32)
 JWT_REFRESH_SECRET=$(openssl rand -hex 32)
-DB_NAME="mcpanel"
-DB_USER="mcpanel"
 
-# ────────────────────────────── System packages ──────────────────────────────
+# ── System packages ───────────────────────────────────────────────────
 step "Installing system packages"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -q
 apt-get install -y -q \
-  curl wget git openssl \
+  curl wget git openssl dnsutils \
   software-properties-common apt-transport-https \
   ca-certificates gnupg lsb-release nginx
 success "System packages installed"
 
-# ────────────────────────────── Node.js 20 ──────────────────────────────
+# ── Node.js ───────────────────────────────────────────────────────────
 step "Installing Node.js ${NODE_VERSION}+"
 CURRENT_NODE_MAJOR=0
 if command -v node &>/dev/null; then
@@ -147,39 +160,36 @@ else
 fi
 success "Node $(node --version), npm $(npm --version)"
 
-# ────────────────────────────── PostgreSQL ──────────────────────────────
+# ── PostgreSQL ────────────────────────────────────────────────────────
 step "Setting up PostgreSQL"
 if ! command -v psql &>/dev/null; then
   apt-get install -y postgresql postgresql-contrib >/dev/null
 fi
 systemctl enable postgresql --now
 
-# Create role or update password (idempotent — password always matches .env)
-if sudo -u postgres psql -qtc "SELECT 1 FROM pg_roles WHERE rolname='${DB_USER}'" | grep -q 1; then
-  sudo -u postgres psql -c "ALTER USER ${DB_USER} WITH PASSWORD '${DB_PASSWORD}';" >/dev/null
+# Helper: run postgres commands from /tmp to avoid "permission denied /root"
+PG() { cd /tmp && sudo -u postgres "$@"; cd - >/dev/null; }
+
+if PG psql -qtc "SELECT 1 FROM pg_roles WHERE rolname='${DB_USER}'" 2>/dev/null | grep -q 1; then
+  PG psql -c "ALTER USER ${DB_USER} WITH PASSWORD '${DB_PASSWORD}';" >/dev/null
 else
-  sudo -u postgres psql -c "CREATE USER ${DB_USER} WITH PASSWORD '${DB_PASSWORD}';" >/dev/null
+  PG psql -c "CREATE USER ${DB_USER} WITH PASSWORD '${DB_PASSWORD}';" >/dev/null
 fi
 
-# Create database (idempotent)
-sudo -u postgres psql -qtc "SELECT 1 FROM pg_database WHERE datname='${DB_NAME}'" | grep -q 1 \
-  || sudo -u postgres createdb -O "${DB_USER}" "${DB_NAME}"
+PG psql -qtc "SELECT 1 FROM pg_database WHERE datname='${DB_NAME}'" 2>/dev/null | grep -q 1 \
+  || PG createdb -O "${DB_USER}" "${DB_NAME}"
 
-# Grants (PostgreSQL 15+ requires explicit schema grant)
-sudo -u postgres psql -d "${DB_NAME}" \
-  -c "GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME} TO ${DB_USER};" >/dev/null 2>&1 || true
-sudo -u postgres psql -d "${DB_NAME}" \
-  -c "GRANT ALL ON SCHEMA public TO ${DB_USER};" >/dev/null 2>&1 || true
+PG psql -d "${DB_NAME}" -c "GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME} TO ${DB_USER};" >/dev/null 2>&1 || true
+PG psql -d "${DB_NAME}" -c "GRANT ALL ON SCHEMA public TO ${DB_USER};" >/dev/null 2>&1 || true
+success "PostgreSQL ready: database='${DB_NAME}' user='${DB_USER}'"
 
-success "PostgreSQL: database='${DB_NAME}' user='${DB_USER}'"
-
-# ────────────────────────────── Panel user ──────────────────────────────
+# ── Panel service user ────────────────────────────────────────────────
 step "Creating service user"
 id -u "$PANEL_USER" &>/dev/null \
   || useradd -r -m -d "$PANEL_DIR" -s /usr/sbin/nologin "$PANEL_USER"
 success "User '${PANEL_USER}' ready"
 
-# ────────────────────────────── Clone / update source ──────────────────────────────
+# ── Clone / update source ─────────────────────────────────────────────
 step "Fetching panel source"
 git config --global --add safe.directory "$PANEL_DIR" 2>/dev/null || true
 if [[ -d "${PANEL_DIR}/.git" ]]; then
@@ -187,17 +197,16 @@ if [[ -d "${PANEL_DIR}/.git" ]]; then
   git -C "$PANEL_DIR" fetch origin "${BRANCH}" --quiet
   git -C "$PANEL_DIR" reset --hard FETCH_HEAD --quiet
 elif [[ -d "${PANEL_DIR}" ]]; then
-  # Directory exists but is not a git repo (e.g. partial previous install)
   info "Removing incomplete directory and re-cloning..."
   rm -rf "$PANEL_DIR"
   git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$PANEL_DIR" --quiet
 else
-  info "Cloning from ${REPO_URL} ..."
+  info "Cloning from ${REPO_URL}..."
   git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$PANEL_DIR" --quiet
 fi
 success "Source at ${PANEL_DIR}"
 
-# ────────────────────────────── Write .env (before build) ──────────────────────────────
+# ── Write .env (http:// — updated to https:// only if SSL succeeds) ───
 step "Writing API environment"
 cat > "${PANEL_DIR}/apps/api/.env" <<ENV
 NODE_ENV=production
@@ -207,60 +216,68 @@ JWT_SECRET=${JWT_SECRET}
 JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
 JWT_EXPIRES_IN=15m
 JWT_REFRESH_EXPIRES_IN=7d
-CORS_ORIGIN=https://${PANEL_DOMAIN}
+CORS_ORIGIN=http://${PANEL_DOMAIN}
 APP_NAME=MC Manage Panel
-APP_URL=https://${PANEL_DOMAIN}
+APP_URL=http://${PANEL_DOMAIN}
 PANEL_VERSION=1.0.0
 ENV
 chmod 600 "${PANEL_DIR}/apps/api/.env"
 success ".env written"
 
-# ────────────────────────────── Install all workspace deps from root ──────────────────────────────
+# ── Install dependencies (with retry) ────────────────────────────────
 step "Installing dependencies"
-# This is an npm workspaces monorepo — always install from the repo root so that
-# all packages (prisma, tsc, vite, etc.) land in /var/www/mc-panel/node_modules.
 cd "${PANEL_DIR}"
-# Remove any stale lock files generated in Docker/Railway context
 rm -f package-lock.json apps/api/package-lock.json apps/web/package-lock.json
-npm install --no-fund --no-audit
+NPM_OK=false
+for attempt in 1 2 3; do
+  if npm install --no-fund --no-audit; then NPM_OK=true; break; fi
+  warn "npm install failed (attempt ${attempt}/3). Retrying in 10s..."
+  sleep 10
+done
+$NPM_OK || error "npm install failed after 3 attempts. Check network connectivity."
 PRISMA_BIN="${PANEL_DIR}/node_modules/.bin/prisma"
-[[ -x "$PRISMA_BIN" ]] || error "Prisma binary not found after npm install. Check output above."
-success "Dependencies installed (workspace root)"
+[[ -x "$PRISMA_BIN" ]] || error "Prisma binary not found after npm install."
+success "Dependencies installed"
 
-# ────────────────────────────── Build API ──────────────────────────────
+# ── Build API ─────────────────────────────────────────────────────────
 step "Building API"
-info "Generating Prisma client..."
 cd "${PANEL_DIR}/apps/api"
 "$PRISMA_BIN" generate
-info "Compiling TypeScript..."
-# Add workspace root bin to PATH so tsc/ts-node are found
 PATH="${PANEL_DIR}/node_modules/.bin:$PATH" npm run build
 success "API built → ${PANEL_DIR}/apps/api/dist"
 
-# ────────────────────────────── Build Web ──────────────────────────────
+# ── Build Web ─────────────────────────────────────────────────────────
 step "Building Web"
-info "Building frontend (relative API paths — works on any domain or IP)..."
+info "Using relative API paths — works on any domain or IP via nginx proxy"
 cd "${PANEL_DIR}/apps/web"
 PATH="${PANEL_DIR}/node_modules/.bin:$PATH" npm run build
 success "Web built → ${PANEL_DIR}/apps/web/dist"
 
-# ────────────────────────────── Database schema ──────────────────────────────
+# ── Database schema ───────────────────────────────────────────────────
 step "Applying database schema"
 cd "${PANEL_DIR}/apps/api"
-"$PRISMA_BIN" db push
+# Backup existing data if tables already exist (upgrade scenario)
+TABLE_COUNT=$(PG psql -d "${DB_NAME}" -qtc \
+  "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public'" \
+  2>/dev/null | tr -d ' \n' || echo 0)
+if [[ "${TABLE_COUNT:-0}" -gt 0 ]]; then
+  BACKUP_FILE="/tmp/mc-panel-db-$(date +%Y%m%d%H%M%S).sql"
+  info "Existing database detected — backing up to ${BACKUP_FILE}..."
+  PG pg_dump "${DB_NAME}" > "$BACKUP_FILE"
+  success "Database backed up: $BACKUP_FILE"
+fi
+"$PRISMA_BIN" db push --accept-data-loss
 success "Schema applied"
 
-# ────────────────────────────── Create admin account ──────────────────────────────
+# ── Create admin account ──────────────────────────────────────────────
 step "Creating admin account"
-# Run from the workspace root so Node finds @prisma/client in the workspace node_modules.
-# Pass credentials via env vars to avoid shell-quoting issues with special chars.
 cd "${PANEL_DIR}"
 SEED_EMAIL="$ADMIN_EMAIL" \
 SEED_USERNAME="$ADMIN_USERNAME" \
 SEED_PASSWORD="$ADMIN_PASSWORD" \
 SEED_FIRSTNAME="$ADMIN_FIRSTNAME" \
 SEED_LASTNAME="$ADMIN_LASTNAME" \
-SEED_APP_URL="https://${PANEL_DOMAIN}" \
+SEED_APP_URL="http://${PANEL_DOMAIN}" \
 node -e "
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
@@ -285,10 +302,10 @@ const prisma = new PrismaClient();
     },
   });
   const settings = [
-    { key: 'app:name',            value: 'MC Manage Panel' },
-    { key: 'app:url',             value: process.env.SEED_APP_URL },
-    { key: 'app:version',         value: '1.0.0' },
-    { key: 'recaptcha:enabled',   value: 'false' },
+    { key: 'app:name',          value: 'MC Manage Panel' },
+    { key: 'app:url',           value: process.env.SEED_APP_URL },
+    { key: 'app:version',       value: '1.0.0' },
+    { key: 'recaptcha:enabled', value: 'false' },
   ];
   for (const s of settings) {
     await prisma.setting.upsert({ where: { key: s.key }, update: { value: s.value }, create: s });
@@ -299,11 +316,11 @@ const prisma = new PrismaClient();
 "
 success "Admin account created: ${ADMIN_EMAIL}"
 
-# ────────────────────────────── Permissions ──────────────────────────────
+# ── Permissions ───────────────────────────────────────────────────────
 chown -R "${PANEL_USER}:${PANEL_USER}" "$PANEL_DIR"
 chmod 750 "${PANEL_DIR}/apps/api/dist"
 
-# ────────────────────────────── Systemd service ──────────────────────────────
+# ── Systemd service ───────────────────────────────────────────────────
 step "Creating systemd service"
 NODE_BIN="$(which node)"
 cat > /etc/systemd/system/mc-panel.service <<SERVICE
@@ -323,7 +340,6 @@ RestartSec=5
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=mc-panel
-# Env is loaded by dotenv from .env file in WorkingDirectory
 
 [Install]
 WantedBy=multi-user.target
@@ -332,15 +348,23 @@ SERVICE
 systemctl daemon-reload
 systemctl enable mc-panel --quiet
 systemctl restart mc-panel
-sleep 2
 
-if systemctl is-active --quiet mc-panel; then
-  success "mc-panel service running"
+# Wait for API (up to 20s)
+info "Waiting for API to start..."
+API_READY=false
+for i in {1..20}; do
+  if curl -sf --max-time 2 http://127.0.0.1:3001/health >/dev/null 2>&1; then
+    API_READY=true; break
+  fi
+  sleep 1
+done
+if $API_READY; then
+  success "API is up and responding"
 else
-  warn "mc-panel service failed to start. Check: journalctl -u mc-panel -n 50"
+  warn "API did not respond in 20s. Continuing — check: journalctl -u mc-panel -n 50"
 fi
 
-# ────────────────────────────── Nginx ──────────────────────────────
+# ── Nginx ─────────────────────────────────────────────────────────────
 step "Configuring Nginx"
 cat > /etc/nginx/sites-available/mc-panel <<NGINX
 server {
@@ -353,19 +377,16 @@ server {
 
     client_max_body_size 100m;
 
-    # React SPA — all non-file paths serve index.html
     location / {
         try_files \$uri \$uri/ /index.html;
         add_header Cache-Control "no-cache, no-store, must-revalidate";
     }
 
-    # Immutable static assets
     location /assets/ {
         expires 1y;
         add_header Cache-Control "public, immutable";
     }
 
-    # API reverse proxy
     location /api/ {
         proxy_pass         http://127.0.0.1:3001;
         proxy_http_version 1.1;
@@ -376,7 +397,6 @@ server {
         proxy_read_timeout 300s;
     }
 
-    # WebSocket (Socket.io console/stats)
     location /socket.io/ {
         proxy_pass         http://127.0.0.1:3001;
         proxy_http_version 1.1;
@@ -390,82 +410,131 @@ server {
 }
 NGINX
 
-# Enable and reload
 ln -sf /etc/nginx/sites-available/mc-panel /etc/nginx/sites-enabled/mc-panel
 rm -f /etc/nginx/sites-enabled/default
 nginx -t
 systemctl reload nginx
 success "Nginx configured for ${PANEL_DOMAIN}"
 
-# ────────────────────────────── SSL ──────────────────────────────
-SCHEME="http"
+# ── SSL ───────────────────────────────────────────────────────────────
 if [[ "${SETUP_SSL,,}" != "n" ]]; then
-  SCHEME="https"
+  SSL_ATTEMPTED="true"
   step "Setting up SSL (Let's Encrypt)"
-  apt-get install -y certbot python3-certbot-nginx >/dev/null
-  if certbot --nginx -d "$PANEL_DOMAIN" \
-      --non-interactive --agree-tos \
-      --email "$ADMIN_EMAIL" \
-      --redirect 2>/dev/null; then
-    success "SSL certificate installed — HTTPS enabled"
-    # Ensure nginx reloads after every renewal
-    mkdir -p /etc/letsencrypt/renewal-hooks/deploy
-    cat > /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh <<'HOOK'
+  apt-get install -y certbot python3-certbot-nginx dnsutils >/dev/null 2>&1 || true
+
+  # Check DNS resolves to this server before wasting certbot rate limits
+  RESOLVED_IP=$(dig +short "${PANEL_DOMAIN}" A 2>/dev/null | tail -1 || echo "")
+  if [[ -z "$RESOLVED_IP" ]]; then
+    warn "DNS check: ${PANEL_DOMAIN} has no A record yet — skipping SSL."
+    warn "Point ${PANEL_DOMAIN} → ${SERVER_IP}, then run:"
+    warn "  certbot --nginx -d ${PANEL_DOMAIN} --email ${ADMIN_EMAIL} --agree-tos --redirect"
+  elif [[ "$RESOLVED_IP" != "$SERVER_IP" ]]; then
+    warn "DNS check: ${PANEL_DOMAIN} resolves to ${RESOLVED_IP}, expected ${SERVER_IP}."
+    warn "Update the DNS A record, then run:"
+    warn "  certbot --nginx -d ${PANEL_DOMAIN} --email ${ADMIN_EMAIL} --agree-tos --redirect"
+  else
+    info "DNS check passed: ${PANEL_DOMAIN} → ${RESOLVED_IP}"
+    # Backup nginx config — certbot may modify it; restore on failure
+    cp /etc/nginx/sites-available/mc-panel /etc/nginx/sites-available/mc-panel.bak
+
+    if certbot --nginx -d "$PANEL_DOMAIN" \
+        --non-interactive --agree-tos \
+        --email "$ADMIN_EMAIL" \
+        --redirect 2>/dev/null; then
+      SSL_OK="true"
+      SCHEME="https"
+      success "SSL certificate installed — HTTPS enabled"
+      rm -f /etc/nginx/sites-available/mc-panel.bak
+      # Update CORS and APP_URL to https://
+      sed -i "s|CORS_ORIGIN=http://|CORS_ORIGIN=https://|" "${PANEL_DIR}/apps/api/.env"
+      sed -i "s|APP_URL=http://|APP_URL=https://|" "${PANEL_DIR}/apps/api/.env"
+      systemctl restart mc-panel
+      # Auto-renewal hook
+      mkdir -p /etc/letsencrypt/renewal-hooks/deploy
+      cat > /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh <<'HOOK'
 #!/bin/sh
 systemctl reload nginx
 HOOK
-    chmod +x /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
-    success "Certbot renewal hook installed"
-  else
-    warn "Certbot failed — DNS for ${PANEL_DOMAIN} may not be pointing to this server yet."
-    warn "Falling back to HTTP access via IP: http://${SERVER_IP}"
-    # Switch nginx to catch-all so the panel is reachable by IP now
-    sed -i "s|server_name ${PANEL_DOMAIN};|server_name _;|" /etc/nginx/sites-available/mc-panel
-    # Update .env CORS to allow IP-based access
-    sed -i "s|CORS_ORIGIN=https://${PANEL_DOMAIN}|CORS_ORIGIN=http://${SERVER_IP}|" "${PANEL_DIR}/apps/api/.env"
-    sed -i "s|APP_URL=https://${PANEL_DOMAIN}|APP_URL=http://${SERVER_IP}|" "${PANEL_DIR}/apps/api/.env"
-    nginx -t && systemctl reload nginx
-    systemctl restart mc-panel
-    SCHEME="http"
-    PANEL_DOMAIN="${SERVER_IP}"
-    warn "Once DNS is set up, run: certbot --nginx -d <your-domain> to enable HTTPS."
+      chmod +x /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
+      success "Certbot auto-renewal hook installed"
+    else
+      warn "Certbot failed — restoring original nginx config."
+      cp /etc/nginx/sites-available/mc-panel.bak /etc/nginx/sites-available/mc-panel
+      rm -f /etc/nginx/sites-available/mc-panel.bak
+      nginx -t && systemctl reload nginx
+    fi
   fi
 fi
 
-# ────────────────────────────── Firewall ──────────────────────────────
+# ── IP fallback (SSL attempted but not active) ─────────────────────────
+if [[ "$SSL_ATTEMPTED" = "true" && "$SSL_OK" != "true" ]]; then
+  SCHEME="http"
+  info "SSL not active — making panel accessible via IP: http://${SERVER_IP}"
+  # Switch nginx to catch-all so any IP request is served
+  sed -i "s|server_name ${PANEL_DOMAIN};|server_name _;|" /etc/nginx/sites-available/mc-panel
+  # Escape dots in domain for sed safety
+  SAFE_DOMAIN="${PANEL_DOMAIN//./\\.}"
+  sed -i "s|CORS_ORIGIN=http://${SAFE_DOMAIN}|CORS_ORIGIN=http://${SERVER_IP}|" "${PANEL_DIR}/apps/api/.env"
+  sed -i "s|APP_URL=http://${SAFE_DOMAIN}|APP_URL=http://${SERVER_IP}|" "${PANEL_DIR}/apps/api/.env"
+  nginx -t && systemctl reload nginx
+  systemctl restart mc-panel
+  PANEL_DOMAIN="${SERVER_IP}"
+fi
+
+# ── Firewall ──────────────────────────────────────────────────────────
 step "Configuring firewall (UFW)"
 if command -v ufw &>/dev/null; then
-  ufw allow 22/tcp   comment "SSH"    >/dev/null 2>&1 || true
-  ufw allow 80/tcp   comment "HTTP"   >/dev/null 2>&1 || true
-  ufw allow 443/tcp  comment "HTTPS"  >/dev/null 2>&1 || true
+  ufw allow 22/tcp   comment "SSH"   >/dev/null 2>&1 || true
+  ufw allow 80/tcp   comment "HTTP"  >/dev/null 2>&1 || true
+  ufw allow 443/tcp  comment "HTTPS" >/dev/null 2>&1 || true
   ufw --force enable >/dev/null 2>&1 || true
   success "UFW enabled: ports 22, 80, 443 open"
 else
-  info "UFW not found — skipping firewall config"
+  info "UFW not found — skipping firewall"
 fi
 
-# ────────────────────────────── Done ──────────────────────────────
-# SCHEME and PANEL_DOMAIN may have been updated by the SSL fallback block above
+# ── Final health check ────────────────────────────────────────────────
+step "Final health check"
+sleep 2
+if curl -sf --max-time 5 http://127.0.0.1:3001/health >/dev/null 2>&1; then
+  success "API health: OK"
+else
+  warn "API health check failed — check: journalctl -u mc-panel -n 50"
+fi
+if curl -sf --max-time 5 http://127.0.0.1:80 >/dev/null 2>&1; then
+  success "Nginx: OK"
+else
+  warn "Nginx not responding — check: nginx -t && systemctl status nginx"
+fi
 
+# ── Done ──────────────────────────────────────────────────────────────
 echo ""
 echo -e "${GREEN}${BOLD}"
 echo "  ╔═══════════════════════════════════════════════════╗"
-echo "  ║          Installation Complete! 🎉                ║"
+echo "  ║          Installation Complete!                   ║"
 echo "  ╚═══════════════════════════════════════════════════╝"
 echo -e "${NC}"
 echo -e "  ${BOLD}Panel URL:${NC}      ${SCHEME}://${PANEL_DOMAIN}"
 echo -e "  ${BOLD}Admin email:${NC}    ${ADMIN_EMAIL}"
 echo -e "  ${BOLD}Admin password:${NC} (the one you entered)"
+echo -e "  ${BOLD}Install log:${NC}    ${LOGFILE}"
 echo ""
-echo -e "  ${BOLD}Service management:${NC}"
+if [[ "$SSL_OK" != "true" ]]; then
+  echo -e "  ${YELLOW}${BOLD}SSL not active.${NC} Once DNS is configured, enable HTTPS:"
+  echo -e "  ${CYAN}certbot --nginx -d <your-domain> --email ${ADMIN_EMAIL} --agree-tos --redirect${NC}"
+  echo -e "  Then update CORS_ORIGIN in ${PANEL_DIR}/apps/api/.env and restart mc-panel."
+  echo ""
+fi
+echo -e "  ${BOLD}Service commands:${NC}"
 echo "    systemctl status  mc-panel"
 echo "    systemctl restart mc-panel"
 echo "    journalctl -u mc-panel -f"
 echo ""
 echo -e "  ${BOLD}Next steps:${NC}"
 echo "  1. Open ${SCHEME}://${PANEL_DOMAIN} and sign in"
-echo "  2. Go to Admin → Nodes → New Node to add a game server"
-echo "  3. Copy the node token, then on your game server run:"
+echo "  2. Admin → Nodes → New Node (add a game server)"
+echo "  3. On each game server run:"
 echo ""
-echo -e "  ${CYAN}bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/${BRANCH}/scripts/install-wings.sh)${NC}"
+echo -e "  ${CYAN}bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/install-wings.sh)${NC}"
 echo ""
+echo "──── Install finished: $(date) ────"
