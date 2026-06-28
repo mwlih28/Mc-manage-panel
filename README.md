@@ -1,10 +1,35 @@
 # MC Manage Panel
 
-A Pterodactyl-inspired game server management panel. Manage Minecraft and other game servers from a web UI — with a Wings daemon on each node, real-time console, resource monitoring, and full admin controls.
+**Self-hosted, open-source game server management panel — a modern alternative to Pterodactyl.**
 
 ![Status](https://img.shields.io/badge/status-active-green)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen)
+![Stars](https://img.shields.io/github/stars/mwlih28/mc-manage-panel?style=flat)
+![Last Commit](https://img.shields.io/github/last-commit/mwlih28/mc-manage-panel)
+
+Manage Minecraft and other game servers from a web UI — with a Wings daemon on each node, real-time console, resource monitoring, and full admin controls.
+
+---
+
+## Screenshots
+
+![Dashboard](./docs/screenshots/dashboard.png)
+![Server Console](./docs/screenshots/console.png)
+![Admin Panel](./docs/screenshots/admin.png)
+
+---
+
+## Why MC Manage Panel?
+
+Pterodactyl is a great project, but it comes with real tradeoffs. Here's where this panel takes a different approach:
+
+- **Modern stack, no PHP.** The frontend is React 18 + TypeScript, the backend is Express + Prisma. No Blade templates, no Laravel — easier to contribute to and extend.
+- **Single-command install.** One `bash` command sets up the panel (Nginx, PostgreSQL, SSL) and another sets up Wings. Pterodactyl's install involves multiple manual steps across several guides.
+- **Unified codebase.** Panel and Wings daemon live in the same monorepo. One `git pull` updates everything; no version drift between components.
+- **Actively opinionated defaults.** Aikar's JVM flags pre-configured, sane resource limits out of the box, modern Docker images — sensible starting point without tuning everything manually.
+
+> **Honest note:** Pterodactyl has years of production hardening, a large plugin ecosystem, and broader egg support. If you need that maturity today, use Pterodactyl. If you want a modern stack you can hack on, this is for you.
 
 ---
 
@@ -54,7 +79,7 @@ The script will ask for:
 - **Backup System** — Create and restore server backups
 - **User Management** — Admin and user roles, create/edit/delete users
 - **Node Management** — Add Wings nodes, manage port allocations
-- **Egg System** — Server configuration templates (Minecraft Paper, etc.)
+- **Egg System** — Server configuration templates (Minecraft Paper, Bedrock, Vanilla, BungeeCord, Velocity, and more)
 - **Activity Log** — Full audit trail of panel actions
 - **JWT Authentication** — Access + refresh token pair, secure bcrypt hashing
 - **Dark UI** — Modern responsive dark-themed interface
@@ -208,6 +233,36 @@ GET    /api/v1/wings/node
 POST   /api/v1/wings/heartbeat
 GET    /api/v1/wings/servers
 ```
+
+---
+
+## Roadmap
+
+Planned features — contributions welcome:
+
+- [ ] **2FA / TOTP support** — Two-factor authentication for panel accounts
+- [ ] **Discord webhook notifications** — Server state changes, alerts, and activity events pushed to a Discord channel
+- [ ] **Scheduled tasks** — Cron-based power actions and commands (e.g. nightly restarts, scheduled backups)
+- [ ] **More egg presets** — Counter-Strike 2, ARK, Rust, Terraria, and community-contributed eggs via a marketplace
+
+---
+
+## Contributing
+
+Contributions are welcome. Here's the flow:
+
+1. **Open an issue first** for anything non-trivial — describe the problem or feature so we can align before you spend time coding.
+2. Fork the repo and create a branch: `git checkout -b feat/your-feature`
+3. Make your changes, keep commits focused and descriptive.
+4. Open a pull request against `main`. Link the related issue in the PR description.
+
+For bug reports, include your OS, Node version, and relevant logs. For feature requests, explain the use case.
+
+---
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=mwlih28/mc-manage-panel&type=Date)](https://star-history.com/#mwlih28/mc-manage-panel&Date)
 
 ---
 
