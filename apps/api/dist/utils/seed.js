@@ -312,7 +312,7 @@ echo "Velocity $VELOCITY_VERSION-$VELOCITY_BUILD installed."`;
         },
     });
     // Bedrock install script runs in ghcr.io/pterodactyl/installers:alpine
-    // which already has bash, curl, python3, unzip — no apt-get needed.
+    // which has bash, curl, unzip — no Python3 dependency.
     // Server runs in debian:bookworm-slim (has glibc required by BDS binary).
     const BEDROCK_INSTALL_SCRIPT = `#!/bin/bash
 set -e
@@ -322,31 +322,21 @@ BDS_VER="\${BDS_VERSION:-LATEST}"
 
 if [ "\$BDS_VER" = "LATEST" ]; then
   echo "Auto-detecting latest BDS version from Minecraft website..."
-  BDS_VER=$(python3 -c "
-import urllib.request, re, sys
-try:
-    req = urllib.request.Request(
-        'https://www.minecraft.net/en-us/download/server/bedrock',
-        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-    )
-    page = urllib.request.urlopen(req, timeout=20).read().decode('utf-8', errors='ignore')
-    m = re.search(r'bin-linux/bedrock-server-([\d.]+)\.zip', page)
-    if m:
-        print(m.group(1))
-    else:
-        print('')
-except Exception as e:
-    print('', file=sys.stderr)
-    sys.exit(0)
-" 2>/dev/null || echo "")
+  BDS_VER=\$(curl -fsSL \
+    -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
+    -H "Accept: text/html" \
+    --max-time 20 \
+    'https://www.minecraft.net/en-us/download/server/bedrock' 2>/dev/null | \
+    grep -oE 'bin-linux/bedrock-server-[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+\\.zip' | \
+    head -1 | grep -oE '[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+' || echo "")
 fi
 
 # If detection failed, try known recent stable versions in order
 if [ -z "\$BDS_VER" ]; then
   echo "Web detection failed. Probing known versions..."
-  for TRY_VER in 1.21.51.02 1.21.50.02 1.21.44.01 1.21.43.01 1.21.3.04 1.21.2.02 1.21.1.02; do
+  for TRY_VER in 1.21.62.01 1.21.61.01 1.21.60.01 1.21.51.02 1.21.50.07 1.21.50.02 1.21.44.01 1.21.43.01 1.21.41.01 1.21.30.03 1.21.2.02 1.21.1.02; do
     CHECK_URL="https://minecraft.azureedge.net/bin-linux/bedrock-server-\${TRY_VER}.zip"
-    if curl -fsSI "\$CHECK_URL" -A "Mozilla/5.0" --max-time 8 >/dev/null 2>&1; then
+    if curl -fsSL -r 0-1 -o /dev/null "\$CHECK_URL" -A "Mozilla/5.0" --max-time 10 2>/dev/null; then
       BDS_VER="\$TRY_VER"
       echo "Found working version: \$BDS_VER"
       break
@@ -354,7 +344,7 @@ if [ -z "\$BDS_VER" ]; then
   done
 fi
 
-[ -z "\$BDS_VER" ] && { echo "ERROR: Could not determine BDS version. Set BDS_VERSION variable manually."; exit 1; }
+[ -z "\$BDS_VER" ] && { echo "ERROR: Could not determine BDS version. Set BDS_VERSION variable manually (e.g. 1.21.51.02)."; exit 1; }
 
 echo "Downloading Bedrock Dedicated Server \${BDS_VER}..."
 PRIMARY="https://minecraft.azureedge.net/bin-linux/bedrock-server-\${BDS_VER}.zip"
