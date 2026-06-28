@@ -16,9 +16,14 @@ Manage Minecraft and other game servers from a web UI — with a Wings daemon on
 
 ## Screenshots
 
-![Dashboard](./docs/screenshots/dashboard.png)
-![Server Console](./docs/screenshots/console.png)
-![Admin Panel](./docs/screenshots/admin.png)
+![Dashboard](./docs/screenshots/dashboard.jpg)
+*User dashboard — server overview, resource stats*
+
+![Server Console](./docs/screenshots/console.jpg)
+*Real-time console with live output and command input*
+
+![Admin Panel](./docs/screenshots/admin.jpg)
+*Separate admin panel — user/node/egg management*
 
 ---
 
