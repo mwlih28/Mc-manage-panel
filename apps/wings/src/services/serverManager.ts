@@ -572,8 +572,7 @@ class ServerManager extends EventEmitter {
       AttachStderr: true,
       HostConfig: {
         Binds: [`${dataPath}:/mnt/server`],
-        NetworkMode: 'bridge',
-        Dns: ['8.8.8.8', '1.1.1.1'],
+        NetworkMode: 'host',
         AutoRemove: false,
       },
     });
