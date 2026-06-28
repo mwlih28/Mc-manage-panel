@@ -177,8 +177,8 @@ step "Fetching panel source"
 git config --global --add safe.directory "$PANEL_DIR" 2>/dev/null || true
 if [[ -d "${PANEL_DIR}/.git" ]]; then
   info "Updating existing installation..."
-  git -C "$PANEL_DIR" fetch origin --quiet
-  git -C "$PANEL_DIR" reset --hard "origin/${BRANCH}" --quiet
+  git -C "$PANEL_DIR" fetch origin "${BRANCH}" --quiet
+  git -C "$PANEL_DIR" reset --hard FETCH_HEAD --quiet
 elif [[ -d "${PANEL_DIR}" ]]; then
   # Directory exists but is not a git repo (e.g. partial previous install)
   info "Removing incomplete directory and re-cloning..."

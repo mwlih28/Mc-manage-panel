@@ -189,8 +189,8 @@ step "Fetching Wings source"
 git config --global --add safe.directory "$WINGS_DIR" 2>/dev/null || true
 if [[ -d "${WINGS_DIR}/.git" ]]; then
   info "Updating existing installation..."
-  git -C "$WINGS_DIR" fetch origin --quiet
-  git -C "$WINGS_DIR" reset --hard "origin/${BRANCH}" --quiet
+  git -C "$WINGS_DIR" fetch origin "${BRANCH}" --quiet
+  git -C "$WINGS_DIR" reset --hard FETCH_HEAD --quiet
 elif [[ -d "${WINGS_DIR}" ]]; then
   info "Removing incomplete directory and re-cloning..."
   rm -rf "$WINGS_DIR"
