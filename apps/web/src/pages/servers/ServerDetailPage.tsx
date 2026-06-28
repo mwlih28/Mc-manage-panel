@@ -539,6 +539,16 @@ export function ServerDetailPage() {
   const isRunning = currentStatus === 'RUNNING';
   const isOffline = currentStatus === 'OFFLINE' || currentStatus === 'INSTALL_FAILED';
 
+  const isBedrock = (() => {
+    try {
+      const env = typeof (data as unknown as { env?: string })?.env === 'string'
+        ? JSON.parse((data as unknown as { env?: string }).env!)
+        : {};
+      if (env.SERVER_TYPE === 'BEDROCK') return true;
+    } catch { /* ignore */ }
+    return data?.egg?.name?.toLowerCase().includes('bedrock') ?? false;
+  })();
+
   const cpuUsage = stats && !isNaN(stats.cpuAbsolute) ? Math.min(stats.cpuAbsolute, 100) : 0;
   const memUsage = stats && stats.memoryLimitBytes > 0
     ? Math.min((stats.memoryBytes / stats.memoryLimitBytes) * 100, 100)
@@ -569,6 +579,9 @@ export function ServerDetailPage() {
               <span className={`text-xs ${getServerStatusBadge(currentStatus)}`}>
                 {currentStatus}
               </span>
+              {isBedrock && (
+                <span className="badge badge-blue text-[10px] uppercase tracking-wide">Bedrock</span>
+              )}
               {data.allocation && (
                 <span className="text-xs font-mono text-slate-400 bg-dark-800/60 px-1.5 py-0.5 rounded">
                   {(data.node as typeof data.node & { gameSubdomain?: string })?.gameSubdomain
@@ -748,9 +761,12 @@ export function ServerDetailPage() {
                 onlinePlayers.map((p) => (
                   <button
                     key={p.name}
-                    onClick={() => openInventory(p)}
-                    className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg bg-dark-700 hover:bg-dark-600 border border-dark-600 hover:border-panel-500/40 transition-all group"
-                    title="Click to view inventory"
+                    onClick={() => !isBedrock && openInventory(p)}
+                    className={cn(
+                      'flex items-center gap-2 w-full px-2 py-1.5 rounded-lg bg-dark-700 border border-dark-600 transition-all group',
+                      isBedrock ? 'cursor-default' : 'hover:bg-dark-600 hover:border-panel-500/40'
+                    )}
+                    title={isBedrock ? p.name : 'Click to view inventory'}
                   >
                     <img
                       src={`https://mc-heads.net/avatar/${p.name}/24`}
@@ -759,7 +775,7 @@ export function ServerDetailPage() {
                       onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                     />
                     <span className="text-xs font-medium text-slate-300 group-hover:text-slate-100 flex-1 text-left truncate">{p.name}</span>
-                    <Package size={10} className="text-slate-600 group-hover:text-panel-400 shrink-0" />
+                    {!isBedrock && <Package size={10} className="text-slate-600 group-hover:text-panel-400 shrink-0" />}
                   </button>
                 ))
               )}
@@ -1219,8 +1235,8 @@ export function ServerDetailPage() {
         );
       })()}
 
-      {/* Inventory Modal (console tab quick view) */}
-      {inventoryPlayer && !selectedPlayer && (
+      {/* Inventory Modal (console tab quick view — Java only) */}
+      {!isBedrock && inventoryPlayer && !selectedPlayer && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => { setInventoryPlayer(null); setPlayerInventory(null); }}>
           <div className="bg-dark-800 border border-dark-600 rounded-xl w-full max-w-2xl mx-4 p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-3 mb-5">
@@ -1338,8 +1354,8 @@ export function ServerDetailPage() {
                     )}
                   </section>
 
-                  {/* Inventory */}
-                  {playerDetails && (
+                  {/* Inventory — Java Edition only (Bedrock uses different data formats) */}
+                  {!isBedrock && playerDetails && (
                     <section>
                       <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Inventory</h3>
                       <MCInventoryGrid items={playerDetails.inventory} onDelete={slot => deleteInventoryItem(selectedPlayer, slot, false)} />
