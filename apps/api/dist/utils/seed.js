@@ -312,27 +312,64 @@ echo "Velocity $VELOCITY_VERSION-$VELOCITY_BUILD installed."`;
         },
     });
     // Bedrock install script runs in ghcr.io/pterodactyl/installers:alpine
-    // which already has bash, curl, unzip — no apt-get needed.
+    // which already has bash, curl, python3, unzip — no apt-get needed.
     // Server runs in debian:bookworm-slim (has glibc required by BDS binary).
     const BEDROCK_INSTALL_SCRIPT = `#!/bin/bash
 set -e
 cd /mnt/server
-VERSION="\${BDS_VERSION:-1.21.60.04}"
-echo "Downloading Bedrock Dedicated Server \${VERSION}..."
-DOWNLOAD_URL="https://minecraft.azureedge.net/bin-linux/bedrock-server-\${VERSION}.zip"
-if curl -fsSL -o bedrock-server.zip "\$DOWNLOAD_URL" -A "Mozilla/5.0" 2>/dev/null; then
-  echo "Downloaded from primary CDN."
-else
-  echo "Primary CDN failed, trying preview CDN..."
-  curl -fsSL -o bedrock-server.zip "https://minecraft.azureedge.net/bin-linux-preview/bedrock-server-\${VERSION}.zip" -A "Mozilla/5.0" || {
-    echo "ERROR: Could not download BDS \${VERSION}. Check BDS_VERSION variable."
-    exit 1
-  }
+
+BDS_VER="\${BDS_VERSION:-LATEST}"
+
+if [ "\$BDS_VER" = "LATEST" ]; then
+  echo "Auto-detecting latest BDS version from Minecraft website..."
+  BDS_VER=$(python3 -c "
+import urllib.request, re, sys
+try:
+    req = urllib.request.Request(
+        'https://www.minecraft.net/en-us/download/server/bedrock',
+        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+    )
+    page = urllib.request.urlopen(req, timeout=20).read().decode('utf-8', errors='ignore')
+    m = re.search(r'bin-linux/bedrock-server-([\d.]+)\.zip', page)
+    if m:
+        print(m.group(1))
+    else:
+        print('')
+except Exception as e:
+    print('', file=sys.stderr)
+    sys.exit(0)
+" 2>/dev/null || echo "")
 fi
+
+# If detection failed, try known recent stable versions in order
+if [ -z "\$BDS_VER" ]; then
+  echo "Web detection failed. Probing known versions..."
+  for TRY_VER in 1.21.51.02 1.21.50.02 1.21.44.01 1.21.43.01 1.21.3.04 1.21.2.02 1.21.1.02; do
+    CHECK_URL="https://minecraft.azureedge.net/bin-linux/bedrock-server-\${TRY_VER}.zip"
+    if curl -fsSI "\$CHECK_URL" -A "Mozilla/5.0" --max-time 8 >/dev/null 2>&1; then
+      BDS_VER="\$TRY_VER"
+      echo "Found working version: \$BDS_VER"
+      break
+    fi
+  done
+fi
+
+[ -z "\$BDS_VER" ] && { echo "ERROR: Could not determine BDS version. Set BDS_VERSION variable manually."; exit 1; }
+
+echo "Downloading Bedrock Dedicated Server \${BDS_VER}..."
+PRIMARY="https://minecraft.azureedge.net/bin-linux/bedrock-server-\${BDS_VER}.zip"
+PREVIEW="https://minecraft.azureedge.net/bin-linux-preview/bedrock-server-\${BDS_VER}.zip"
+
+curl -fsSL -o bedrock-server.zip "\$PRIMARY" -A "Mozilla/5.0" 2>/dev/null || \
+curl -fsSL -o bedrock-server.zip "\$PREVIEW"  -A "Mozilla/5.0" 2>/dev/null || {
+  echo "ERROR: Download failed for BDS \${BDS_VER}. Check BDS_VERSION variable."
+  exit 1
+}
+
 unzip -o bedrock-server.zip
 rm -f bedrock-server.zip
 chmod +x bedrock_server
-echo "Bedrock Server \${VERSION} installed successfully."`;
+echo "Bedrock Server \${BDS_VER} installed successfully."`;
     // Minecraft Bedrock
     const bedrockEgg = await prisma.egg.upsert({
         where: { uuid: '00000000-0000-0000-0000-000000000008' },
@@ -371,14 +408,14 @@ echo "Bedrock Server \${VERSION} installed successfully."`;
     // BDS_VERSION variable — lets users pin a specific Bedrock version
     await prisma.eggVariable.upsert({
         where: { id: 'bedrock-bds-version-var' },
-        update: { defaultValue: '1.21.60.04' },
+        update: { defaultValue: 'LATEST' },
         create: {
             id: 'bedrock-bds-version-var',
             eggId: bedrockEgg.id,
             name: 'BDS Version',
-            description: 'Bedrock Dedicated Server version to install (e.g. 1.21.60.04)',
+            description: 'Bedrock Dedicated Server version to install (e.g. 1.21.51.02), or LATEST to auto-detect',
             envVariable: 'BDS_VERSION',
-            defaultValue: '1.21.60.04',
+            defaultValue: 'LATEST',
             userViewable: true,
             userEditable: true,
         },
