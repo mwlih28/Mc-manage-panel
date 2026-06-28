@@ -121,7 +121,12 @@ router.post('/', auth_1.authenticate, auth_1.requireAdmin, [
                 where: { nodeId },
                 orderBy: { port: 'desc' },
             });
-            const nextPort = highest ? highest.port + 1 : 25565;
+            // Check if the egg is Bedrock to choose the right default port
+            const eggForPort = egg; // Already fetched above
+            const isBedrockEgg = eggForPort.name.toLowerCase().includes('bedrock') ||
+                eggForPort.startup.includes('bedrock_server');
+            const basePort = isBedrockEgg ? 19132 : 25565;
+            const nextPort = highest ? highest.port + 1 : basePort;
             const nodeRecord = await prisma_1.prisma.node.findUnique({ where: { id: nodeId } });
             freeAlloc = await prisma_1.prisma.allocation.create({
                 data: { nodeId, ip: nodeRecord?.fqdn || '0.0.0.0', port: nextPort },

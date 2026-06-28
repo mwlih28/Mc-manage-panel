@@ -45,6 +45,11 @@ class ServerManager extends EventEmitter {
     this.io = io;
   }
 
+  private isBedrockServer(uuid: string): boolean {
+    const env = this.servers.get(uuid)?.config.environment ?? {};
+    return env['SERVER_TYPE'] === 'BEDROCK';
+  }
+
   async loadServer(config: ServerConfig): Promise<void> {
     const existing = this.servers.get(config.uuid);
     const cfg = getConfig();
@@ -96,19 +101,22 @@ class ServerManager extends EventEmitter {
     const dataPath = path.join(cfg.system.data, uuid);
     fs.mkdirSync(dataPath, { recursive: true });
 
-    // Auto-accept Minecraft EULA
-    const eulaPath = path.join(dataPath, 'eula.txt');
-    if (!fs.existsSync(eulaPath)) {
-      fs.writeFileSync(eulaPath, 'eula=true\n', 'utf8');
-    } else {
-      const eulaContent = fs.readFileSync(eulaPath, 'utf8');
-      if (eulaContent.includes('eula=false')) {
-        fs.writeFileSync(eulaPath, eulaContent.replace('eula=false', 'eula=true'), 'utf8');
-      }
-    }
-
     try {
       const { config } = server;
+      const isBedrock = this.isBedrockServer(uuid);
+
+      if (!isBedrock) {
+        // Auto-accept Minecraft Java EULA
+        const eulaPath = path.join(dataPath, 'eula.txt');
+        if (!fs.existsSync(eulaPath)) {
+          fs.writeFileSync(eulaPath, 'eula=true\n', 'utf8');
+        } else {
+          const eulaContent = fs.readFileSync(eulaPath, 'utf8');
+          if (eulaContent.includes('eula=false')) {
+            fs.writeFileSync(eulaPath, eulaContent.replace('eula=false', 'eula=true'), 'utf8');
+          }
+        }
+      }
 
       // Substitute {{VAR}} placeholders in invocation with environment values.
       // Fall back to sensible defaults for critical JVM variables so a missing
@@ -130,9 +138,11 @@ class ServerManager extends EventEmitter {
         await pullImage(config.image);
       }
 
-      // Run install script on first start (when server jar doesn't exist)
+      // Run install script on first start (when server binary/jar doesn't exist)
+      const isBedrockBinary = isBedrock;
       const jarFile = config.environment['SERVER_JARFILE'] || 'server.jar';
-      const isFirstStart = !fs.existsSync(path.join(dataPath, jarFile));
+      const firstStartFile = isBedrockBinary ? 'bedrock_server' : jarFile;
+      const isFirstStart = !fs.existsSync(path.join(dataPath, firstStartFile));
       if (isFirstStart && config.installScript) {
         this.sendConsole(uuid, '[Wings] Running install script...');
         try {
@@ -145,72 +155,122 @@ class ServerManager extends EventEmitter {
         }
       }
 
-      // Pre-create subdirectories that server software needs (e.g. Paper's cache/).
-      // chmod 777 so any container uid can write without requiring a root chown.
-      for (const dir of ['cache', 'logs', 'config']) {
-        const dirPath = path.join(dataPath, dir);
-        fs.mkdirSync(dirPath, { recursive: true });
-        try { fs.chmodSync(dirPath, 0o777); } catch { /* non-fatal */ }
+      if (!isBedrock) {
+        // Pre-create subdirectories that server software needs (e.g. Paper's cache/).
+        // chmod 777 so any container uid can write without requiring a root chown.
+        for (const dir of ['cache', 'logs', 'config']) {
+          const dirPath = path.join(dataPath, dir);
+          fs.mkdirSync(dirPath, { recursive: true });
+          try { fs.chmodSync(dirPath, 0o777); } catch { /* non-fatal */ }
+        }
+        this.sendConsole(uuid, '[Wings] Prepared server directories.');
       }
-      this.sendConsole(uuid, '[Wings] Prepared server directories.');
 
-      // Write optimized server.properties on first start (before Paper generates defaults).
-      // view-distance=7 and simulation-distance=4 reduce chunk loading pressure by ~50%
-      // vs the Paper default of 10, eliminating the main source of TPS lag.
-      const propsFile = path.join(dataPath, 'server.properties');
-      if (!fs.existsSync(propsFile)) {
-        const serverPort = parseInt(
-          config.environment['SERVER_PORT'] || config.environment['PORT'] || '25565', 10
-        );
-        const props = [
-          '#Minecraft server properties — optimized defaults by MC Manage Panel',
-          `server-port=${serverPort}`,
-          'online-mode=false',
-          'view-distance=7',
-          'simulation-distance=4',
-          'max-tick-time=60000',
-          'max-players=20',
-          'motd=A Minecraft Server',
-          'spawn-protection=16',
-          'allow-flight=false',
-          'enable-rcon=false',
-          'level-name=world',
-          'gamemode=survival',
-          'difficulty=normal',
-        ].join('\n') + '\n';
-        try {
-          fs.writeFileSync(propsFile, props, 'utf8');
-          this.sendConsole(uuid, '[Wings] Wrote optimized server.properties (view-distance=7, simulation-distance=4)');
-        } catch { /* non-fatal — Paper will create its own */ }
-      } else {
-        // Patch view-distance and simulation-distance in existing server.properties
-        // if they are still at the heavy Paper default of 10.
-        try {
-          let props = fs.readFileSync(propsFile, 'utf8');
-          let changed = false;
-          if (/^view-distance=10$/m.test(props)) {
-            props = props.replace(/^view-distance=10$/m, 'view-distance=7');
-            changed = true;
-          }
-          if (/^simulation-distance=10$/m.test(props)) {
-            props = props.replace(/^simulation-distance=10$/m, 'simulation-distance=4');
-            changed = true;
-          }
-          if (changed) {
+      if (!isBedrock) {
+        // Write optimized Java server.properties on first start (before Paper generates defaults).
+        // view-distance=7 and simulation-distance=4 reduce chunk loading pressure by ~50%
+        // vs the Paper default of 10, eliminating the main source of TPS lag.
+        const propsFile = path.join(dataPath, 'server.properties');
+        if (!fs.existsSync(propsFile)) {
+          const serverPort = parseInt(
+            config.environment['SERVER_PORT'] || config.environment['PORT'] || '25565', 10
+          );
+          const props = [
+            '#Minecraft server properties — optimized defaults by MC Manage Panel',
+            `server-port=${serverPort}`,
+            'online-mode=false',
+            'view-distance=7',
+            'simulation-distance=4',
+            'max-tick-time=60000',
+            'max-players=20',
+            'motd=A Minecraft Server',
+            'spawn-protection=16',
+            'allow-flight=false',
+            'enable-rcon=false',
+            'level-name=world',
+            'gamemode=survival',
+            'difficulty=normal',
+          ].join('\n') + '\n';
+          try {
             fs.writeFileSync(propsFile, props, 'utf8');
-            this.sendConsole(uuid, '[Wings] Patched server.properties: view-distance=7, simulation-distance=4');
-          }
-        } catch { /* non-fatal */ }
+            this.sendConsole(uuid, '[Wings] Wrote optimized server.properties (view-distance=7, simulation-distance=4)');
+          } catch { /* non-fatal — Paper will create its own */ }
+        } else {
+          // Patch view-distance and simulation-distance in existing server.properties
+          // if they are still at the heavy Paper default of 10.
+          try {
+            let props = fs.readFileSync(propsFile, 'utf8');
+            let changed = false;
+            if (/^view-distance=10$/m.test(props)) {
+              props = props.replace(/^view-distance=10$/m, 'view-distance=7');
+              changed = true;
+            }
+            if (/^simulation-distance=10$/m.test(props)) {
+              props = props.replace(/^simulation-distance=10$/m, 'simulation-distance=4');
+              changed = true;
+            }
+            if (changed) {
+              fs.writeFileSync(propsFile, props, 'utf8');
+              this.sendConsole(uuid, '[Wings] Patched server.properties: view-distance=7, simulation-distance=4');
+            }
+          } catch { /* non-fatal */ }
+        }
+      } else {
+        // Write Bedrock server.properties on first start
+        const bedrockPropsFile = path.join(dataPath, 'server.properties');
+        if (!fs.existsSync(bedrockPropsFile)) {
+          const serverPort = parseInt(
+            config.environment['SERVER_PORT'] || config.environment['PORT'] || '19132', 10
+          );
+          const bedrockProps = [
+            'server-name=Dedicated Server',
+            'gamemode=survival',
+            'difficulty=easy',
+            'allow-cheats=false',
+            'max-players=20',
+            'online-mode=false',
+            'white-list=false',
+            `server-port=${serverPort}`,
+            `server-portv6=${serverPort + 1}`,
+            'view-distance=32',
+            'tick-distance=4',
+            'player-idle-timeout=30',
+            'max-threads=8',
+            'level-name=Bedrock level',
+            'level-seed=',
+            'default-player-permission-level=member',
+            'texturepack-required=false',
+            'content-log-file-enabled=false',
+            'compression-threshold=1',
+            'server-authoritative-movement=server-auth',
+            'network-compression-threshold=600',
+            'correct-player-movement=false',
+            'server-authoritative-block-breaking=false',
+            'chat-restriction=None',
+            'disable-player-interaction=false',
+            'client-side-chunk-generation-enabled=true',
+            'block-network-ids-are-hashes=true',
+            'disable-persona=false',
+            'disable-custom-skins=false',
+          ].join('\n') + '\n';
+          try {
+            fs.writeFileSync(bedrockPropsFile, bedrockProps, 'utf8');
+            this.sendConsole(uuid, '[Wings] Wrote Bedrock server.properties');
+          } catch { /* non-fatal */ }
+        }
       }
 
       // Ensure all files in the volume are owned by UID 1000 so the container
       // user can write them (Wings writes eula.txt etc. as the mcwings OS user,
       // which has a different UID). This also fixes server.properties being
       // unwritable on subsequent starts.
-      try {
-        await ensureVolumePermissions(config.image, dataPath);
-      } catch (err) {
-        logger.warn(`ensureVolumePermissions failed (non-fatal): ${(err as Error).message}`);
+      // BDS runs as root (uid 0) so we can skip volume permissions for Bedrock.
+      if (!isBedrock) {
+        try {
+          await ensureVolumePermissions(config.image, dataPath);
+        } catch (err) {
+          logger.warn(`ensureVolumePermissions failed (non-fatal): ${(err as Error).message}`);
+        }
       }
 
       // Remove old container if exists
@@ -583,6 +643,33 @@ class ServerManager extends EventEmitter {
     const leaveMatch = line.match(/\]: (\w[\w ]*?) left the game\s*$/);
     if (leaveMatch) {
       const name = leaveMatch[1];
+      this.playerSessions.get(uuid)?.delete(name);
+      const e = hist.get(name);
+      if (e) { e.online = false; e.lastSeen = new Date(); }
+      const players = this.getOnlinePlayers(uuid);
+      this.io?.to(`server:${uuid}`).emit('server:players', { uuid, players });
+    }
+
+    // Bedrock player connect/disconnect
+    const bedrockConnectMatch = line.match(/Player connected: (\S+),/);
+    if (bedrockConnectMatch) {
+      const name = bedrockConnectMatch[1];
+      if (!this.playerSessions.has(uuid)) this.playerSessions.set(uuid, new Map());
+      const map = this.playerSessions.get(uuid)!;
+      if (!map.has(name)) map.set(name, '');
+      const existing = hist.get(name);
+      if (existing) {
+        existing.lastSeen = new Date(); existing.joinCount++; existing.online = true;
+      } else {
+        hist.set(name, { name, uuid: '', firstSeen: new Date(), lastSeen: new Date(), joinCount: 1, online: true });
+      }
+      const players = this.getOnlinePlayers(uuid);
+      this.io?.to(`server:${uuid}`).emit('server:players', { uuid, players });
+    }
+
+    const bedrockDisconnectMatch = line.match(/Player disconnected: (\S+),/);
+    if (bedrockDisconnectMatch) {
+      const name = bedrockDisconnectMatch[1];
       this.playerSessions.get(uuid)?.delete(name);
       const e = hist.get(name);
       if (e) { e.online = false; e.lastSeen = new Date(); }

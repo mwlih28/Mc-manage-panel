@@ -269,6 +269,53 @@ echo "Velocity $VELOCITY_VERSION-$VELOCITY_BUILD installed."`,
             scriptContainer: 'ghcr.io/pterodactyl/installers:alpine',
         },
     });
+    // Minecraft Bedrock
+    await prisma.egg.upsert({
+        where: { uuid: '00000000-0000-0000-0000-000000000008' },
+        update: {},
+        create: {
+            uuid: '00000000-0000-0000-0000-000000000008',
+            nestId: minecraftNest.id,
+            author: 'support@pterodactyl.io',
+            name: 'Minecraft Bedrock',
+            description: 'Minecraft Bedrock Edition Dedicated Server (BDS)',
+            dockerImage: 'debian:bookworm-slim',
+            startup: 'LD_LIBRARY_PATH=. ./bedrock_server',
+            configStop: 'stop',
+            scriptInstall: `#!/bin/bash
+set -e
+cd /mnt/server
+VERSION="\${BDS_VERSION:-LATEST}"
+echo "Fetching Bedrock Dedicated Server version info..."
+if [ "$VERSION" = "LATEST" ]; then
+  VERSION=$(curl -sSL -A "Mozilla/5.0" "https://raw.githubusercontent.com/nicklvsa/mcbe-releases/main/releases.json" 2>/dev/null | python3 -c "import sys,json;d=json.load(sys.stdin);print(sorted(d.keys())[-1])" 2>/dev/null || echo "1.21.0.03")
+fi
+DOWNLOAD_URL="https://minecraft.azureedge.net/bin-linux/bedrock-server-\${VERSION}.zip"
+echo "Downloading Bedrock Server \${VERSION} from Mojang..."
+curl -sSL -o bedrock-server.zip "\$DOWNLOAD_URL" -A "Mozilla/5.0" || { echo "Download failed, trying backup URL..."; curl -sSL -o bedrock-server.zip "https://minecraft.azureedge.net/bin-linux-preview/bedrock-server-\${VERSION}.zip" -A "Mozilla/5.0"; }
+unzip -o bedrock-server.zip
+rm -f bedrock-server.zip
+chmod +x bedrock_server
+echo "Bedrock Server \${VERSION} installed."`,
+            scriptContainer: 'ghcr.io/pterodactyl/installers:alpine',
+        },
+    });
+    // Bedrock allocations
+    for (let port = 19132; port <= 19135; port++) {
+        await prisma.allocation.upsert({
+            where: { id: `alloc-bedrock-${port}` },
+            update: {},
+            create: {
+                id: `alloc-bedrock-${port}`,
+                nodeId: node.id,
+                ip: '0.0.0.0',
+                port,
+                notes: `Bedrock UDP Port ${port}`,
+                assigned: false,
+            },
+        });
+    }
+    console.log('Bedrock allocations created');
     // Create Games nest
     const gamesNest = await prisma.nest.upsert({
         where: { uuid: '00000000-0000-0000-0001-000000000001' },
