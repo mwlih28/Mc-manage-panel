@@ -1,8 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import {
-  LayoutDashboard, Server, Users, Cpu, Settings,
-  LogOut, Shield, Activity, Package, Wrench, ExternalLink
-} from 'lucide-react';
+import { LayoutDashboard, Server, Settings, LogOut, Shield } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { cn } from '@/lib/utils';
 import api from '@/lib/axios';
@@ -15,28 +12,18 @@ const userNavItems = [
   { to: '/account',  icon: Settings,         label: 'Account' },
 ];
 
-const adminNavItems = [
-  { to: '/admin',          icon: Shield,          label: 'Overview',  exact: true },
-  { to: '/admin/servers',  icon: Server,          label: 'Servers' },
-  { to: '/admin/users',    icon: Users,           label: 'Users' },
-  { to: '/admin/nodes',    icon: Cpu,             label: 'Nodes' },
-  { to: '/admin/eggs',     icon: Package,         label: 'Eggs' },
-  { to: '/admin/activity', icon: Activity,        label: 'Activity' },
-  { to: '/admin/settings', icon: Wrench,          label: 'Settings' },
-];
-
 export function Sidebar() {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
   const isAdmin = user?.role === 'ADMIN';
 
-  // Load site name from settings
   const { data: settings } = useQuery({
     queryKey: ['site-settings'],
     queryFn: () => api.get('/settings').then(r => r.data as Record<string, string>),
     staleTime: 60000,
   });
   const siteName = settings?.['app.name'] || 'MC Panel';
+  const logoUrl = settings?.['app.logo'];
 
   const handleLogout = async () => {
     try { await api.post('/auth/logout'); } catch { /* ignore */ }
@@ -44,8 +31,6 @@ export function Sidebar() {
     navigate('/login');
     toast.success('Logged out successfully');
   };
-
-  const logoUrl = settings?.['app.logo'];
 
   return (
     <aside
@@ -92,37 +77,23 @@ export function Sidebar() {
           </ul>
         </div>
 
+        {/* Admin panel shortcut — opens in a new tab */}
         {isAdmin && (
           <div>
-            <div className="px-3 mb-1.5 flex items-center justify-between">
-              <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-700">Admin</p>
-              <a
-                href="/admin"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-zinc-700 hover:text-zinc-400 transition-colors"
-                title="Open admin panel in new tab"
-              >
-                <ExternalLink size={10} />
-              </a>
-            </div>
+            <p className="px-3 mb-1.5 text-[9px] font-bold uppercase tracking-widest text-zinc-700">Admin</p>
             <ul className="space-y-0.5">
-              {adminNavItems.map(({ to, icon: Icon, label }) => (
-                <li key={to}>
-                  <a
-                    href={to}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={cn(
-                      'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-100',
-                      'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.03] border-l-2 border-transparent'
-                    )}
-                  >
-                    <Icon size={14} />
-                    <span>{label}</span>
-                  </a>
-                </li>
-              ))}
+              <li>
+                <a
+                  href="/admin"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-100 text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.03] border-l-2 border-transparent"
+                >
+                  <Shield size={14} />
+                  <span>Admin Panel</span>
+                  <span className="ml-auto text-[9px] text-zinc-700">↗</span>
+                </a>
+              </li>
             </ul>
           </div>
         )}
