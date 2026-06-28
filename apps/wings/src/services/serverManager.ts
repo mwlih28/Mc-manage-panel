@@ -500,14 +500,47 @@ class ServerManager extends EventEmitter {
     };
   }
 
+  async reinstallServer(uuid: string): Promise<void> {
+    const server = this.servers.get(uuid);
+    if (!server) throw new Error('Server not found');
+
+    if (server.status !== 'offline') {
+      await this.stopServer(uuid).catch(() => {});
+      await new Promise(r => setTimeout(r, 4000));
+    }
+
+    const { config } = server;
+    const cfg = getConfig();
+    const dataPath = path.join(cfg.system.data, uuid);
+
+    if (fs.existsSync(dataPath)) {
+      for (const f of fs.readdirSync(dataPath)) {
+        fs.rmSync(path.join(dataPath, f), { recursive: true, force: true });
+      }
+    } else {
+      fs.mkdirSync(dataPath, { recursive: true });
+    }
+
+    this.setStatus(uuid, 'installing');
+    this.sendConsole(uuid, '[Wings] Reinstalling server...');
+
+    if (config.installScript) {
+      await this.runInstallScript(uuid, config, dataPath);
+    }
+
+    this.setStatus(uuid, 'offline');
+    this.sendConsole(uuid, '[Wings] Reinstall complete. Start the server to launch.');
+  }
+
   private async runInstallScript(uuid: string, config: ServerConfig, dataPath: string): Promise<void> {
     const d = getDocker();
     const installName = `mc_install_${uuid}`;
 
-    // Use server image (has curl/python3); pull if needed
-    if (!await imageExists(config.image)) {
-      this.sendConsole(uuid, `[Wings] Pulling image ${config.image}...`);
-      await pullImage(config.image);
+    // Use scriptContainer if provided, otherwise fall back to server image
+    const installImage = config.scriptContainer || config.image;
+    if (!await imageExists(installImage)) {
+      this.sendConsole(uuid, `[Wings] Pulling image ${installImage}...`);
+      await pullImage(installImage);
     }
 
     // Remove stale install container
@@ -525,10 +558,10 @@ class ServerManager extends EventEmitter {
 
     const container = await d.createContainer({
       name: installName,
-      Image: config.image,
+      Image: installImage,
       Cmd: ['/bin/bash', '/mnt/server/.wings_install.sh'],
       Env: envArray,
-      User: '1000',
+      User: '0',
       WorkingDir: '/mnt/server',
       AttachStdout: true,
       AttachStderr: true,

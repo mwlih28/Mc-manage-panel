@@ -353,46 +353,213 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
 }
 
 function EditServerModal({ server, onClose, onSuccess }: { server: Server; onClose: () => void; onSuccess: () => void }) {
-  const [image, setImage] = useState((server as Server & { image?: string }).image || 'ghcr.io/pterodactyl/yolks:java_21');
-  const [isLoading, setIsLoading] = useState(false);
+  const queryClient = useQueryClient();
+  const [tab, setTab] = useState<'general' | 'resources' | 'startup' | 'danger'>('general');
+  const [isSaving, setIsSaving] = useState(false);
+  const [isReinstalling, setIsReinstalling] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
+  const srv = server as Server & { image?: string; startup?: string; cpu?: number; swap?: number; backupLimit?: number; allocationId?: string; allocation?: { id: string; ip: string; port: number } };
+
+  const [general, setGeneral] = useState({
+    name: server.name,
+    description: (server as Server & { description?: string }).description || '',
+    userId: server.user?.id || '',
+    allocationId: srv.allocationId || '',
+  });
+  const [resources, setResources] = useState({
+    memory: String(server.memory),
+    disk: String(server.disk),
+    cpu: String(srv.cpu ?? 0),
+    backupLimit: String(srv.backupLimit ?? 0),
+  });
+  const [startup, setStartup] = useState({
+    image: srv.image || 'ghcr.io/pterodactyl/yolks:java_21',
+    startupCmd: srv.startup || '',
+  });
+
+  const { data: usersData } = useQuery({
+    queryKey: ['users-list'],
+    queryFn: () => api.get('/users', { params: { perPage: 100 } }).then((r) => r.data.data),
+  });
+  const { data: allocationsData } = useQuery({
+    queryKey: ['allocations-list', server.node?.id],
+    queryFn: () => api.get(`/nodes/${server.node?.id}/allocations`, { params: { perPage: 100 } }).then((r) => r.data.data).catch(() => []),
+    enabled: !!server.node?.id,
+  });
+
+  const save = async (payload: Record<string, unknown>) => {
+    setIsSaving(true);
     try {
-      await api.patch(`/servers/${server.id}`, { image });
-      toast.success('Server image updated. Restart the server to apply.');
+      await api.patch(`/servers/${server.id}`, payload);
+      toast.success('Server updated');
+      queryClient.invalidateQueries({ queryKey: ['admin-servers'] });
       onSuccess();
-    } catch {
-      toast.error('Failed to update server');
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      toast.error(e.response?.data?.message || 'Failed to update server');
     } finally {
-      setIsLoading(false);
+      setIsSaving(false);
     }
   };
 
+  const handleReinstall = async () => {
+    if (!confirm(`Reinstall "${server.name}"? All server files will be deleted and the install script will run again.`)) return;
+    setIsReinstalling(true);
+    try {
+      await api.post(`/servers/${server.id}/reinstall`, {});
+      toast.success('Reinstall initiated — check the console for progress');
+      queryClient.invalidateQueries({ queryKey: ['admin-servers'] });
+      onClose();
+    } catch {
+      toast.error('Failed to initiate reinstall');
+    } finally {
+      setIsReinstalling(false);
+    }
+  };
+
+  const tabs = [
+    { id: 'general', label: 'General' },
+    { id: 'resources', label: 'Resources' },
+    { id: 'startup', label: 'Startup' },
+    { id: 'danger', label: 'Danger Zone' },
+  ] as const;
+
   return (
-    <Modal isOpen onClose={onClose} title={`Edit: ${server.name}`} size="md">
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="label">Docker Image</label>
-          <input
-            className="input font-mono"
-            value={image}
-            onChange={(e) => setImage(e.target.value)}
-            placeholder="ghcr.io/pterodactyl/yolks:java_21"
-            required
-          />
-          <p className="text-xs text-slate-500 mt-1">
-            Use <code className="text-panel-400">ghcr.io/pterodactyl/yolks:java_21</code> for Paper 1.21+
-          </p>
-        </div>
-        <div className="flex gap-3 pt-2">
-          <button type="button" className="btn-secondary flex-1" onClick={onClose}>Cancel</button>
-          <button type="submit" className="btn-primary flex-1" disabled={isLoading}>
-            {isLoading ? <Spinner size="sm" /> : 'Save'}
+    <Modal isOpen onClose={onClose} title={`Manage: ${server.name}`} size="xl">
+      <div className="flex gap-1 mb-5 border-b border-slate-700/50 -mx-1 px-1">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`px-3 py-2 text-sm font-medium rounded-t transition-colors ${
+              tab === t.id
+                ? 'text-panel-400 border-b-2 border-panel-400 -mb-px'
+                : 'text-slate-500 hover:text-slate-300'
+            }`}
+          >
+            {t.label}
           </button>
+        ))}
+      </div>
+
+      {tab === 'general' && (
+        <div className="space-y-4">
+          <div>
+            <label className="label">Server Name</label>
+            <input className="input" value={general.name} onChange={(e) => setGeneral({ ...general, name: e.target.value })} />
+          </div>
+          <div>
+            <label className="label">Description</label>
+            <input className="input" value={general.description} onChange={(e) => setGeneral({ ...general, description: e.target.value })} placeholder="Optional description" />
+          </div>
+          <div>
+            <label className="label">Owner</label>
+            <select className="input" value={general.userId} onChange={(e) => setGeneral({ ...general, userId: e.target.value })}>
+              <option value="">Select user...</option>
+              {(usersData || []).map((u: { id: string; username: string; email: string }) => (
+                <option key={u.id} value={u.id}>{u.username} ({u.email})</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="label">Allocation (IP:Port)</label>
+            <select className="input" value={general.allocationId} onChange={(e) => setGeneral({ ...general, allocationId: e.target.value })}>
+              <option value="">Keep current ({srv.allocation ? `${srv.allocation.ip}:${srv.allocation.port}` : 'none'})</option>
+              {(allocationsData || []).map((a: { id: string; ip: string; port: number; assigned: boolean }) => (
+                <option key={a.id} value={a.id} disabled={a.assigned && a.id !== srv.allocationId}>
+                  {a.ip}:{a.port}{a.assigned && a.id !== srv.allocationId ? ' (in use)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button className="btn-secondary flex-1" onClick={onClose}>Cancel</button>
+            <button className="btn-primary flex-1" disabled={isSaving} onClick={() => save({
+              name: general.name,
+              description: general.description,
+              userId: general.userId || undefined,
+              allocationId: general.allocationId || undefined,
+            })}>
+              {isSaving ? <Spinner size="sm" /> : 'Save'}
+            </button>
+          </div>
         </div>
-      </form>
+      )}
+
+      {tab === 'resources' && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Memory (MB)</label>
+              <input type="number" className="input" value={resources.memory} onChange={(e) => setResources({ ...resources, memory: e.target.value })} />
+            </div>
+            <div>
+              <label className="label">Disk Space (MB)</label>
+              <input type="number" className="input" value={resources.disk} onChange={(e) => setResources({ ...resources, disk: e.target.value })} />
+            </div>
+            <div>
+              <label className="label">CPU Limit <span className="text-slate-500 font-normal">(% of 1 core, 0=unlimited)</span></label>
+              <input type="number" className="input" value={resources.cpu} onChange={(e) => setResources({ ...resources, cpu: e.target.value })} />
+            </div>
+            <div>
+              <label className="label">Backup Limit</label>
+              <input type="number" className="input" value={resources.backupLimit} onChange={(e) => setResources({ ...resources, backupLimit: e.target.value })} />
+            </div>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button className="btn-secondary flex-1" onClick={onClose}>Cancel</button>
+            <button className="btn-primary flex-1" disabled={isSaving} onClick={() => save({
+              memory: resources.memory,
+              disk: resources.disk,
+              cpu: resources.cpu,
+              backupLimit: resources.backupLimit,
+            })}>
+              {isSaving ? <Spinner size="sm" /> : 'Save'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {tab === 'startup' && (
+        <div className="space-y-4">
+          <div>
+            <label className="label">Docker Image</label>
+            <input className="input font-mono" value={startup.image} onChange={(e) => setStartup({ ...startup, image: e.target.value })} placeholder="ghcr.io/pterodactyl/yolks:java_21" />
+            <p className="text-xs text-slate-500 mt-1">Use <code className="text-panel-400">ghcr.io/pterodactyl/yolks:java_21</code> for Paper 1.21+</p>
+          </div>
+          <div>
+            <label className="label">Startup Command</label>
+            <input className="input font-mono text-xs" value={startup.startupCmd} onChange={(e) => setStartup({ ...startup, startupCmd: e.target.value })} />
+            <p className="text-xs text-slate-500 mt-1">Changes take effect on next server start.</p>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button className="btn-secondary flex-1" onClick={onClose}>Cancel</button>
+            <button className="btn-primary flex-1" disabled={isSaving} onClick={() => save({ image: startup.image, startup: startup.startupCmd })}>
+              {isSaving ? <Spinner size="sm" /> : 'Save'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {tab === 'danger' && (
+        <div className="space-y-4">
+          <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-4">
+            <h3 className="text-sm font-semibold text-yellow-400 mb-1">Reinstall Server</h3>
+            <p className="text-xs text-slate-400 mb-3">
+              Deletes all server files and re-runs the install script. The server will be offline during reinstall.
+              This action cannot be undone.
+            </p>
+            <button
+              className="px-4 py-2 rounded-lg text-sm font-medium bg-yellow-500/10 text-yellow-400 border border-yellow-500/30 hover:bg-yellow-500/20 transition-colors disabled:opacity-50"
+              onClick={handleReinstall}
+              disabled={isReinstalling}
+            >
+              {isReinstalling ? <Spinner size="sm" /> : 'Reinstall Server'}
+            </button>
+          </div>
+          <p className="text-xs text-slate-500">To delete this server entirely, use the trash icon on the servers list.</p>
+        </div>
+      )}
     </Modal>
   );
 }

@@ -269,10 +269,34 @@ echo "Velocity $VELOCITY_VERSION-$VELOCITY_BUILD installed."`,
             scriptContainer: 'ghcr.io/pterodactyl/installers:alpine',
         },
     });
+    const BEDROCK_INSTALL_SCRIPT = `#!/bin/bash
+set -e
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -qq && apt-get install -y -qq curl unzip 2>/dev/null
+cd /mnt/server
+VERSION="\${BDS_VERSION:-LATEST}"
+echo "Fetching Bedrock Dedicated Server version info..."
+if [ "$VERSION" = "LATEST" ]; then
+  LATEST_PAGE=$(curl -sSL -A "Mozilla/5.0" "https://www.minecraft.net/en-us/download/server/bedrock" 2>/dev/null || echo "")
+  VERSION=$(echo "$LATEST_PAGE" | grep -oP 'bin-linux/bedrock-server-\\K[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+(?=\\.zip)' | head -1 || echo "1.21.51.02")
+fi
+DOWNLOAD_URL="https://minecraft.azureedge.net/bin-linux/bedrock-server-\${VERSION}.zip"
+echo "Downloading Bedrock Server \${VERSION} from Mojang..."
+curl -sSL -o bedrock-server.zip "\$DOWNLOAD_URL" -A "Mozilla/5.0" || {
+  echo "Primary URL failed, trying preview URL..."
+  curl -sSL -o bedrock-server.zip "https://minecraft.azureedge.net/bin-linux-preview/bedrock-server-\${VERSION}.zip" -A "Mozilla/5.0"
+}
+unzip -o bedrock-server.zip
+rm -f bedrock-server.zip
+chmod +x bedrock_server
+echo "Bedrock Server \${VERSION} installed."`;
     // Minecraft Bedrock
     const bedrockEgg = await prisma.egg.upsert({
         where: { uuid: '00000000-0000-0000-0000-000000000008' },
-        update: {},
+        update: {
+            scriptInstall: BEDROCK_INSTALL_SCRIPT,
+            scriptContainer: 'debian:bookworm-slim',
+        },
         create: {
             uuid: '00000000-0000-0000-0000-000000000008',
             nestId: minecraftNest.id,
@@ -282,22 +306,8 @@ echo "Velocity $VELOCITY_VERSION-$VELOCITY_BUILD installed."`,
             dockerImage: 'debian:bookworm-slim',
             startup: 'LD_LIBRARY_PATH=. ./bedrock_server',
             configStop: 'stop',
-            scriptInstall: `#!/bin/bash
-set -e
-cd /mnt/server
-VERSION="\${BDS_VERSION:-LATEST}"
-echo "Fetching Bedrock Dedicated Server version info..."
-if [ "$VERSION" = "LATEST" ]; then
-  VERSION=$(curl -sSL -A "Mozilla/5.0" "https://raw.githubusercontent.com/nicklvsa/mcbe-releases/main/releases.json" 2>/dev/null | python3 -c "import sys,json;d=json.load(sys.stdin);print(sorted(d.keys())[-1])" 2>/dev/null || echo "1.21.0.03")
-fi
-DOWNLOAD_URL="https://minecraft.azureedge.net/bin-linux/bedrock-server-\${VERSION}.zip"
-echo "Downloading Bedrock Server \${VERSION} from Mojang..."
-curl -sSL -o bedrock-server.zip "\$DOWNLOAD_URL" -A "Mozilla/5.0" || { echo "Download failed, trying backup URL..."; curl -sSL -o bedrock-server.zip "https://minecraft.azureedge.net/bin-linux-preview/bedrock-server-\${VERSION}.zip" -A "Mozilla/5.0"; }
-unzip -o bedrock-server.zip
-rm -f bedrock-server.zip
-chmod +x bedrock_server
-echo "Bedrock Server \${VERSION} installed."`,
-            scriptContainer: 'ghcr.io/pterodactyl/installers:alpine',
+            scriptInstall: BEDROCK_INSTALL_SCRIPT,
+            scriptContainer: 'debian:bookworm-slim',
         },
     });
     // SERVER_TYPE env variable for Bedrock egg so Wings can detect the server type

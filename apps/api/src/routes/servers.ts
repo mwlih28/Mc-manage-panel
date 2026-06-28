@@ -239,34 +239,93 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   if (name) updateData.name = name;
   if (description !== undefined) updateData.description = description;
 
-  // Any authenticated user can update MC version (needed for plugin compatibility filtering)
   if (mcVersion) {
     let currentEnv: Record<string, string> = {};
     try { currentEnv = JSON.parse(server.env as string) || {}; } catch { /* use empty */ }
-    // Always restore critical JVM variables in case they were missing
     if (!currentEnv.SERVER_MEMORY) currentEnv.SERVER_MEMORY = String(server.memory);
     if (!currentEnv.SERVER_JARFILE) currentEnv.SERVER_JARFILE = 'server.jar';
     updateData.env = JSON.stringify({ ...currentEnv, MC_VERSION: mcVersion });
   }
 
   if (isAdmin) {
-    const { memory, swap, disk, io, cpu, startup, image, suspended } = req.body;
+    const { memory, swap, disk, io, cpu, startup, image, suspended, userId, allocationId, backupLimit, databaseLimit } = req.body;
     if (memory) updateData.memory = parseInt(memory);
     if (swap !== undefined) updateData.swap = parseInt(swap);
     if (disk) updateData.disk = parseInt(disk);
     if (io) updateData.io = parseInt(io);
-    if (cpu) updateData.cpu = parseInt(cpu);
+    if (cpu !== undefined) updateData.cpu = parseInt(cpu);
     if (startup) updateData.startup = startup;
     if (image) updateData.image = image;
     if (typeof suspended === 'boolean') updateData.suspended = suspended;
+    if (backupLimit !== undefined) updateData.backupLimit = parseInt(backupLimit);
+    if (databaseLimit !== undefined) updateData.databaseLimit = parseInt(databaseLimit);
+
+    // Owner change
+    if (userId && userId !== server.userId) {
+      const newOwner = await prisma.user.findUnique({ where: { id: userId } });
+      if (!newOwner) return res.status(422).json({ message: 'User not found' });
+      updateData.userId = userId;
+    }
+
+    // Allocation change
+    if (allocationId && allocationId !== server.allocationId) {
+      const newAlloc = await prisma.allocation.findUnique({ where: { id: allocationId } });
+      if (!newAlloc) return res.status(422).json({ message: 'Allocation not found' });
+      if (newAlloc.assigned && newAlloc.id !== server.allocationId) {
+        return res.status(422).json({ message: 'Allocation already in use' });
+      }
+      // Free old allocation
+      if (server.allocationId) {
+        await prisma.allocation.update({ where: { id: server.allocationId }, data: { assigned: false } });
+      }
+      await prisma.allocation.update({ where: { id: allocationId }, data: { assigned: true } });
+      updateData.allocationId = allocationId;
+    }
   }
 
   const updated = await prisma.server.update({
     where: { id: req.params.id },
     data: updateData,
+    include: {
+      user: { select: { id: true, email: true, username: true } },
+      node: { select: { id: true, name: true } },
+      allocation: true,
+    },
   });
 
   return res.json({ data: updated });
+});
+
+// POST /servers/:id/reinstall - Admin only
+router.post('/:id/reinstall', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
+  const server = await prisma.server.findFirst({
+    where: { id: req.params.id },
+    include: { node: true },
+  });
+  if (!server) return res.status(404).json({ message: 'Server not found' });
+
+  await prisma.server.update({ where: { id: server.id }, data: { status: 'INSTALLING' } });
+
+  if (server.node?.status === 'ONLINE') {
+    const client = axios.create({
+      baseURL: `${server.node.scheme}://${server.node.fqdn}:${(server.node as unknown as { daemonPort: number }).daemonPort}/api`,
+      headers: { Authorization: `Bearer ${server.node.token}` },
+      timeout: 10000,
+    });
+    client.post(`/servers/${server.uuid}/reinstall`, {})
+      .catch(err => logger.warn(`Wings reinstall request failed: ${(err as Error).message}`));
+  }
+
+  await prisma.activity.create({
+    data: {
+      userId: req.user!.id,
+      serverId: server.id,
+      event: 'server:reinstall',
+      ip: req.ip,
+    },
+  });
+
+  return res.json({ message: 'Reinstall initiated' });
 });
 
 // DELETE /servers/:id

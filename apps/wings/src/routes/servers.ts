@@ -81,6 +81,17 @@ router.get('/:uuid/status', (req: Request, res: Response) => {
   return res.json({ status });
 });
 
+// Reinstall server
+router.post('/:uuid/reinstall', async (req: Request, res: Response) => {
+  try {
+    serverManager.reinstallServer(req.params.uuid)
+      .catch(err => logger.error(`Reinstall failed: ${err.message}`));
+    return res.json({ message: 'Reinstall initiated' });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
+  }
+});
+
 // Delete server
 router.delete('/:uuid', async (req: Request, res: Response) => {
   try {
