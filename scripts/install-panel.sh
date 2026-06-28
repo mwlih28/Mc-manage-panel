@@ -22,7 +22,9 @@ PANEL_DIR="/var/www/mc-panel"
 PANEL_USER="mcpanel"
 NODE_VERSION="20"
 REPO_URL="https://github.com/mwlih28/mc-manage-panel"
-BRANCH="claude/pterodactyl-panel-builder-8uy3tp"
+BRANCH="main"
+MIN_DISK_GB=5
+MIN_RAM_MB=512
 
 # ────────────────────────────── Banner ──────────────────────────────
 echo -e "\n${BOLD}"
@@ -46,6 +48,27 @@ case "$OS_ID" in
 esac
 
 info "OS: ${OS_ID} ${OS_VER}"
+
+# Disk space check
+AVAIL_DISK_GB=$(df / --output=avail -BG | tail -1 | tr -d 'G ')
+if [[ "$AVAIL_DISK_GB" -lt "$MIN_DISK_GB" ]]; then
+  error "Not enough disk space: ${AVAIL_DISK_GB}GB available, ${MIN_DISK_GB}GB required."
+fi
+info "Disk: ${AVAIL_DISK_GB}GB available"
+
+# RAM check
+AVAIL_RAM_MB=$(awk '/MemAvailable/ { printf "%d", $2/1024 }' /proc/meminfo)
+if [[ "$AVAIL_RAM_MB" -lt "$MIN_RAM_MB" ]]; then
+  warn "Low RAM: ${AVAIL_RAM_MB}MB available (recommended: ${MIN_RAM_MB}MB+). Proceeding anyway."
+fi
+info "RAM: ${AVAIL_RAM_MB}MB available"
+
+# Port check (80/443 must be available or at least nginx-controlled)
+for PORT_CHECK in 80 443 3001; do
+  if ss -tlnp "sport = :${PORT_CHECK}" 2>/dev/null | grep -q LISTEN; then
+    warn "Port ${PORT_CHECK} is already in use. This may conflict."
+  fi
+done
 
 # ────────────────────────────── Collect inputs ──────────────────────────────
 step "Configuration"
@@ -217,7 +240,7 @@ success "Web built → ${PANEL_DIR}/apps/web/dist"
 # ────────────────────────────── Database schema ──────────────────────────────
 step "Applying database schema"
 cd "${PANEL_DIR}/apps/api"
-"$PRISMA_BIN" db push --accept-data-loss
+"$PRISMA_BIN" db push
 success "Schema applied"
 
 # ────────────────────────────── Create admin account ──────────────────────────────
@@ -376,7 +399,14 @@ if [[ "${SETUP_SSL,,}" != "n" ]]; then
       --email "$ADMIN_EMAIL" \
       --redirect 2>/dev/null; then
     success "SSL certificate installed — HTTPS enabled"
-    # Update CORS_ORIGIN (already https)
+    # Ensure nginx reloads after every renewal
+    mkdir -p /etc/letsencrypt/renewal-hooks/deploy
+    cat > /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh <<'HOOK'
+#!/bin/sh
+systemctl reload nginx
+HOOK
+    chmod +x /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
+    success "Certbot renewal hook installed"
   else
     warn "Certbot failed. Make sure ${PANEL_DOMAIN} points to this server's IP."
     warn "You can retry later: certbot --nginx -d ${PANEL_DOMAIN}"

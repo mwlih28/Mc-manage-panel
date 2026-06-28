@@ -10,7 +10,7 @@ import { verify } from 'otplib';
 
 const router = Router();
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
+const JWT_SECRET = process.env.JWT_SECRET!;
 
 function safeUser(user: Record<string, unknown>) {
   const { password, twoFactorSecret, smtpPass, ...rest } = user;

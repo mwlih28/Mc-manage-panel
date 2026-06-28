@@ -27,7 +27,9 @@ DATA_DIR="/var/lib/mc-wings"
 LOG_DIR="/var/log/mc-wings"
 NODE_VERSION="20"
 REPO_URL="https://github.com/mwlih28/mc-manage-panel"
-BRANCH="claude/pterodactyl-panel-builder-8uy3tp"
+BRANCH="main"
+MIN_DISK_GB=10
+MIN_RAM_MB=512
 
 # ────────────────────────────── Banner ──────────────────────────────
 echo -e "\n${BOLD}"
@@ -52,6 +54,19 @@ esac
 
 info "OS: ${OS_ID} ${OS_VER}"
 
+# Disk and RAM pre-flight
+AVAIL_DISK_GB=$(df / --output=avail -BG | tail -1 | tr -d 'G ')
+if [[ "$AVAIL_DISK_GB" -lt "$MIN_DISK_GB" ]]; then
+  error "Not enough disk space: ${AVAIL_DISK_GB}GB available, ${MIN_DISK_GB}GB required (game servers need room)."
+fi
+info "Disk: ${AVAIL_DISK_GB}GB available"
+
+AVAIL_RAM_MB=$(awk '/MemAvailable/ { printf "%d", $2/1024 }' /proc/meminfo)
+if [[ "$AVAIL_RAM_MB" -lt "$MIN_RAM_MB" ]]; then
+  warn "Low RAM: ${AVAIL_RAM_MB}MB available. Game servers typically need 512MB+ each."
+fi
+info "RAM: ${AVAIL_RAM_MB}MB available"
+
 # ────────────────────────────── Collect inputs ──────────────────────────────
 step "Configuration"
 
@@ -68,6 +83,7 @@ PANEL_URL="${PANEL_URL%/}"  # strip trailing slash
 
 read -rp "  Node token (from Admin → Nodes → your node): " NODE_TOKEN
 [[ -z "$NODE_TOKEN" ]] && error "Node token is required."
+[[ ${#NODE_TOKEN} -lt 16 ]] && error "Node token looks too short. Copy the full token from the panel."
 
 read -rp "  This server's FQDN or public IP: " NODE_FQDN
 [[ -z "$NODE_FQDN" ]] && error "FQDN/IP is required."
@@ -87,6 +103,16 @@ echo "    HTTPS      : $WINGS_SSL"
 echo ""
 read -rp "  Proceed? [Y/n]: " CONFIRM
 [[ "${CONFIRM,,}" == "n" ]] && { echo "Aborted."; exit 0; }
+
+# Verify panel is reachable before spending time installing
+info "Verifying panel connectivity..."
+if ! curl -sf --max-time 10 "${PANEL_URL}/health" >/dev/null 2>&1; then
+  warn "Cannot reach panel at ${PANEL_URL}/health"
+  read -rp "  Continue anyway? [y/N]: " FORCE_CONTINUE
+  [[ "${FORCE_CONTINUE,,}" != "y" ]] && { echo "Aborted. Fix panel connectivity first."; exit 1; }
+else
+  success "Panel reachable at ${PANEL_URL}"
+fi
 
 # ────────────────────────────── System packages ──────────────────────────────
 step "Installing system packages"
@@ -216,6 +242,13 @@ if [[ "${WINGS_SSL,,}" == "y" ]]; then
     SSL_ENABLED="true"
     SCHEME="https"
     success "SSL certificate obtained for ${NODE_FQDN}"
+    # Restart wings after every cert renewal so it picks up the new cert
+    mkdir -p /etc/letsencrypt/renewal-hooks/deploy
+    cat > "/etc/letsencrypt/renewal-hooks/deploy/restart-mc-wings.sh" <<'HOOK'
+#!/bin/sh
+systemctl restart mc-wings
+HOOK
+    chmod +x "/etc/letsencrypt/renewal-hooks/deploy/restart-mc-wings.sh"
 
     # Allow Wings user to read certs
     chmod 755 "/etc/letsencrypt/live" "/etc/letsencrypt/archive"
@@ -332,15 +365,6 @@ if command -v ufw &>/dev/null; then
   success "UFW: ports 22, ${WINGS_PORT}, 2022, 25565-25600 open"
 else
   info "UFW not found — skipping firewall config"
-fi
-
-# ────────────────────────────── Verify panel connection ──────────────────────────────
-step "Testing panel connectivity"
-if curl -sf --max-time 10 "${PANEL_URL}/health" >/dev/null 2>&1; then
-  success "Panel reachable at ${PANEL_URL}"
-else
-  warn "Cannot reach panel at ${PANEL_URL}"
-  warn "Check the panel URL and ensure port 443/80 is open on the panel server."
 fi
 
 # ────────────────────────────── Done ──────────────────────────────

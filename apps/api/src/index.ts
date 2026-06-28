@@ -1,4 +1,14 @@
 import 'dotenv/config';
+
+// Fail fast on missing required env vars — better to crash on startup than silently use weak defaults
+const REQUIRED_ENV = ['DATABASE_URL', 'JWT_SECRET', 'JWT_REFRESH_SECRET'];
+for (const key of REQUIRED_ENV) {
+  if (!process.env[key]) {
+    console.error(`FATAL: Required environment variable "${key}" is not set. Exiting.`);
+    process.exit(1);
+  }
+}
+
 import express from 'express';
 import http from 'http';
 import cors from 'cors';
