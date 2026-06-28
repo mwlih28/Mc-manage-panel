@@ -120,6 +120,17 @@ read -rp "  Setup SSL with Let's Encrypt? [Y/n]: " SETUP_SSL
 SETUP_SSL="${SETUP_SSL:-y}"
 
 echo ""
+echo -e "  ${CYAN}${BOLD}Optional:${NC} Help us improve MC Manage Panel"
+read -rp "  Your name (for the thank-you email) [press Enter to skip]: " INSTALLER_NAME
+read -rp "  Your contact email (optional): " INSTALLER_EMAIL
+NOTIFY_UPDATES="false"
+if [[ -n "$INSTALLER_EMAIL" ]]; then
+  read -rp "  Get notified when updates are released? [Y/n]: " NOTIFY_OPT
+  NOTIFY_OPT="${NOTIFY_OPT:-y}"
+  [[ "${NOTIFY_OPT,,}" != "n" ]] && NOTIFY_UPDATES="true"
+fi
+
+echo ""
 echo -e "  ${BOLD}Summary:${NC}"
 echo "    Domain    : $PANEL_DOMAIN"
 echo "    Email     : $ADMIN_EMAIL"
@@ -493,6 +504,35 @@ else
   info "UFW not found — skipping firewall"
 fi
 
+# ── Save installer config & send notifications ────────────────────────
+INSTALLER_CONF_DIR="/etc/mc-panel"
+mkdir -p "$INSTALLER_CONF_DIR"
+cat > "${INSTALLER_CONF_DIR}/installer.conf" <<CONF
+# MC Manage Panel — Installer configuration
+# Do not delete — used by update and uninstall scripts
+INSTALLED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+INSTALLED_VERSION="main"
+PANEL_DIR="${PANEL_DIR}"
+PANEL_USER="${PANEL_USER}"
+PANEL_DOMAIN_ORIGINAL="${PANEL_DOMAIN}"
+INSTALLER_NAME="${INSTALLER_NAME:-}"
+INSTALLER_EMAIL="${INSTALLER_EMAIL:-}"
+NOTIFY_UPDATES="${NOTIFY_UPDATES}"
+# Set your webhook URL below (see docs for setup instructions)
+MC_PANEL_WEBHOOK_URL=""
+CONF
+chmod 600 "${INSTALLER_CONF_DIR}/installer.conf"
+success "Installer config saved: ${INSTALLER_CONF_DIR}/installer.conf"
+
+# Send webhook notification (thank-you email + registration)
+WEBHOOK_URL="${MC_PANEL_WEBHOOK_URL:-}"
+if [[ -n "$WEBHOOK_URL" && -n "${INSTALLER_EMAIL:-}" ]]; then
+  curl -sf -X POST "$WEBHOOK_URL" \
+    -H "Content-Type: application/json" \
+    -d "{\"type\":\"install\",\"name\":\"${INSTALLER_NAME:-}\",\"email\":\"${INSTALLER_EMAIL}\",\"notify_updates\":${NOTIFY_UPDATES},\"server_ip\":\"${SERVER_IP}\",\"domain\":\"${PANEL_DOMAIN}\",\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" \
+    >/dev/null 2>&1 && info "Registration sent" || true
+fi
+
 # ── Final health check ────────────────────────────────────────────────
 step "Final health check"
 sleep 2
@@ -529,6 +569,10 @@ echo -e "  ${BOLD}Service commands:${NC}"
 echo "    systemctl status  mc-panel"
 echo "    systemctl restart mc-panel"
 echo "    journalctl -u mc-panel -f"
+echo ""
+echo -e "  ${BOLD}Management:${NC}"
+echo -e "  Update panel:    ${CYAN}bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/update-panel.sh)${NC}"
+echo -e "  Uninstall panel: ${CYAN}bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/uninstall-panel.sh)${NC}"
 echo ""
 echo -e "  ${BOLD}Next steps:${NC}"
 echo "  1. Open ${SCHEME}://${PANEL_DOMAIN} and sign in"
