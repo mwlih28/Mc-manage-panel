@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Server, Users, Cpu, Settings,
-  LogOut, Shield, Activity, Package, Wrench
+  LogOut, Shield, Activity, Package, Wrench, ExternalLink
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { cn } from '@/lib/utils';
@@ -94,23 +94,33 @@ export function Sidebar() {
 
         {isAdmin && (
           <div>
-            <p className="px-3 mb-1.5 text-[9px] font-bold uppercase tracking-widest text-zinc-700">Admin</p>
+            <div className="px-3 mb-1.5 flex items-center justify-between">
+              <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-700">Admin</p>
+              <a
+                href="/admin"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-zinc-700 hover:text-zinc-400 transition-colors"
+                title="Open admin panel in new tab"
+              >
+                <ExternalLink size={10} />
+              </a>
+            </div>
             <ul className="space-y-0.5">
-              {adminNavItems.map(({ to, icon: Icon, label, exact }) => (
+              {adminNavItems.map(({ to, icon: Icon, label }) => (
                 <li key={to}>
-                  <NavLink
-                    to={to}
-                    end={exact}
-                    className={({ isActive }) => cn(
+                  <a
+                    href={to}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={cn(
                       'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-100',
-                      isActive
-                        ? 'text-white bg-white/[0.06] border-l-2 border-white'
-                        : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.03] border-l-2 border-transparent'
+                      'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.03] border-l-2 border-transparent'
                     )}
                   >
                     <Icon size={14} />
                     <span>{label}</span>
-                  </NavLink>
+                  </a>
                 </li>
               ))}
             </ul>

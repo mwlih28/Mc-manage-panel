@@ -80,6 +80,7 @@ The script will ask for:
 - **User Management** — Admin and user roles, create/edit/delete users
 - **Node Management** — Add Wings nodes, manage port allocations
 - **Egg System** — Server configuration templates (Minecraft Paper, Bedrock, Vanilla, BungeeCord, Velocity, and more)
+- **Plugin Support** — Paper/Spigot/Bukkit plugins work out of the box; drop `.jar` files into the server's `plugins/` folder via the file manager or SFTP
 - **Activity Log** — Full audit trail of panel actions
 - **JWT Authentication** — Access + refresh token pair, secure bcrypt hashing
 - **Dark UI** — Modern responsive dark-themed interface
@@ -243,6 +244,7 @@ Planned features — contributions welcome:
 - [ ] **2FA / TOTP support** — Two-factor authentication for panel accounts
 - [ ] **Discord webhook notifications** — Server state changes, alerts, and activity events pushed to a Discord channel
 - [ ] **Scheduled tasks** — Cron-based power actions and commands (e.g. nightly restarts, scheduled backups)
+- [ ] **Plugin marketplace browser** — Browse and install popular Bukkit/Spigot/Paper plugins directly from the panel UI
 - [ ] **More egg presets** — Counter-Strike 2, ARK, Rust, Terraria, and community-contributed eggs via a marketplace
 
 ---
