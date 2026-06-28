@@ -532,6 +532,7 @@ class ServerManager extends events_1.EventEmitter {
             HostConfig: {
                 Binds: [`${dataPath}:/mnt/server`],
                 NetworkMode: 'bridge',
+                Dns: ['8.8.8.8', '1.1.1.1'],
                 AutoRemove: false,
             },
         });
