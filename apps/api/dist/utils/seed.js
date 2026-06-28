@@ -113,12 +113,28 @@ async function main() {
         ' -XX:+PerfDisableSharedMem -XX:MaxTenuringThreshold=1' +
         ' -Dusing.aikars.flags=https://mcflags.emc.gs -Daikars.new.flags=true' +
         ' -jar {{SERVER_JARFILE}} nogui';
+    const PAPER_INSTALL_SCRIPT = `#!/bin/bash
+set -e
+cd /mnt/server
+MC_VER="\${MC_VERSION:-latest}"
+echo "Fetching latest Paper build..."
+if [ "$MC_VER" = "latest" ]; then
+  MC_VER=$(curl -sSL https://api.papermc.io/v2/projects/paper | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['versions'][-1])" 2>/dev/null || echo "1.21.4")
+fi
+BUILD=$(curl -sSL "https://api.papermc.io/v2/projects/paper/versions/$MC_VER" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['builds'][-1])" 2>/dev/null || echo "1")
+JAR="paper-$MC_VER-$BUILD.jar"
+echo "Downloading Paper $MC_VER build $BUILD..."
+curl -sSL -o server.jar "https://api.papermc.io/v2/projects/paper/versions/$MC_VER/builds/$BUILD/downloads/$JAR"
+echo "eula=true" > eula.txt
+echo "Paper $MC_VER-$BUILD installed."`;
     // Create Egg
     const paperEgg = await prisma.egg.upsert({
         where: { uuid: '00000000-0000-0000-0000-000000000002' },
         update: {
             dockerImage: 'ghcr.io/pterodactyl/yolks:java_21',
             startup: AIKAR_STARTUP,
+            scriptInstall: PAPER_INSTALL_SCRIPT,
+            scriptContainer: 'ghcr.io/pterodactyl/installers:alpine',
         },
         create: {
             uuid: '00000000-0000-0000-0000-000000000002',
@@ -129,6 +145,8 @@ async function main() {
             dockerImage: 'ghcr.io/pterodactyl/yolks:java_21',
             startup: AIKAR_STARTUP,
             configStop: '^C',
+            scriptInstall: PAPER_INSTALL_SCRIPT,
+            scriptContainer: 'ghcr.io/pterodactyl/installers:alpine',
         },
     });
     // Migrate any existing servers still using an older Java image to java_21
@@ -198,10 +216,48 @@ async function main() {
         },
     });
     console.log('Demo server created');
+    const VANILLA_INSTALL_SCRIPT = `#!/bin/bash
+set -e
+cd /mnt/server
+VERSION="\${MC_VERSION:-latest}"
+MANIFEST_BASE="https://launchermeta.mojang.com/mc/game/version_manifest.json"
+if [ "$VERSION" = "latest" ]; then
+  VERSION=$(curl -sSL "$MANIFEST_BASE" | python3 -c "import sys,json;print(json.load(sys.stdin)['latest']['release'])")
+fi
+echo "Downloading Vanilla $VERSION..."
+MANIFEST_URL=$(curl -sSL "$MANIFEST_BASE" | python3 -c "import sys,json;d=json.load(sys.stdin);v=[x for x in d['versions'] if x['id']==\"$VERSION\"];print(v[0]['url'] if v else '')")
+[ -z "$MANIFEST_URL" ] && { echo "Version $VERSION not found"; exit 1; }
+JAR_URL=$(curl -sSL "$MANIFEST_URL" | python3 -c "import sys,json;print(json.load(sys.stdin)['downloads']['server']['url'])")
+curl -sSL -o server.jar "$JAR_URL"
+echo "eula=true" > eula.txt
+echo "Vanilla $VERSION installed."`;
+    const BUNGEECORD_INSTALL_SCRIPT = `#!/bin/bash
+set -e
+cd /mnt/server
+echo "Downloading BungeeCord..."
+curl -sSL -o bungeecord.jar "https://ci.md-5.net/job/BungeeCord/lastSuccessfulBuild/artifact/bootstrap/target/BungeeCord.jar" || {
+  echo "Primary URL failed, trying fallback..."
+  curl -sSL -o bungeecord.jar "https://github.com/SpigotMC/BungeeCord/releases/latest/download/BungeeCord.jar"
+}
+echo "BungeeCord installed."`;
+    const VELOCITY_INSTALL_SCRIPT = `#!/bin/bash
+set -e
+cd /mnt/server
+echo "Fetching latest Velocity build..."
+VELOCITY_VERSION=$(curl -sSL https://api.papermc.io/v2/projects/velocity | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['versions'][-1])" 2>/dev/null || echo "3.3.0-SNAPSHOT")
+VELOCITY_BUILD=$(curl -sSL "https://api.papermc.io/v2/projects/velocity/versions/$VELOCITY_VERSION" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['builds'][-1])" 2>/dev/null || echo "1")
+JAR="velocity-$VELOCITY_VERSION-$VELOCITY_BUILD.jar"
+echo "Downloading Velocity $VELOCITY_VERSION build $VELOCITY_BUILD..."
+curl -sSL -o velocity.jar "https://api.papermc.io/v2/projects/velocity/versions/$VELOCITY_VERSION/builds/$VELOCITY_BUILD/downloads/$JAR"
+echo "Velocity $VELOCITY_VERSION-$VELOCITY_BUILD installed."`;
     // Vanilla Minecraft
     await prisma.egg.upsert({
         where: { uuid: '00000000-0000-0000-0000-000000000004' },
-        update: { startup: 'java -Xms{{SERVER_MEMORY}}M -Xmx{{SERVER_MEMORY}}M -jar {{SERVER_JARFILE}} nogui' },
+        update: {
+            startup: 'java -Xms{{SERVER_MEMORY}}M -Xmx{{SERVER_MEMORY}}M -jar {{SERVER_JARFILE}} nogui',
+            scriptInstall: VANILLA_INSTALL_SCRIPT,
+            scriptContainer: 'ghcr.io/pterodactyl/installers:alpine',
+        },
         create: {
             uuid: '00000000-0000-0000-0000-000000000004',
             nestId: minecraftNest.id,
@@ -211,25 +267,17 @@ async function main() {
             dockerImage: 'ghcr.io/pterodactyl/yolks:java_21',
             startup: 'java -Xms{{SERVER_MEMORY}}M -Xmx{{SERVER_MEMORY}}M -jar {{SERVER_JARFILE}} nogui',
             configStop: 'stop',
-            scriptInstall: `#!/bin/bash
-cd /mnt/server
-VERSION="\${MC_VERSION:-latest}"
-if [ "$VERSION" = "latest" ]; then
-  VERSION=$(curl -sS https://launchermeta.mojang.com/mc/game/version_manifest.json | python3 -c "import sys,json;print(json.load(sys.stdin)['latest']['release'])")
-fi
-MANIFEST_URL=$(curl -sS https://launchermeta.mojang.com/mc/game/version_manifest.json | python3 -c "import sys,json;d=json.load(sys.stdin);v=[x for x in d['versions'] if x['id']==\"$VERSION\"];print(v[0]['url'] if v else '')")
-[ -z "$MANIFEST_URL" ] && { echo "Version $VERSION not found"; exit 1; }
-JAR_URL=$(curl -sS "$MANIFEST_URL" | python3 -c "import sys,json;print(json.load(sys.stdin)['downloads']['server']['url'])")
-curl -sSL -o server.jar "$JAR_URL"
-echo "eula=true" > eula.txt
-echo "Vanilla $VERSION installed."`,
+            scriptInstall: VANILLA_INSTALL_SCRIPT,
             scriptContainer: 'ghcr.io/pterodactyl/installers:alpine',
         },
     });
     // BungeeCord
     await prisma.egg.upsert({
         where: { uuid: '00000000-0000-0000-0000-000000000005' },
-        update: {},
+        update: {
+            scriptInstall: BUNGEECORD_INSTALL_SCRIPT,
+            scriptContainer: 'ghcr.io/pterodactyl/installers:alpine',
+        },
         create: {
             uuid: '00000000-0000-0000-0000-000000000005',
             nestId: minecraftNest.id,
@@ -239,17 +287,17 @@ echo "Vanilla $VERSION installed."`,
             dockerImage: 'ghcr.io/pterodactyl/yolks:java_21',
             startup: 'java -Xms{{SERVER_MEMORY}}M -Xmx{{SERVER_MEMORY}}M -jar {{SERVER_JARFILE}}',
             configStop: 'end',
-            scriptInstall: `#!/bin/bash
-cd /mnt/server
-curl -sSL -o bungeecord.jar "https://ci.md-5.net/job/BungeeCord/lastSuccessfulBuild/artifact/bootstrap/target/BungeeCord.jar"
-echo "BungeeCord installed."`,
+            scriptInstall: BUNGEECORD_INSTALL_SCRIPT,
             scriptContainer: 'ghcr.io/pterodactyl/installers:alpine',
         },
     });
     // Velocity
     await prisma.egg.upsert({
         where: { uuid: '00000000-0000-0000-0000-000000000006' },
-        update: {},
+        update: {
+            scriptInstall: VELOCITY_INSTALL_SCRIPT,
+            scriptContainer: 'ghcr.io/pterodactyl/installers:alpine',
+        },
         create: {
             uuid: '00000000-0000-0000-0000-000000000006',
             nestId: minecraftNest.id,
@@ -259,43 +307,38 @@ echo "BungeeCord installed."`,
             dockerImage: 'ghcr.io/pterodactyl/yolks:java_21',
             startup: 'java -Xms{{SERVER_MEMORY}}M -Xmx{{SERVER_MEMORY}}M -XX:+UseG1GC -XX:G1HeapRegionSize=4M -XX:+UnlockExperimentalVMOptions -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch -jar {{SERVER_JARFILE}}',
             configStop: 'shutdown',
-            scriptInstall: `#!/bin/bash
-cd /mnt/server
-VELOCITY_VERSION=$(curl -sSL https://api.papermc.io/v2/projects/velocity | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['versions'][-1])")
-VELOCITY_BUILD=$(curl -sSL "https://api.papermc.io/v2/projects/velocity/versions/$VELOCITY_VERSION" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['builds'][-1])")
-JAR="velocity-$VELOCITY_VERSION-$VELOCITY_BUILD.jar"
-curl -sSL -o velocity.jar "https://api.papermc.io/v2/projects/velocity/versions/$VELOCITY_VERSION/builds/$VELOCITY_BUILD/downloads/$JAR"
-echo "Velocity $VELOCITY_VERSION-$VELOCITY_BUILD installed."`,
+            scriptInstall: VELOCITY_INSTALL_SCRIPT,
             scriptContainer: 'ghcr.io/pterodactyl/installers:alpine',
         },
     });
+    // Bedrock install script runs in ghcr.io/pterodactyl/installers:alpine
+    // which already has bash, curl, unzip — no apt-get needed.
+    // Server runs in debian:bookworm-slim (has glibc required by BDS binary).
     const BEDROCK_INSTALL_SCRIPT = `#!/bin/bash
 set -e
-export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq && apt-get install -y -qq curl unzip 2>/dev/null
 cd /mnt/server
-VERSION="\${BDS_VERSION:-LATEST}"
-echo "Fetching Bedrock Dedicated Server version info..."
-if [ "$VERSION" = "LATEST" ]; then
-  LATEST_PAGE=$(curl -sSL -A "Mozilla/5.0" "https://www.minecraft.net/en-us/download/server/bedrock" 2>/dev/null || echo "")
-  VERSION=$(echo "$LATEST_PAGE" | grep -oP 'bin-linux/bedrock-server-\\K[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+(?=\\.zip)' | head -1 || echo "1.21.51.02")
-fi
+VERSION="\${BDS_VERSION:-1.21.60.04}"
+echo "Downloading Bedrock Dedicated Server \${VERSION}..."
 DOWNLOAD_URL="https://minecraft.azureedge.net/bin-linux/bedrock-server-\${VERSION}.zip"
-echo "Downloading Bedrock Server \${VERSION} from Mojang..."
-curl -sSL -o bedrock-server.zip "\$DOWNLOAD_URL" -A "Mozilla/5.0" || {
-  echo "Primary URL failed, trying preview URL..."
-  curl -sSL -o bedrock-server.zip "https://minecraft.azureedge.net/bin-linux-preview/bedrock-server-\${VERSION}.zip" -A "Mozilla/5.0"
-}
+if curl -fsSL -o bedrock-server.zip "\$DOWNLOAD_URL" -A "Mozilla/5.0" 2>/dev/null; then
+  echo "Downloaded from primary CDN."
+else
+  echo "Primary CDN failed, trying preview CDN..."
+  curl -fsSL -o bedrock-server.zip "https://minecraft.azureedge.net/bin-linux-preview/bedrock-server-\${VERSION}.zip" -A "Mozilla/5.0" || {
+    echo "ERROR: Could not download BDS \${VERSION}. Check BDS_VERSION variable."
+    exit 1
+  }
+fi
 unzip -o bedrock-server.zip
 rm -f bedrock-server.zip
 chmod +x bedrock_server
-echo "Bedrock Server \${VERSION} installed."`;
+echo "Bedrock Server \${VERSION} installed successfully."`;
     // Minecraft Bedrock
     const bedrockEgg = await prisma.egg.upsert({
         where: { uuid: '00000000-0000-0000-0000-000000000008' },
         update: {
             scriptInstall: BEDROCK_INSTALL_SCRIPT,
-            scriptContainer: 'debian:bookworm-slim',
+            scriptContainer: 'ghcr.io/pterodactyl/installers:alpine',
         },
         create: {
             uuid: '00000000-0000-0000-0000-000000000008',
@@ -307,7 +350,7 @@ echo "Bedrock Server \${VERSION} installed."`;
             startup: 'LD_LIBRARY_PATH=. ./bedrock_server',
             configStop: 'stop',
             scriptInstall: BEDROCK_INSTALL_SCRIPT,
-            scriptContainer: 'debian:bookworm-slim',
+            scriptContainer: 'ghcr.io/pterodactyl/installers:alpine',
         },
     });
     // SERVER_TYPE env variable for Bedrock egg so Wings can detect the server type
@@ -323,6 +366,21 @@ echo "Bedrock Server \${VERSION} installed."`;
             defaultValue: 'BEDROCK',
             userViewable: false,
             userEditable: false,
+        },
+    });
+    // BDS_VERSION variable — lets users pin a specific Bedrock version
+    await prisma.eggVariable.upsert({
+        where: { id: 'bedrock-bds-version-var' },
+        update: { defaultValue: '1.21.60.04' },
+        create: {
+            id: 'bedrock-bds-version-var',
+            eggId: bedrockEgg.id,
+            name: 'BDS Version',
+            description: 'Bedrock Dedicated Server version to install (e.g. 1.21.60.04)',
+            envVariable: 'BDS_VERSION',
+            defaultValue: '1.21.60.04',
+            userViewable: true,
+            userEditable: true,
         },
     });
     // Bedrock allocations
@@ -352,10 +410,50 @@ echo "Bedrock Server \${VERSION} installed."`;
             description: 'Non-Minecraft game servers',
         },
     });
+    const RUST_INSTALL = `#!/bin/bash
+set -e
+cd /mnt/server
+echo "Installing Rust via SteamCMD..."
+steamcmd +force_install_dir /mnt/server +login anonymous +app_update 258550 validate +quit
+echo "Rust server installed."`;
+    const GMOD_INSTALL = `#!/bin/bash
+set -e
+cd /mnt/server
+echo "Installing Garry's Mod via SteamCMD..."
+steamcmd +force_install_dir /mnt/server +login anonymous +app_update 4020 validate +quit
+echo "Garry's Mod installed."`;
+    const CS2_INSTALL = `#!/bin/bash
+set -e
+cd /mnt/server
+echo "Installing CS2 via SteamCMD..."
+steamcmd +force_install_dir /mnt/server +login anonymous +app_update 730 validate +quit
+echo "CS2 dedicated server installed."`;
+    const ARK_INSTALL = `#!/bin/bash
+set -e
+cd /mnt/server
+echo "Installing ARK via SteamCMD..."
+steamcmd +force_install_dir /mnt/server +login anonymous +app_update 376030 validate +quit
+echo "ARK server installed."`;
+    const TSHOCK_INSTALL = `#!/bin/bash
+set -e
+cd /mnt/server
+echo "Fetching latest TShock release..."
+TSHOCK_URL=$(curl -sSL https://api.github.com/repos/Pryaxis/TShock/releases/latest | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+urls = [a['browser_download_url'] for a in d['assets'] if 'TShock' in a['name'] and a['name'].endswith('.zip')]
+print(urls[0] if urls else '')
+" 2>/dev/null || echo "")
+[ -z "$TSHOCK_URL" ] && { echo "Could not find TShock download URL"; exit 1; }
+curl -sSL -o tshock.zip "$TSHOCK_URL"
+unzip -o tshock.zip
+rm -f tshock.zip
+chmod +x TShock.Server 2>/dev/null || true
+echo "TShock installed."`;
     // Rust
     await prisma.egg.upsert({
         where: { uuid: '00000000-0000-0000-0001-000000000001' },
-        update: {},
+        update: { scriptInstall: RUST_INSTALL, scriptContainer: 'ghcr.io/pterodactyl/installers:steam' },
         create: {
             uuid: '00000000-0000-0000-0001-000000000001',
             nestId: gamesNest.id,
@@ -365,17 +463,14 @@ echo "Bedrock Server \${VERSION} installed."`;
             dockerImage: 'ghcr.io/pterodactyl/games:rust',
             startup: './RustDedicated -batchmode +server.ip 0.0.0.0 +server.port {{SERVER_PORT}} +server.queryport {{QUERY_PORT}} +rcon.ip 0.0.0.0 +rcon.port {{RCON_PORT}} +rcon.password "{{RCON_PASSWORD}}" +server.maxplayers {{MAX_PLAYERS}} +server.hostname "{{SERVER_NAME}}" +server.identity "{{SERVER_IDENT}}" +server.seed {{SERVER_SEED}} +server.worldsize {{WORLD_SIZE}} -logfile /dev/stdout',
             configStop: 'quit',
-            scriptInstall: `#!/bin/bash
-cd /mnt/server
-steamcmd +force_install_dir /mnt/server +login anonymous +app_update 258550 validate +quit
-echo "Rust server installed."`,
+            scriptInstall: RUST_INSTALL,
             scriptContainer: 'ghcr.io/pterodactyl/installers:steam',
         },
     });
     // Garry's Mod
     await prisma.egg.upsert({
         where: { uuid: '00000000-0000-0000-0001-000000000002' },
-        update: {},
+        update: { scriptInstall: GMOD_INSTALL, scriptContainer: 'ghcr.io/pterodactyl/installers:steam' },
         create: {
             uuid: '00000000-0000-0000-0001-000000000002',
             nestId: gamesNest.id,
@@ -385,17 +480,14 @@ echo "Rust server installed."`,
             dockerImage: 'ghcr.io/pterodactyl/games:source',
             startup: './srcds_run -game garrysmod -console -port {{SERVER_PORT}} +maxplayers {{MAX_PLAYERS}} +map {{DEFAULT_MAP}} -strictportbind -norestart',
             configStop: 'quit',
-            scriptInstall: `#!/bin/bash
-cd /mnt/server
-steamcmd +force_install_dir /mnt/server +login anonymous +app_update 4020 validate +quit
-echo "Garry's Mod installed."`,
+            scriptInstall: GMOD_INSTALL,
             scriptContainer: 'ghcr.io/pterodactyl/installers:steam',
         },
     });
     // CS2
     await prisma.egg.upsert({
         where: { uuid: '00000000-0000-0000-0001-000000000003' },
-        update: {},
+        update: { scriptInstall: CS2_INSTALL, scriptContainer: 'ghcr.io/pterodactyl/installers:steam' },
         create: {
             uuid: '00000000-0000-0000-0001-000000000003',
             nestId: gamesNest.id,
@@ -405,17 +497,14 @@ echo "Garry's Mod installed."`,
             dockerImage: 'ghcr.io/pterodactyl/games:source',
             startup: './game/bin/linuxsteamrt64/cs2 -dedicated -console -port {{SERVER_PORT}} +map {{DEFAULT_MAP}} +maxplayers_override {{MAX_PLAYERS}} +sv_setsteamaccount {{STEAM_ACC}}',
             configStop: 'quit',
-            scriptInstall: `#!/bin/bash
-cd /mnt/server
-steamcmd +force_install_dir /mnt/server +login anonymous +app_update 730 validate +quit
-echo "CS2 dedicated server installed."`,
+            scriptInstall: CS2_INSTALL,
             scriptContainer: 'ghcr.io/pterodactyl/installers:steam',
         },
     });
     // ARK: Survival Evolved
     await prisma.egg.upsert({
         where: { uuid: '00000000-0000-0000-0001-000000000004' },
-        update: {},
+        update: { scriptInstall: ARK_INSTALL, scriptContainer: 'ghcr.io/pterodactyl/installers:steam' },
         create: {
             uuid: '00000000-0000-0000-0001-000000000004',
             nestId: gamesNest.id,
@@ -425,17 +514,14 @@ echo "CS2 dedicated server installed."`,
             dockerImage: 'ghcr.io/pterodactyl/games:source',
             startup: './ShooterGame/Binaries/Linux/ShooterGameServer {{MAP}}?listen?ServerPassword={{SERVER_PASSWORD}}?ServerAdminPassword={{ADMIN_PASSWORD}}?RCONEnabled=True?RCONPort={{RCON_PORT}} -port={{SERVER_PORT}} -queryport={{QUERY_PORT}} -NoBattlEye',
             configStop: 'DoExit',
-            scriptInstall: `#!/bin/bash
-cd /mnt/server
-steamcmd +force_install_dir /mnt/server +login anonymous +app_update 376030 validate +quit
-echo "ARK server installed."`,
+            scriptInstall: ARK_INSTALL,
             scriptContainer: 'ghcr.io/pterodactyl/installers:steam',
         },
     });
     // Terraria / TShock
     await prisma.egg.upsert({
         where: { uuid: '00000000-0000-0000-0001-000000000005' },
-        update: {},
+        update: { scriptInstall: TSHOCK_INSTALL, scriptContainer: 'ghcr.io/pterodactyl/installers:alpine' },
         create: {
             uuid: '00000000-0000-0000-0001-000000000005',
             nestId: gamesNest.id,
@@ -445,14 +531,7 @@ echo "ARK server installed."`,
             dockerImage: 'ghcr.io/pterodactyl/yolks:dotnet_6',
             startup: './TShock.Server -port {{SERVER_PORT}} -maxplayers {{MAX_PLAYERS}} -world {{WORLD_NAME}}.wld -autocreate {{WORLD_SIZE}} -worldname {{WORLD_NAME}}',
             configStop: 'exit',
-            scriptInstall: `#!/bin/bash
-cd /mnt/server
-TSHOCK=$(curl -sS https://api.github.com/repos/Pryaxis/TShock/releases/latest | python3 -c "import sys,json;d=json.load(sys.stdin);[print(a['browser_download_url']) for a in d['assets'] if 'TShock-' in a['name'] and a['name'].endswith('.zip')]" | head -1)
-curl -sSL -o tshock.zip "$TSHOCK"
-unzip -o tshock.zip
-rm tshock.zip
-chmod +x TShock.Server
-echo "TShock installed."`,
+            scriptInstall: TSHOCK_INSTALL,
             scriptContainer: 'ghcr.io/pterodactyl/installers:alpine',
         },
     });
