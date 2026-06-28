@@ -8,6 +8,8 @@
 ![Stars](https://img.shields.io/github/stars/mwlih28/mc-manage-panel?style=flat)
 ![Last Commit](https://img.shields.io/github/last-commit/mwlih28/mc-manage-panel)
 
+> ⚠️ **This project is under active development.** Core features work, but expect rough edges, breaking changes, and missing polish. Not yet recommended for production use without testing in your own environment first. Feedback and bug reports are very welcome.
+
 Manage Minecraft and other game servers from a web UI — with a Wings daemon on each node, real-time console, resource monitoring, and full admin controls.
 
 ---
@@ -259,6 +261,12 @@ Contributions are welcome. Here's the flow:
 4. Open a pull request against `main`. Link the related issue in the PR description.
 
 For bug reports, include your OS, Node version, and relevant logs. For feature requests, explain the use case.
+
+---
+
+## Contact
+
+Got an idea, found a bug, or just want to reach out? Email: **mwlih28@gmail.com**
 
 ---
 
