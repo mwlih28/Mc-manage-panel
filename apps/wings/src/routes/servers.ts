@@ -81,15 +81,12 @@ router.get('/:uuid/status', (req: Request, res: Response) => {
   return res.json({ status });
 });
 
-// Reinstall server
+// Reinstall server — body may contain ServerConfig from the panel
 router.post('/:uuid/reinstall', async (req: Request, res: Response) => {
-  try {
-    serverManager.reinstallServer(req.params.uuid)
-      .catch(err => logger.error(`Reinstall failed: ${err.message}`));
-    return res.json({ message: 'Reinstall initiated' });
-  } catch (err) {
-    return res.status(500).json({ message: (err as Error).message });
-  }
+  const externalConfig: ServerConfig | undefined = req.body?.uuid ? req.body as ServerConfig : undefined;
+  serverManager.reinstallServer(req.params.uuid, externalConfig)
+    .catch(err => logger.error(`Reinstall failed for ${req.params.uuid}: ${err.message}`));
+  return res.json({ message: 'Reinstall initiated' });
 });
 
 // Delete server

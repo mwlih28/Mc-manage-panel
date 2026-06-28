@@ -500,16 +500,21 @@ class ServerManager extends EventEmitter {
     };
   }
 
-  async reinstallServer(uuid: string): Promise<void> {
+  async reinstallServer(uuid: string, externalConfig?: ServerConfig): Promise<void> {
     const server = this.servers.get(uuid);
-    if (!server) throw new Error('Server not found');
+    const config = server?.config ?? externalConfig;
+    if (!config) throw new Error('Server not found — provide config in request body');
 
-    if (server.status !== 'offline') {
+    // Load into memory if not already there so status updates work
+    if (!server && externalConfig) {
+      await this.loadServer(externalConfig).catch(() => {});
+    }
+
+    if (server?.status && server.status !== 'offline') {
       await this.stopServer(uuid).catch(() => {});
       await new Promise(r => setTimeout(r, 4000));
     }
 
-    const { config } = server;
     const cfg = getConfig();
     const dataPath = path.join(cfg.system.data, uuid);
 

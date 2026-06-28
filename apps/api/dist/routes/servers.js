@@ -285,31 +285,36 @@ router.patch('/:id', auth_1.authenticate, async (req, res) => {
 });
 // POST /servers/:id/reinstall - Admin only
 router.post('/:id/reinstall', auth_1.authenticate, auth_1.requireAdmin, async (req, res) => {
-    const server = await prisma_1.prisma.server.findFirst({
-        where: { id: req.params.id },
-        include: { node: true },
-    });
-    if (!server)
-        return res.status(404).json({ message: 'Server not found' });
-    await prisma_1.prisma.server.update({ where: { id: server.id }, data: { status: 'INSTALLING' } });
-    if (server.node?.status === 'ONLINE') {
-        const client = axios_1.default.create({
-            baseURL: `${server.node.scheme}://${server.node.fqdn}:${server.node.daemonPort}/api`,
-            headers: { Authorization: `Bearer ${server.node.token}` },
-            timeout: 10000,
+    try {
+        const server = await prisma_1.prisma.server.findFirst({
+            where: { id: req.params.id },
+            include: {
+                node: true,
+                egg: { select: { startup: true, dockerImage: true, scriptInstall: true, scriptContainer: true } },
+            },
         });
-        client.post(`/servers/${server.uuid}/reinstall`, {})
-            .catch(err => logger_1.logger.warn(`Wings reinstall request failed: ${err.message}`));
+        if (!server)
+            return res.status(404).json({ message: 'Server not found' });
+        await prisma_1.prisma.server.update({ where: { id: server.id }, data: { status: 'INSTALLING' } });
+        if (server.node?.status === 'ONLINE') {
+            const wingsConfig = (0, wingsClient_1.buildWingsConfig)(server);
+            const client = axios_1.default.create({
+                baseURL: `${server.node.scheme}://${server.node.fqdn}:${server.node.daemonPort}/api`,
+                headers: { Authorization: `Bearer ${server.node.token}` },
+                timeout: 10000,
+            });
+            client.post(`/servers/${server.uuid}/reinstall`, wingsConfig)
+                .catch(err => logger_1.logger.warn(`Wings reinstall request failed: ${err.message}`));
+        }
+        await prisma_1.prisma.activity.create({
+            data: { userId: req.user.id, serverId: server.id, event: 'server:reinstall', ip: req.ip },
+        });
+        return res.json({ message: 'Reinstall initiated' });
     }
-    await prisma_1.prisma.activity.create({
-        data: {
-            userId: req.user.id,
-            serverId: server.id,
-            event: 'server:reinstall',
-            ip: req.ip,
-        },
-    });
-    return res.json({ message: 'Reinstall initiated' });
+    catch (err) {
+        logger_1.logger.error('Reinstall error:', err);
+        return res.status(500).json({ message: 'Internal server error during reinstall' });
+    }
 });
 // DELETE /servers/:id
 router.delete('/:id', auth_1.authenticate, auth_1.requireAdmin, async (req, res) => {

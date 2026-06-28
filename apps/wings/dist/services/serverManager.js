@@ -468,15 +468,19 @@ class ServerManager extends events_1.EventEmitter {
             state: server.status,
         };
     }
-    async reinstallServer(uuid) {
+    async reinstallServer(uuid, externalConfig) {
         const server = this.servers.get(uuid);
-        if (!server)
-            throw new Error('Server not found');
-        if (server.status !== 'offline') {
+        const config = server?.config ?? externalConfig;
+        if (!config)
+            throw new Error('Server not found — provide config in request body');
+        // Load into memory if not already there so status updates work
+        if (!server && externalConfig) {
+            await this.loadServer(externalConfig).catch(() => { });
+        }
+        if (server?.status && server.status !== 'offline') {
             await this.stopServer(uuid).catch(() => { });
             await new Promise(r => setTimeout(r, 4000));
         }
-        const { config } = server;
         const cfg = (0, config_1.getConfig)();
         const dataPath = path_1.default.join(cfg.system.data, uuid);
         if (fs_1.default.existsSync(dataPath)) {

@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendPowerAction = sendPowerAction;
 exports.sendCommand = sendCommand;
 exports.getServerResources = getServerResources;
+exports.buildWingsConfig = buildWingsConfig;
 exports.createServerOnNode = createServerOnNode;
 exports.deleteServerFromNode = deleteServerFromNode;
 exports.checkNodeHealth = checkNodeHealth;
@@ -36,15 +37,13 @@ async function getServerResources(server) {
     const { data } = await client.get(`/servers/${server.uuid}/resources`);
     return data.resources;
 }
-async function createServerOnNode(server) {
-    const client = getNodeClient(server.node.fqdn, server.node.daemonPort, server.node.scheme, server.node.token);
+function buildWingsConfig(server) {
     const env = {};
     try {
-        const parsed = JSON.parse(server.env);
-        Object.assign(env, parsed);
+        Object.assign(env, JSON.parse(server.env));
     }
     catch { /* ignore */ }
-    const config = {
+    return {
         uuid: server.uuid,
         suspended: server.suspended,
         environment: env,
@@ -64,7 +63,10 @@ async function createServerOnNode(server) {
         egg: { id: server.eggId, file_denylist: [] },
         container: { image: server.image, requires_rebuild: false },
     };
-    await client.post('/servers', config);
+}
+async function createServerOnNode(server) {
+    const client = getNodeClient(server.node.fqdn, server.node.daemonPort, server.node.scheme, server.node.token);
+    await client.post('/servers', buildWingsConfig(server));
     logger_1.logger.info(`Server ${server.uuid} registered on Wings node ${server.node.fqdn}`);
 }
 async function deleteServerFromNode(server) {

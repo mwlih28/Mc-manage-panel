@@ -58,18 +58,21 @@ export declare function getServerResources(server: Server & {
     uptime: number;
     state: string;
 }>;
-export declare function createServerOnNode(server: Server & {
-    node: {
-        fqdn: string;
-        daemonPort: number;
-        scheme: string;
-        token: string;
-    };
+type ServerWithEgg = Server & {
     egg: {
         startup: string;
         dockerImage: string;
         scriptInstall?: string | null;
         scriptContainer?: string | null;
+    };
+};
+export declare function buildWingsConfig(server: ServerWithEgg): WingsServerConfig;
+export declare function createServerOnNode(server: ServerWithEgg & {
+    node: {
+        fqdn: string;
+        daemonPort: number;
+        scheme: string;
+        token: string;
     };
 }): Promise<void>;
 export declare function deleteServerFromNode(server: Server & {

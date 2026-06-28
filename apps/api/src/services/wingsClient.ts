@@ -86,26 +86,14 @@ export async function getServerResources(
   return data.resources;
 }
 
-export async function createServerOnNode(
-  server: Server & {
-    node: { fqdn: string; daemonPort: number; scheme: string; token: string };
-    egg: { startup: string; dockerImage: string; scriptInstall?: string | null; scriptContainer?: string | null };
-  }
-): Promise<void> {
-  const client = getNodeClient(
-    server.node.fqdn,
-    server.node.daemonPort,
-    server.node.scheme,
-    server.node.token
-  );
+type ServerWithEgg = Server & {
+  egg: { startup: string; dockerImage: string; scriptInstall?: string | null; scriptContainer?: string | null };
+};
 
+export function buildWingsConfig(server: ServerWithEgg): WingsServerConfig {
   const env: Record<string, string> = {};
-  try {
-    const parsed = JSON.parse(server.env);
-    Object.assign(env, parsed);
-  } catch { /* ignore */ }
-
-  const config: WingsServerConfig = {
+  try { Object.assign(env, JSON.parse(server.env as string)); } catch { /* ignore */ }
+  return {
     uuid: server.uuid,
     suspended: server.suspended,
     environment: env,
@@ -125,8 +113,20 @@ export async function createServerOnNode(
     egg: { id: server.eggId, file_denylist: [] },
     container: { image: server.image, requires_rebuild: false },
   };
+}
 
-  await client.post('/servers', config);
+export async function createServerOnNode(
+  server: ServerWithEgg & {
+    node: { fqdn: string; daemonPort: number; scheme: string; token: string };
+  }
+): Promise<void> {
+  const client = getNodeClient(
+    server.node.fqdn,
+    server.node.daemonPort,
+    server.node.scheme,
+    server.node.token
+  );
+  await client.post('/servers', buildWingsConfig(server));
   logger.info(`Server ${server.uuid} registered on Wings node ${server.node.fqdn}`);
 }
 
