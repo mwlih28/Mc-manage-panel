@@ -212,13 +212,20 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
     queryFn: () => api.get('/eggs').then((r) => r.data.data),
   });
 
-  // Fetch Paper versions from PaperMC API
+  // Derive selected egg type
+  const eggs: { id: string; name: string }[] = eggsData || [];
+  const selectedEgg = eggs.find((e) => e.id === form.eggId);
+  const isPaperEgg = selectedEgg?.name?.toLowerCase() === 'paper';
+  const isBedrockEgg = selectedEgg?.name?.toLowerCase().includes('bedrock') ?? false;
+
+  // Fetch Paper versions from PaperMC API (only when a Paper egg is selected)
   useEffect(() => {
+    if (!isPaperEgg) return;
     fetch('https://api.papermc.io/v2/projects/paper', { signal: AbortSignal.timeout(10000) })
       .then((r) => r.json())
       .then((d) => { if (d.versions) setPaperVersions([...d.versions].reverse()); })
-      .catch(() => {/* ignore, user can still type */});
-  }, []);
+      .catch(() => {/* ignore */});
+  }, [isPaperEgg]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -226,11 +233,10 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
     try {
       const res = await api.post('/servers', form);
       const serverId: string = res.data?.data?.id;
-      // Install selected Paper version right after creation (skip if "latest" — Wings downloads on first start)
-      if (serverId && paperVersion && paperVersion !== 'latest') {
+      // Install selected Paper version right after creation (only for Paper egg)
+      if (isPaperEgg && serverId && paperVersion && paperVersion !== 'latest') {
         try {
           await api.post(`/servers/${serverId}/version`, { version: paperVersion }, { timeout: 180000 });
-          // Store MC_VERSION so plugin installer picks the right build
           await api.patch(`/servers/${serverId}`, { mcVersion: paperVersion }).catch(() => {});
           toast.success(`Server created with Paper ${paperVersion}`);
         } catch {
@@ -284,24 +290,35 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
             <label className="label">Egg (Server Type)</label>
             <select className="input" value={form.eggId} onChange={f('eggId')} required>
               <option value="">Select egg...</option>
-              {(eggsData || []).map((egg: { id: string; name: string }) => (
+              {eggs.map((egg) => (
                 <option key={egg.id} value={egg.id}>{egg.name}</option>
               ))}
             </select>
           </div>
 
-          <div className="col-span-2">
-            <label className="label">Paper Version</label>
-            <select className="input" value={paperVersion} onChange={(e) => setPaperVersion(e.target.value)}>
-              <option value="latest">Latest (auto-download on first start)</option>
-              {paperVersions.map((v) => (
-                <option key={v} value={v}>{v}</option>
-              ))}
-            </select>
-            <p className="text-xs text-slate-500 mt-1">
-              Specific version downloads the Paper JAR immediately after server creation.
-            </p>
-          </div>
+          {/* Paper version — only shown for Paper egg */}
+          {isPaperEgg && (
+            <div className="col-span-2">
+              <label className="label">Paper Version</label>
+              <select className="input" value={paperVersion} onChange={(e) => setPaperVersion(e.target.value)}>
+                <option value="latest">Latest (auto-download on first start)</option>
+                {paperVersions.map((v) => (
+                  <option key={v} value={v}>{v}</option>
+                ))}
+              </select>
+              <p className="text-xs text-zinc-500 mt-1">
+                Specific version downloads the Paper JAR immediately after server creation.
+              </p>
+            </div>
+          )}
+
+          {/* Bedrock info */}
+          {isBedrockEgg && (
+            <div className="col-span-2 rounded-lg px-3 py-2.5 text-xs text-zinc-400" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid #2a2a2e' }}>
+              Bedrock Dedicated Server (BDS) will be downloaded from Mojang automatically on first start.
+              Players connect with Minecraft Bedrock/PE/Console edition on port <span className="font-mono text-zinc-200">19132 UDP</span>.
+            </div>
+          )}
 
           <div>
             <label className="label">Memory (MB)</label>
@@ -314,7 +331,7 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
           </div>
 
           <div>
-            <label className="label">CPU Limit <span className="text-slate-500 font-normal">(% of 1 core, 0 = unlimited)</span></label>
+            <label className="label">CPU Limit <span className="text-zinc-500 font-normal">(% of 1 core, 0 = unlimited)</span></label>
             <input type="number" className="input" value={form.cpu} onChange={f('cpu')} placeholder="0" />
           </div>
 

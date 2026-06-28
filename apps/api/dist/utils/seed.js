@@ -270,7 +270,7 @@ echo "Velocity $VELOCITY_VERSION-$VELOCITY_BUILD installed."`,
         },
     });
     // Minecraft Bedrock
-    await prisma.egg.upsert({
+    const bedrockEgg = await prisma.egg.upsert({
         where: { uuid: '00000000-0000-0000-0000-000000000008' },
         update: {},
         create: {
@@ -298,6 +298,21 @@ rm -f bedrock-server.zip
 chmod +x bedrock_server
 echo "Bedrock Server \${VERSION} installed."`,
             scriptContainer: 'ghcr.io/pterodactyl/installers:alpine',
+        },
+    });
+    // SERVER_TYPE env variable for Bedrock egg so Wings can detect the server type
+    await prisma.eggVariable.upsert({
+        where: { id: 'bedrock-server-type-var' },
+        update: {},
+        create: {
+            id: 'bedrock-server-type-var',
+            eggId: bedrockEgg.id,
+            name: 'Server Type',
+            description: 'Internal marker for Wings to detect Bedrock servers',
+            envVariable: 'SERVER_TYPE',
+            defaultValue: 'BEDROCK',
+            userViewable: false,
+            userEditable: false,
         },
     });
     // Bedrock allocations
