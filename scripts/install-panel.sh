@@ -25,6 +25,7 @@ REPO_URL="https://github.com/mwlih28/mc-manage-panel"
 BRANCH="main"
 MIN_DISK_GB=5
 MIN_RAM_MB=512
+SERVER_IP=""
 
 # ────────────────────────────── Banner ──────────────────────────────
 echo -e "\n${BOLD}"
@@ -48,6 +49,12 @@ case "$OS_ID" in
 esac
 
 info "OS: ${OS_ID} ${OS_VER}"
+
+# Detect public IP early (used as fallback if SSL fails)
+SERVER_IP=$(curl -4 -sf --max-time 5 https://api.ipify.org 2>/dev/null \
+  || curl -4 -sf --max-time 5 https://ifconfig.me 2>/dev/null \
+  || hostname -I | awk '{print $1}')
+info "Server IP: ${SERVER_IP}"
 
 # Disk space check
 AVAIL_DISK_GB=$(df / --output=avail -BG | tail -1 | tr -d 'G ')
@@ -232,9 +239,9 @@ success "API built → ${PANEL_DIR}/apps/api/dist"
 
 # ────────────────────────────── Build Web ──────────────────────────────
 step "Building Web"
-info "Building frontend (VITE_API_URL=https://${PANEL_DOMAIN})..."
+info "Building frontend (relative API paths — works on any domain or IP)..."
 cd "${PANEL_DIR}/apps/web"
-PATH="${PANEL_DIR}/node_modules/.bin:$PATH" VITE_API_URL="https://${PANEL_DOMAIN}" npm run build
+PATH="${PANEL_DIR}/node_modules/.bin:$PATH" npm run build
 success "Web built → ${PANEL_DIR}/apps/web/dist"
 
 # ────────────────────────────── Database schema ──────────────────────────────
@@ -391,7 +398,9 @@ systemctl reload nginx
 success "Nginx configured for ${PANEL_DOMAIN}"
 
 # ────────────────────────────── SSL ──────────────────────────────
+SCHEME="http"
 if [[ "${SETUP_SSL,,}" != "n" ]]; then
+  SCHEME="https"
   step "Setting up SSL (Let's Encrypt)"
   apt-get install -y certbot python3-certbot-nginx >/dev/null
   if certbot --nginx -d "$PANEL_DOMAIN" \
@@ -408,8 +417,18 @@ HOOK
     chmod +x /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
     success "Certbot renewal hook installed"
   else
-    warn "Certbot failed. Make sure ${PANEL_DOMAIN} points to this server's IP."
-    warn "You can retry later: certbot --nginx -d ${PANEL_DOMAIN}"
+    warn "Certbot failed — DNS for ${PANEL_DOMAIN} may not be pointing to this server yet."
+    warn "Falling back to HTTP access via IP: http://${SERVER_IP}"
+    # Switch nginx to catch-all so the panel is reachable by IP now
+    sed -i "s|server_name ${PANEL_DOMAIN};|server_name _;|" /etc/nginx/sites-available/mc-panel
+    # Update .env CORS to allow IP-based access
+    sed -i "s|CORS_ORIGIN=https://${PANEL_DOMAIN}|CORS_ORIGIN=http://${SERVER_IP}|" "${PANEL_DIR}/apps/api/.env"
+    sed -i "s|APP_URL=https://${PANEL_DOMAIN}|APP_URL=http://${SERVER_IP}|" "${PANEL_DIR}/apps/api/.env"
+    nginx -t && systemctl reload nginx
+    systemctl restart mc-panel
+    SCHEME="http"
+    PANEL_DOMAIN="${SERVER_IP}"
+    warn "Once DNS is set up, run: certbot --nginx -d <your-domain> to enable HTTPS."
   fi
 fi
 
@@ -426,8 +445,7 @@ else
 fi
 
 # ────────────────────────────── Done ──────────────────────────────
-SCHEME="http"
-[[ "${SETUP_SSL,,}" != "n" ]] && SCHEME="https"
+# SCHEME and PANEL_DOMAIN may have been updated by the SSL fallback block above
 
 echo ""
 echo -e "${GREEN}${BOLD}"
