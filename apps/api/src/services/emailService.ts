@@ -2,11 +2,35 @@ import nodemailer from 'nodemailer';
 import { prisma } from '../utils/prisma';
 import { logger } from '../utils/logger';
 
-async function getSmtpConf(): Promise<Record<string, string>> {
+// ── Registry SMTP (mwlih28's own email for contacting installers) ──────
+// Set these in apps/api/.env on the central registry server.
+// Panel owners configure their own SMTP in Admin → Settings → Email.
+function getRegistrySmtp(): Record<string, string> | null {
+  const host = process.env.REGISTRY_SMTP_HOST;
+  const user = process.env.REGISTRY_SMTP_USER;
+  const pass = process.env.REGISTRY_SMTP_PASS;
+  if (!host || !user || !pass) return null;
+  return {
+    'smtp.host':        host,
+    'smtp.port':        process.env.REGISTRY_SMTP_PORT  || '587',
+    'smtp.user':        user,
+    'smtp.pass':        pass,
+    'smtp.from':        process.env.REGISTRY_SMTP_FROM  || user,
+    'smtp.owner_email': process.env.REGISTRY_SMTP_OWNER || user,
+  };
+}
+
+// ── Panel SMTP (configured by panel admin in Admin → Settings) ─────────
+async function getPanelSmtpConf(): Promise<Record<string, string>> {
   const rows = await prisma.setting.findMany({ where: { key: { startsWith: 'smtp.' } } });
   const conf: Record<string, string> = {};
   for (const r of rows) conf[r.key] = r.value;
   return conf;
+}
+
+// Returns registry SMTP if available, otherwise falls back to panel SMTP
+async function getSmtpConf(): Promise<Record<string, string>> {
+  return getRegistrySmtp() ?? getPanelSmtpConf();
 }
 
 function makeTransport(conf: Record<string, string>) {
@@ -118,8 +142,10 @@ export async function sendThankYouEmail(to: string, name: string, serverIp: stri
   }
 }
 
-export async function sendOwnerNotification(conf: Record<string, string>, name: string, email: string, serverIp: string, domain: string): Promise<boolean> {
+export async function sendOwnerNotification(name: string, email: string, serverIp: string, domain: string): Promise<boolean> {
   try {
+    // Always use registry SMTP for owner notifications, fall back to panel SMTP
+    const conf = getRegistrySmtp() ?? await getPanelSmtpConf();
     const transport = makeTransport(conf);
     if (!transport) return false;
     const ownerEmail = conf['smtp.owner_email'];
@@ -129,8 +155,19 @@ export async function sendOwnerNotification(conf: Record<string, string>, name: 
       from: `"MC Panel Registry" <${from}>`,
       to: ownerEmail,
       subject: `New installation: ${domain || serverIp}`,
-      text: `New MC Manage Panel installation registered.\n\nName: ${name || '(not provided)'}\nEmail: ${email}\nServer IP: ${serverIp}\nDomain: ${domain || '—'}\nTime: ${new Date().toISOString()}`,
+      html: `<div style="font-family:sans-serif;max-width:480px;padding:24px;background:#111;color:#e4e4e7;border-radius:8px;">
+<h2 style="margin:0 0 16px;color:#86efac;">📥 New Installation</h2>
+<table style="width:100%;border-collapse:collapse;font-size:14px;">
+<tr><td style="padding:6px 0;color:#71717a;width:100px;">Name</td><td style="color:#e4e4e7;">${name || '—'}</td></tr>
+<tr><td style="padding:6px 0;color:#71717a;">Email</td><td style="color:#e4e4e7;">${email}</td></tr>
+<tr><td style="padding:6px 0;color:#71717a;">Server IP</td><td style="font-family:monospace;color:#e4e4e7;">${serverIp}</td></tr>
+<tr><td style="padding:6px 0;color:#71717a;">Domain</td><td style="color:#e4e4e7;">${domain || '—'}</td></tr>
+<tr><td style="padding:6px 0;color:#71717a;">Time</td><td style="color:#e4e4e7;">${new Date().toUTCString()}</td></tr>
+</table>
+</div>`,
+      text: `New MC Manage Panel installation.\n\nName: ${name || '—'}\nEmail: ${email}\nServer IP: ${serverIp}\nDomain: ${domain || '—'}\nTime: ${new Date().toISOString()}`,
     });
+    logger.info(`Owner notification sent for installation from ${serverIp}`);
     return true;
   } catch (err) {
     logger.warn(`Failed to send owner notification: ${(err as Error).message}`);

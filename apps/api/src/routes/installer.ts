@@ -58,11 +58,8 @@ router.post(
     });
 
     // Fire-and-forget: thank-you email to installer + owner notification
-    const conf = await prisma.setting.findMany({ where: { key: { startsWith: 'smtp.' } } })
-      .then(rows => Object.fromEntries(rows.map(r => [r.key, r.value])));
-
     sendThankYouEmail(email, name, serverIp).catch(() => {});
-    sendOwnerNotification(conf, name, email, serverIp, panelDomain).catch(() => {});
+    sendOwnerNotification(name, email, serverIp, panelDomain).catch(() => {});
 
     return res.status(201).json({ message: 'Registered. Thank-you email queued.' });
   }
@@ -96,14 +93,16 @@ router.post('/notify-updates', authenticate, requireAdmin, async (req: AuthReque
 });
 
 // POST /api/v1/installer/test-smtp — admin only: send test email to owner
-router.post('/test-smtp', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
-  const conf = await prisma.setting.findMany({ where: { key: { startsWith: 'smtp.' } } })
-    .then(rows => Object.fromEntries(rows.map(r => [r.key, r.value])));
-  const ownerEmail = conf['smtp.owner_email'];
-  if (!ownerEmail) return res.status(400).json({ message: 'Set smtp.owner_email first.' });
-  const ok = await sendUpdateNotification(ownerEmail, 'TEST — SMTP is working!');
+router.post('/test-smtp', authenticate, requireAdmin, async (_req: AuthRequest, res: Response) => {
+  // Resolve owner email: registry env var takes priority, then DB setting
+  const ownerEmail = process.env.REGISTRY_SMTP_OWNER
+    || await prisma.setting.findUnique({ where: { key: 'smtp.owner_email' } }).then(r => r?.value || '');
+  if (!ownerEmail) {
+    return res.status(400).json({ message: 'No owner email configured. Set REGISTRY_SMTP_OWNER in .env or smtp.owner_email in Settings.' });
+  }
+  const ok = await sendUpdateNotification(ownerEmail, 'TEST — SMTP is working!').catch(() => false);
   if (!ok) return res.status(500).json({ message: 'SMTP send failed — check host/port/credentials.' });
-  return res.json({ message: 'Test email sent.' });
+  return res.json({ message: `Test email sent to ${ownerEmail}.` });
 });
 
 // DELETE /api/v1/installer/registrations/:id — admin only
