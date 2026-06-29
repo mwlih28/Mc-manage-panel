@@ -120,15 +120,11 @@ read -rp "  Setup SSL with Let's Encrypt? [Y/n]: " SETUP_SSL
 SETUP_SSL="${SETUP_SSL:-y}"
 
 echo ""
-echo -e "  ${CYAN}${BOLD}Optional:${NC} Help us improve MC Manage Panel"
-read -rp "  Your name (for the thank-you email) [press Enter to skip]: " INSTALLER_NAME
-read -rp "  Your contact email (optional): " INSTALLER_EMAIL
+echo -e "  ${CYAN}${BOLD}Optional:${NC} Get notified about updates"
+read -rp "  Email for update notifications (or Enter to skip): " INSTALLER_EMAIL
+INSTALLER_NAME=""
 NOTIFY_UPDATES="false"
-if [[ -n "$INSTALLER_EMAIL" ]]; then
-  read -rp "  Get notified when updates are released? [Y/n]: " NOTIFY_OPT
-  NOTIFY_OPT="${NOTIFY_OPT:-y}"
-  [[ "${NOTIFY_OPT,,}" != "n" ]] && NOTIFY_UPDATES="true"
-fi
+[[ -n "$INSTALLER_EMAIL" ]] && NOTIFY_UPDATES="true"
 
 echo ""
 echo -e "  ${BOLD}Summary:${NC}"
@@ -295,23 +291,32 @@ const bcrypt = require('bcryptjs');
 const prisma = new PrismaClient();
 (async () => {
   const hash = await bcrypt.hash(process.env.SEED_PASSWORD, 12);
-  await prisma.user.upsert({
-    where:  { email: process.env.SEED_EMAIL },
-    update: {
-      password: hash,
-      firstName: process.env.SEED_FIRSTNAME,
-      lastName:  process.env.SEED_LASTNAME,
-      role: 'ADMIN', rootAdmin: true,
-    },
-    create: {
-      email:     process.env.SEED_EMAIL,
-      username:  process.env.SEED_USERNAME,
-      password:  hash,
-      firstName: process.env.SEED_FIRSTNAME,
-      lastName:  process.env.SEED_LASTNAME,
-      role: 'ADMIN', rootAdmin: true,
-    },
+  const existing = await prisma.user.findFirst({
+    where: { OR: [{ email: process.env.SEED_EMAIL }, { username: process.env.SEED_USERNAME }] }
   });
+  if (existing) {
+    await prisma.user.update({
+      where: { id: existing.id },
+      data: {
+        email:     process.env.SEED_EMAIL,
+        password:  hash,
+        firstName: process.env.SEED_FIRSTNAME,
+        lastName:  process.env.SEED_LASTNAME,
+        role: 'ADMIN', rootAdmin: true,
+      },
+    });
+  } else {
+    await prisma.user.create({
+      data: {
+        email:     process.env.SEED_EMAIL,
+        username:  process.env.SEED_USERNAME,
+        password:  hash,
+        firstName: process.env.SEED_FIRSTNAME,
+        lastName:  process.env.SEED_LASTNAME,
+        role: 'ADMIN', rootAdmin: true,
+      },
+    });
+  }
   const settings = [
     { key: 'app:name',          value: 'MC Manage Panel' },
     { key: 'app:url',           value: process.env.SEED_APP_URL },
