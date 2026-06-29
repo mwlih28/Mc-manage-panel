@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, Globe, Image, Type, FileText } from 'lucide-react';
+import { Save, Globe, Image, Type, FileText, Mail, Send, Eye, EyeOff } from 'lucide-react';
 import api from '@/lib/axios';
 import toast from 'react-hot-toast';
 import { Spinner } from '@/components/ui/Spinner';
@@ -8,21 +8,35 @@ import { useQueryClient } from '@tanstack/react-query';
 export function AdminSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [testingSmtp, setTestingSmtp] = useState(false);
+  const [showSmtpPass, setShowSmtpPass] = useState(false);
   const [form, setForm] = useState({
     'app.name': '',
     'app.title': '',
     'app.logo': '',
     'app.description': '',
+    'smtp.host': '',
+    'smtp.port': '587',
+    'smtp.user': '',
+    'smtp.pass': '',
+    'smtp.from': '',
+    'smtp.owner_email': '',
   });
   const queryClient = useQueryClient();
 
   useEffect(() => {
     api.get('/settings').then(({ data }) => {
       setForm({
-        'app.name':        data['app.name']        || '',
-        'app.title':       data['app.title']        || '',
-        'app.logo':        data['app.logo']         || '',
-        'app.description': data['app.description']  || '',
+        'app.name':         data['app.name']         || '',
+        'app.title':        data['app.title']         || '',
+        'app.logo':         data['app.logo']          || '',
+        'app.description':  data['app.description']   || '',
+        'smtp.host':        data['smtp.host']         || '',
+        'smtp.port':        data['smtp.port']         || '587',
+        'smtp.user':        data['smtp.user']         || '',
+        'smtp.pass':        data['smtp.pass']         || '',
+        'smtp.from':        data['smtp.from']         || '',
+        'smtp.owner_email': data['smtp.owner_email']  || '',
       });
     }).finally(() => setLoading(false));
   }, []);
@@ -31,6 +45,18 @@ export function AdminSettingsPage() {
   useEffect(() => {
     if (form['app.title']) document.title = form['app.title'];
   }, [form]);
+
+  const testSmtp = async () => {
+    setTestingSmtp(true);
+    try {
+      await api.post('/installer/test-smtp');
+      toast.success('SMTP test email sent — check your inbox');
+    } catch {
+      toast.error('SMTP test failed — check your settings');
+    } finally {
+      setTestingSmtp(false);
+    }
+  };
 
   const save = async () => {
     setSaving(true);
@@ -119,7 +145,88 @@ export function AdminSettingsPage() {
         </div>
       </div>
 
-      <div className="flex justify-end">
+      {/* SMTP Settings */}
+      <div className="card">
+        <div className="card-header">
+          <h2 className="text-sm font-semibold text-zinc-100 flex items-center gap-2"><Mail size={14} />Email / SMTP</h2>
+          <p className="text-xs text-zinc-500 mt-0.5">Used to send thank-you and update notification emails to panel installers.</p>
+        </div>
+        <div className="p-6 space-y-5">
+          <div className="grid grid-cols-3 gap-4">
+            <div className="col-span-2">
+              <label className="label">SMTP Host</label>
+              <input
+                className="input"
+                value={form['smtp.host']}
+                onChange={e => setForm(f => ({ ...f, 'smtp.host': e.target.value }))}
+                placeholder="smtp.gmail.com"
+              />
+            </div>
+            <div>
+              <label className="label">Port</label>
+              <input
+                className="input"
+                value={form['smtp.port']}
+                onChange={e => setForm(f => ({ ...f, 'smtp.port': e.target.value }))}
+                placeholder="587"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="label">SMTP Username</label>
+            <input
+              className="input"
+              value={form['smtp.user']}
+              onChange={e => setForm(f => ({ ...f, 'smtp.user': e.target.value }))}
+              placeholder="your@email.com"
+            />
+          </div>
+          <div>
+            <label className="label">SMTP Password / App Password</label>
+            <div className="relative">
+              <input
+                type={showSmtpPass ? 'text' : 'password'}
+                className="input pr-10"
+                value={form['smtp.pass']}
+                onChange={e => setForm(f => ({ ...f, 'smtp.pass': e.target.value }))}
+                placeholder="••••••••••••"
+              />
+              <button
+                type="button"
+                onClick={() => setShowSmtpPass(p => !p)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-300 transition-colors"
+              >
+                {showSmtpPass ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="label">From Address</label>
+            <input
+              className="input"
+              value={form['smtp.from']}
+              onChange={e => setForm(f => ({ ...f, 'smtp.from': e.target.value }))}
+              placeholder="MC Manage Panel <noreply@yourdomain.com>"
+            />
+            <p className="text-xs text-zinc-600 mt-1">Shown in the "From" field of outgoing emails.</p>
+          </div>
+          <div>
+            <label className="label">Your Notification Email</label>
+            <input
+              className="input"
+              value={form['smtp.owner_email']}
+              onChange={e => setForm(f => ({ ...f, 'smtp.owner_email': e.target.value }))}
+              placeholder="you@yourdomain.com"
+            />
+            <p className="text-xs text-zinc-600 mt-1">You'll get a notification here whenever someone installs the panel.</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-3">
+        <button className="btn-secondary" onClick={testSmtp} disabled={testingSmtp || !form['smtp.host']}>
+          {testingSmtp ? <><Spinner size="sm" />Testing...</> : <><Send size={13} />Send Test Email</>}
+        </button>
         <button className="btn-primary" onClick={save} disabled={saving}>
           {saving ? <><Spinner size="sm" />Saving...</> : <><Save size={14} />Save Changes</>}
         </button>

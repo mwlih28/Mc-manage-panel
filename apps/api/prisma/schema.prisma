@@ -250,3 +250,18 @@ model Setting {
   key   String @unique
   value String
 }
+
+model InstallerRegistration {
+  id            String   @id @default(uuid())
+  email         String
+  name          String   @default("")
+  serverIp      String
+  panelDomain   String   @default("")
+  panelVersion  String   @default("")
+  notifyUpdates Boolean  @default(false)
+  installedAt   DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([email])
+  @@index([serverIp])
+}
