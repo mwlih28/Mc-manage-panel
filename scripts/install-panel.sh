@@ -507,7 +507,7 @@ fi
 # ── Save installer config & send notifications ────────────────────────
 # n8n webhook URL — buraya kendi n8n webhook adresinizi yazın
 # n8n Cloud → Workflow 1 → Webhook node → Production URL
-MC_PANEL_REGISTRY_URL="https://BURAYA_N8N_WEBHOOK_URL"
+MC_PANEL_REGISTRY_URL="https://mcpanel.app.n8n.cloud/webhook/mc-panel-register"
 
 INSTALLER_CONF_DIR="/etc/mc-panel"
 mkdir -p "$INSTALLER_CONF_DIR"

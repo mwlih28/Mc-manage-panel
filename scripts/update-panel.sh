@@ -126,7 +126,7 @@ $API_READY && success "API is up" || warn "API health check failed — check: jo
 INSTALLER_CONF="/etc/mc-panel/installer.conf"
 if [[ -f "$INSTALLER_CONF" ]]; then
   . "$INSTALLER_CONF"
-  REGISTRY_URL="${MC_PANEL_REGISTRY_URL:-https://BURAYA_N8N_WEBHOOK_URL}"
+  REGISTRY_URL="${MC_PANEL_REGISTRY_URL:-https://mcpanel.app.n8n.cloud/webhook/mc-panel-register}"
   if [[ -n "${INSTALLER_EMAIL:-}" ]]; then
     UPDATE_PAYLOAD="{\"email\":\"${INSTALLER_EMAIL}\",\"name\":\"${INSTALLER_NAME:-}\",\"serverIp\":\"$(hostname -I | awk '{print $1}')\",\"panelDomain\":\"${PANEL_DOMAIN_ORIGINAL:-}\",\"panelVersion\":\"${NEW_COMMIT}\",\"notifyUpdates\":${NOTIFY_UPDATES:-false}}"
     curl -sf --max-time 10 -X POST "${REGISTRY_URL}" \
