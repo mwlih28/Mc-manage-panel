@@ -1,170 +1,534 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Kretase — Game Server Management</title>
-  <meta name="description" content="Açık kaynak, güçlü ve kullanımı kolay oyun sunucusu yönetim paneli. Minecraft ve diğer oyun sunucularını tek panelden yönet." />
-  <meta property="og:title" content="Kretase — Game Server Management" />
-  <meta property="og:description" content="Açık kaynak oyun sunucusu yönetim paneli." />
+  <title>Kretase — Game Server Management Panel</title>
+  <meta name="description" content="Open-source, self-hosted game server management panel. Deploy and manage Minecraft and other game servers with a single command." />
+  <meta property="og:title" content="Kretase — Game Server Management Panel" />
+  <meta property="og:description" content="Open-source game server management panel. One command install." />
   <meta property="og:url" content="https://kretase.com" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
   <!-- NAV -->
-  <nav>
+  <nav id="navbar">
     <div class="nav-inner">
       <a href="/" class="logo">
-        <span class="logo-icon">⚡</span>
+        <div class="logo-mark">K</div>
         <span class="logo-text">Kretase</span>
       </a>
       <div class="nav-links">
-        <a href="#features">Özellikler</a>
-        <a href="#install">Kurulum</a>
+        <a href="#features">Features</a>
+        <a href="#how-it-works">How it works</a>
+        <a href="#community">Community</a>
         <a href="https://github.com/mwlih28/mc-manage-panel" target="_blank">Docs</a>
-        <a href="https://github.com/mwlih28/mc-manage-panel" target="_blank" class="btn-nav">
+      </div>
+      <div class="nav-actions">
+        <a href="https://github.com/mwlih28/mc-manage-panel" target="_blank" class="btn-ghost">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
           GitHub
         </a>
+        <a href="#install" class="btn-primary-sm">Get Started</a>
       </div>
+      <button class="nav-mobile-btn" id="mobileMenuBtn" aria-label="Menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+    <div class="mobile-menu" id="mobileMenu">
+      <a href="#features">Features</a>
+      <a href="#how-it-works">How it works</a>
+      <a href="#community">Community</a>
+      <a href="https://github.com/mwlih28/mc-manage-panel" target="_blank">Docs</a>
+      <a href="https://github.com/mwlih28/mc-manage-panel" target="_blank">GitHub</a>
+      <a href="#install" class="btn-primary-sm">Get Started</a>
     </div>
   </nav>
 
   <!-- HERO -->
   <section class="hero">
-    <div class="hero-badge">Açık Kaynak · Ücretsiz</div>
-    <h1>Sunucularını <span class="gradient-text">tek panelden</span> yönet</h1>
-    <p class="hero-sub">Kretase, Minecraft ve diğer oyun sunucularını yönetmek için tasarlanmış güçlü, modern ve açık kaynaklı bir yönetim panelidir.</p>
-    <div class="hero-actions">
-      <a href="#install" class="btn-primary">Hemen Kur</a>
-      <a href="https://github.com/mwlih28/mc-manage-panel" target="_blank" class="btn-secondary">GitHub'da İncele</a>
-    </div>
-    <div class="hero-code">
-      <span class="code-label">Tek komutla kur</span>
-      <div class="code-block">
-        <code>bash &lt;(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/install-panel.sh)</code>
-        <button class="copy-btn" onclick="copyInstall()">Kopyala</button>
+    <div class="hero-glow"></div>
+    <div class="hero-grid"></div>
+    <div class="hero-inner">
+      <div class="hero-badge">
+        <span class="badge-dot"></span>
+        Open Source &middot; MIT License &middot; Free Forever
+      </div>
+      <h1 class="hero-title">
+        The modern way to<br/>
+        <span class="gradient-text">manage game servers</span>
+      </h1>
+      <p class="hero-sub">
+        Kretase is a self-hosted, open-source game server management panel. Deploy Minecraft and other game servers in minutes — no DevOps experience needed.
+      </p>
+      <div class="hero-actions">
+        <a href="#install" class="btn-primary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v13M5 9l7 7 7-7"/><path d="M3 20h18"/></svg>
+          Install Now
+        </a>
+        <a href="https://github.com/mwlih28/mc-manage-panel" target="_blank" class="btn-outline">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+          View on GitHub
+        </a>
+      </div>
+      <div class="hero-terminal">
+        <div class="terminal-bar">
+          <span class="t-dot red"></span>
+          <span class="t-dot yellow"></span>
+          <span class="t-dot green"></span>
+          <span class="t-title">bash &mdash; install</span>
+          <button class="t-copy" onclick="copyInstall()">Copy</button>
+        </div>
+        <div class="terminal-body">
+          <span class="t-prompt">$</span>
+          <code>bash &lt;(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/install-panel.sh)</code>
+        </div>
       </div>
     </div>
   </section>
+
+  <!-- STATS -->
+  <div class="stats-bar">
+    <div class="stats-inner">
+      <div class="stat-item"><div class="stat-num">1-cmd</div><div class="stat-label">Install</div></div>
+      <div class="stat-div"></div>
+      <div class="stat-item"><div class="stat-num">100%</div><div class="stat-label">Open Source</div></div>
+      <div class="stat-div"></div>
+      <div class="stat-item"><div class="stat-num">MIT</div><div class="stat-label">License</div></div>
+      <div class="stat-div"></div>
+      <div class="stat-item"><div class="stat-num">Ubuntu</div><div class="stat-label">&amp; Debian</div></div>
+      <div class="stat-div"></div>
+      <div class="stat-item"><div class="stat-num">SSL</div><div class="stat-label">Auto-configured</div></div>
+    </div>
+  </div>
 
   <!-- FEATURES -->
-  <section class="features" id="features">
-    <div class="section-inner">
-      <div class="section-label">Özellikler</div>
-      <h2>İhtiyacın olan her şey<br/>tek bir yerde</h2>
+  <section class="section" id="features">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-tag">Features</div>
+        <h2>Everything you need to run<br/>game servers at scale</h2>
+        <p class="section-sub">Built for server owners who want power without complexity. No PHP, no bloat — just a clean modern stack.</p>
+      </div>
       <div class="features-grid">
-        <div class="feature-card">
-          <div class="feature-icon">🖥️</div>
-          <h3>Gerçek Zamanlı Konsol</h3>
-          <p>Sunucu konsoluna anlık eriş, komut gönder, logları takip et.</p>
+        <div class="feat-card feat-large">
+          <div class="feat-icon-wrap cyan">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M6 8l2 2-2 2M11 12h4"/></svg>
+          </div>
+          <h3>Real-Time Console</h3>
+          <p>WebSocket-powered server console with live output streaming. Send commands, monitor logs, and track events — all in real time.</p>
+          <div class="feat-demo console-demo">
+            <div class="cd-line"><span class="cd-time">[12:04:31]</span><span class="cd-info">[Server/INFO]</span> Done (2.8s)! For help, type "help"</div>
+            <div class="cd-line"><span class="cd-time">[12:04:45]</span><span class="cd-info">[Server/INFO]</span> Player_1 joined the game</div>
+            <div class="cd-line cd-cmd"><span class="cd-prompt">&rsaquo;</span> say Welcome to the server!</div>
+            <div class="cd-line"><span class="cd-time">[12:04:46]</span><span class="cd-info">[Server/INFO]</span> [Server] Welcome!</div>
+          </div>
         </div>
-        <div class="feature-card">
-          <div class="feature-icon">📊</div>
-          <h3>Kaynak İzleme</h3>
-          <p>CPU, RAM ve disk kullanımını canlı grafiklerle izle.</p>
+        <div class="feat-card">
+          <div class="feat-icon-wrap indigo">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          </div>
+          <h3>Resource Monitoring</h3>
+          <p>Live CPU, RAM, and disk graphs updated in real time. Know exactly what your servers are doing at all times.</p>
         </div>
-        <div class="feature-card">
-          <div class="feature-icon">💾</div>
-          <h3>Otomatik Yedekleme</h3>
-          <p>Sunucu verilerini otomatik yedekle, tek tıkla geri yükle.</p>
+        <div class="feat-card">
+          <div class="feat-icon-wrap green">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96L12 12.01l8.73-5.05M12 22.08V12"/></svg>
+          </div>
+          <h3>Multi-Node Support</h3>
+          <p>Connect unlimited Wings daemon nodes. Spread servers across multiple machines from one central panel.</p>
         </div>
-        <div class="feature-card">
-          <div class="feature-icon">👥</div>
-          <h3>Çoklu Kullanıcı</h3>
-          <p>Ekibine farklı yetki seviyeleriyle erişim ver.</p>
+        <div class="feat-card">
+          <div class="feat-icon-wrap amber">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+          </div>
+          <h3>Auto Backups</h3>
+          <p>Schedule automatic server backups and restore them with a single click. Never lose your world data again.</p>
         </div>
-        <div class="feature-card">
-          <div class="feature-icon">🔒</div>
-          <h3>Güvenli Erişim</h3>
-          <p>JWT tabanlı kimlik doğrulama ve 2FA desteği.</p>
+        <div class="feat-card">
+          <div class="feat-icon-wrap rose">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <h3>Secure by Default</h3>
+          <p>JWT authentication, 2FA support, role-based access control, and auto-SSL via Let's Encrypt.</p>
         </div>
-        <div class="feature-card">
-          <div class="feature-icon">⚡</div>
-          <h3>Kolay Kurulum</h3>
-          <p>Tek komutla kur, SSL otomatik yapılandırılsın.</p>
+        <div class="feat-card">
+          <div class="feat-icon-wrap purple">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
+          <h3>Team Management</h3>
+          <p>Invite teammates with granular permission levels. Give admins, mods, and players exactly the access they need.</p>
+        </div>
+        <div class="feat-card">
+          <div class="feat-icon-wrap teal">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="9" height="9" rx="1"/><rect x="13" y="2" width="9" height="9" rx="1"/><rect x="2" y="13" width="9" height="9" rx="1"/><path d="M13 13h4v4M17 13v4h4"/></svg>
+          </div>
+          <h3>Docker Isolation</h3>
+          <p>Each server runs in its own Docker container. Full process isolation — no server can affect another.</p>
+        </div>
+        <div class="feat-card">
+          <div class="feat-icon-wrap sky">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/></svg>
+          </div>
+          <h3>File Manager</h3>
+          <p>Browse, edit, upload, and delete server files directly from the browser. Full SFTP access also available.</p>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- INSTALL -->
-  <section class="install" id="install">
-    <div class="section-inner">
-      <div class="section-label">Kurulum</div>
-      <h2>Dakikalar içinde çalışır hale gel</h2>
-      <div class="steps">
-        <div class="step">
-          <div class="step-num">1</div>
-          <div class="step-content">
-            <h3>Sunucuya bağlan</h3>
-            <p>Ubuntu 20.04 / 22.04 / 24.04 veya Debian 11 / 12 çalıştıran bir sunucuya root erişimiyle bağlan.</p>
+  <!-- HOW IT WORKS -->
+  <section class="section section-alt" id="how-it-works">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-tag">Installation</div>
+        <h2>Up and running<br/>in under 5 minutes</h2>
+        <p class="section-sub">One command sets up Nginx, PostgreSQL, SSL certificates, and the panel. Another command on each game server installs the Wings daemon.</p>
+      </div>
+      <div class="how-layout">
+        <div class="steps-list">
+          <div class="step-item active">
+            <div class="step-num">01</div>
+            <div class="step-body">
+              <h3>Get a server</h3>
+              <p>Any Ubuntu 20.04/22.04/24.04 or Debian 11/12 VPS with root access. Minimum 1 GB RAM.</p>
+            </div>
           </div>
-        </div>
-        <div class="step">
-          <div class="step-num">2</div>
-          <div class="step-content">
-            <h3>Kurulum scriptini çalıştır</h3>
-            <div class="code-block small">
-              <code>bash &lt;(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/install-panel.sh)</code>
-              <button class="copy-btn" onclick="copyInstall()">Kopyala</button>
+          <div class="step-item">
+            <div class="step-num">02</div>
+            <div class="step-body">
+              <h3>Run the installer</h3>
+              <p>One command installs everything — Node.js, Nginx, PostgreSQL, SSL, and the panel itself.</p>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="step-num">03</div>
+            <div class="step-body">
+              <h3>Install Wings on nodes</h3>
+              <p>On each game server, run the Wings installer. Connect it to your panel via the admin UI.</p>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="step-num">04</div>
+            <div class="step-body">
+              <h3>Create servers</h3>
+              <p>Pick a game, allocate resources, and deploy. Your server starts in seconds.</p>
             </div>
           </div>
         </div>
-        <div class="step">
-          <div class="step-num">3</div>
-          <div class="step-content">
-            <h3>Paneli aç, kullanmaya başla</h3>
-            <p>Domain adresinizi tarayıcıda açın. SSL otomatik kurulur, admin hesabınız hazır olur.</p>
+        <div class="steps-terminal">
+          <div class="terminal-window">
+            <div class="terminal-bar">
+              <span class="t-dot red"></span>
+              <span class="t-dot yellow"></span>
+              <span class="t-dot green"></span>
+              <span class="t-title">root@server:~</span>
+            </div>
+            <div class="terminal-body multi">
+              <div class="t-line"><span class="t-comment"># Install the panel</span></div>
+              <div class="t-line"><span class="t-prompt">$</span> <span class="t-cmd">bash &lt;(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/install-panel.sh)</span></div>
+              <div class="t-line t-out">&nbsp; &#10003; PostgreSQL installed</div>
+              <div class="t-line t-out">&nbsp; &#10003; Node.js 20 installed</div>
+              <div class="t-line t-out">&nbsp; &#10003; SSL certificate issued</div>
+              <div class="t-line t-out">&nbsp; &#10003; Panel running at https://panel.yourdomain.com</div>
+              <div class="t-line">&nbsp;</div>
+              <div class="t-line"><span class="t-comment"># On each game server node</span></div>
+              <div class="t-line"><span class="t-prompt">$</span> <span class="t-cmd">bash &lt;(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/install-wings.sh)</span></div>
+              <div class="t-line t-out">&nbsp; &#10003; Docker installed</div>
+              <div class="t-line t-out">&nbsp; &#10003; Wings daemon running</div>
+              <div class="t-line t-success">&nbsp; &#10003; Node connected to panel</div>
+            </div>
           </div>
         </div>
-      </div>
-      <div class="install-note">
-        <span>📋</span>
-        <span>Gereksinimler: Ubuntu/Debian, min. 1GB RAM, 10GB disk, root erişimi</span>
       </div>
     </div>
   </section>
 
-  <!-- OPEN SOURCE -->
-  <section class="opensource">
-    <div class="section-inner center">
-      <div class="section-label">Açık Kaynak</div>
-      <h2>Toplulukla birlikte<br/>büyüyor</h2>
-      <p class="os-sub">Kretase tamamen açık kaynaklıdır. Katkıda bulunabilir, fork'layabilir veya kendi sunucunda çalıştırabilirsin.</p>
-      <a href="https://github.com/mwlih28/mc-manage-panel" target="_blank" class="btn-primary">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
-        GitHub'da Gör
-      </a>
+  <!-- GAMES -->
+  <section class="section" id="games">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-tag">Supported Games</div>
+        <h2>One panel, any game server</h2>
+        <p class="section-sub">Pre-configured eggs for popular games. More coming soon — or write your own.</p>
+      </div>
+      <div class="games-grid">
+        <div class="game-card">
+          <div class="game-icon mc">&#9875;</div>
+          <div class="game-info">
+            <div class="game-name">Minecraft</div>
+            <div class="game-tags"><span>Java</span><span>Bedrock</span><span>Paper</span><span>Forge</span><span>Fabric</span></div>
+          </div>
+        </div>
+        <div class="game-card coming">
+          <div class="game-icon cs">&#127919;</div>
+          <div class="game-info">
+            <div class="game-name">Counter-Strike 2</div>
+            <div class="game-tags"><span class="soon">Coming soon</span></div>
+          </div>
+        </div>
+        <div class="game-card coming">
+          <div class="game-icon rust">&#128295;</div>
+          <div class="game-info">
+            <div class="game-name">Rust</div>
+            <div class="game-tags"><span class="soon">Coming soon</span></div>
+          </div>
+        </div>
+        <div class="game-card coming">
+          <div class="game-icon ark">&#129430;</div>
+          <div class="game-info">
+            <div class="game-name">ARK: Survival</div>
+            <div class="game-tags"><span class="soon">Coming soon</span></div>
+          </div>
+        </div>
+        <div class="game-card coming">
+          <div class="game-icon terraria">&#127807;</div>
+          <div class="game-info">
+            <div class="game-name">Terraria</div>
+            <div class="game-tags"><span class="soon">Coming soon</span></div>
+          </div>
+        </div>
+        <div class="game-card custom">
+          <div class="game-icon plus">+</div>
+          <div class="game-info">
+            <div class="game-name">Custom Game</div>
+            <div class="game-tags"><span>Write your own egg</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- COMMUNITY -->
+  <section class="section section-alt" id="community">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-tag">Community</div>
+        <h2>Built with the community,<br/>for the community</h2>
+        <p class="section-sub">Ask questions, share configs, report bugs, and help shape Kretase. Everything happens on GitHub.</p>
+      </div>
+      <div class="community-grid">
+        <a href="https://github.com/mwlih28/mc-manage-panel/discussions" target="_blank" class="community-card">
+          <div class="cc-header">
+            <div class="cc-icon discussions">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </div>
+            <div class="cc-title">Discussions</div>
+            <svg class="cc-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M7 7h10v10"/></svg>
+          </div>
+          <p>Ask for help, share your setup, or start a conversation about new features and ideas.</p>
+          <div class="cc-posts">
+            <div class="cc-post"><span class="cc-badge help">Help</span><span>How to set up reverse proxy with Nginx?</span></div>
+            <div class="cc-post"><span class="cc-badge idea">Idea</span><span>Discord webhook notifications</span></div>
+            <div class="cc-post"><span class="cc-badge show">Show</span><span>Running 12 servers on a $10 VPS</span></div>
+          </div>
+        </a>
+        <a href="https://github.com/mwlih28/mc-manage-panel/issues" target="_blank" class="community-card">
+          <div class="cc-header">
+            <div class="cc-icon issues">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+            </div>
+            <div class="cc-title">Issues &amp; Bugs</div>
+            <svg class="cc-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M7 7h10v10"/></svg>
+          </div>
+          <p>Found a bug or want to request a feature? Open an issue and we'll look into it right away.</p>
+          <div class="cc-posts">
+            <div class="cc-post"><span class="cc-badge bug">Bug</span><span>Console disconnects after 10 min idle</span></div>
+            <div class="cc-post"><span class="cc-badge feat">Feature</span><span>Add built-in SFTP server to Wings</span></div>
+            <div class="cc-post"><span class="cc-badge bug">Bug</span><span>Memory shows NaN on new nodes</span></div>
+          </div>
+        </a>
+        <a href="https://github.com/mwlih28/mc-manage-panel" target="_blank" class="community-card">
+          <div class="cc-header">
+            <div class="cc-icon contribute">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+            </div>
+            <div class="cc-title">Contribute</div>
+            <svg class="cc-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M7 7h10v10"/></svg>
+          </div>
+          <p>Kretase is fully open source. Fork it, submit pull requests, or star the repo to show support.</p>
+          <div class="cc-contrib">
+            <div class="contrib-stat">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+              Star on GitHub
+            </div>
+            <div class="contrib-stat">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3v12"/><path d="M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M15 6a9 9 0 0 1-9 9"/></svg>
+              Fork &amp; contribute
+            </div>
+            <div class="contrib-stat">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+              Report bugs
+            </div>
+          </div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- COMPARISON -->
+  <section class="section" id="compare">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-tag">Why Kretase?</div>
+        <h2>A modern alternative<br/>to Pterodactyl</h2>
+        <p class="section-sub">Pterodactyl is battle-tested and widely used — we respect that. Kretase takes a different approach for those who want a modern stack they can hack on.</p>
+      </div>
+      <div class="compare-table">
+        <div class="compare-header">
+          <div class="compare-feature"></div>
+          <div class="compare-col kretase"><div class="col-logo-k">K</div>Kretase</div>
+          <div class="compare-col other">Pterodactyl</div>
+        </div>
+        <div class="compare-row">
+          <div class="compare-feature">Language / Stack</div>
+          <div class="compare-col kretase"><span class="check">React + TypeScript + Express</span></div>
+          <div class="compare-col other">PHP / Laravel + React</div>
+        </div>
+        <div class="compare-row">
+          <div class="compare-feature">Install complexity</div>
+          <div class="compare-col kretase"><span class="check">&#10003; Single command</span></div>
+          <div class="compare-col other">Multiple manual steps</div>
+        </div>
+        <div class="compare-row">
+          <div class="compare-feature">Codebase</div>
+          <div class="compare-col kretase"><span class="check">&#10003; Unified monorepo</span></div>
+          <div class="compare-col other">Separate repos (panel + wings)</div>
+        </div>
+        <div class="compare-row">
+          <div class="compare-feature">Modern tooling</div>
+          <div class="compare-col kretase"><span class="check">&#10003; Vite, Prisma, Tailwind</span></div>
+          <div class="compare-col other">Blade templates, Laravel Mix</div>
+        </div>
+        <div class="compare-row">
+          <div class="compare-feature">Production maturity</div>
+          <div class="compare-col other"><span class="check">&#10003; Years of hardening</span></div>
+          <div class="compare-col kretase">Active development</div>
+        </div>
+        <div class="compare-row">
+          <div class="compare-feature">Plugin ecosystem</div>
+          <div class="compare-col other"><span class="check">&#10003; Large community</span></div>
+          <div class="compare-col kretase">Growing</div>
+        </div>
+        <div class="compare-footer">
+          <p>Honest take: if you need production-hardened software today, use Pterodactyl. If you want a modern stack you can read, modify, and contribute to — Kretase is for you.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="section section-cta" id="install">
+    <div class="container">
+      <div class="cta-box">
+        <div class="cta-glow"></div>
+        <div class="cta-content">
+          <div class="section-tag">Get Started</div>
+          <h2>Deploy your panel today</h2>
+          <p>Works on Ubuntu 20.04 &middot; 22.04 &middot; 24.04 and Debian 11 &middot; 12. Minimum 1 GB RAM, 10 GB disk, root access.</p>
+          <div class="cta-terminal">
+            <div class="terminal-bar">
+              <span class="t-dot red"></span>
+              <span class="t-dot yellow"></span>
+              <span class="t-dot green"></span>
+              <span class="t-title">Panel installer</span>
+              <button class="t-copy" onclick="copyInstall()">Copy</button>
+            </div>
+            <div class="terminal-body">
+              <span class="t-prompt">$</span>
+              <code>bash &lt;(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/install-panel.sh)</code>
+            </div>
+          </div>
+          <div class="cta-links">
+            <a href="https://github.com/mwlih28/mc-manage-panel" target="_blank" class="btn-outline">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+              Read the docs on GitHub
+            </a>
+            <a href="https://github.com/mwlih28/mc-manage-panel/discussions" target="_blank" class="btn-ghost">Join the discussion &rarr;</a>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
   <!-- FOOTER -->
   <footer>
     <div class="footer-inner">
-      <div class="footer-logo">
-        <span class="logo-icon">⚡</span>
-        <span class="logo-text">Kretase</span>
+      <div class="footer-top">
+        <div class="footer-brand">
+          <a href="/" class="logo">
+            <div class="logo-mark sm">K</div>
+            <span class="logo-text">Kretase</span>
+          </a>
+          <p>Open-source game server management panel. Built for developers and server owners who value simplicity and transparency.</p>
+          <div class="footer-social">
+            <a href="https://github.com/mwlih28/mc-manage-panel" target="_blank" aria-label="GitHub">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+            </a>
+          </div>
+        </div>
+        <div class="footer-cols">
+          <div class="footer-col">
+            <h4>Product</h4>
+            <a href="#features">Features</a>
+            <a href="#how-it-works">Installation</a>
+            <a href="#games">Supported Games</a>
+            <a href="#compare">vs Pterodactyl</a>
+          </div>
+          <div class="footer-col">
+            <h4>Resources</h4>
+            <a href="https://github.com/mwlih28/mc-manage-panel" target="_blank">Documentation</a>
+            <a href="https://github.com/mwlih28/mc-manage-panel/releases" target="_blank">Changelog</a>
+            <a href="https://github.com/mwlih28/mc-manage-panel/issues" target="_blank">Bug Reports</a>
+            <a href="https://github.com/mwlih28/mc-manage-panel/blob/main/scripts/install-panel.sh" target="_blank">Install Script</a>
+          </div>
+          <div class="footer-col">
+            <h4>Community</h4>
+            <a href="https://github.com/mwlih28/mc-manage-panel/discussions" target="_blank">Discussions</a>
+            <a href="https://github.com/mwlih28/mc-manage-panel/issues" target="_blank">Issues</a>
+            <a href="https://github.com/mwlih28/mc-manage-panel/pulls" target="_blank">Pull Requests</a>
+            <a href="https://github.com/mwlih28/mc-manage-panel" target="_blank">Contributing</a>
+          </div>
+          <div class="footer-col">
+            <h4>Legal</h4>
+            <a href="https://github.com/mwlih28/mc-manage-panel/blob/main/LICENSE" target="_blank">MIT License</a>
+            <a href="mailto:contact@kretase.com">Contact</a>
+          </div>
+        </div>
       </div>
-      <p class="footer-copy">© 2026 Kretase. MIT Lisansı ile dağıtılmaktadır.</p>
-      <div class="footer-links">
-        <a href="https://github.com/mwlih28/mc-manage-panel" target="_blank">GitHub</a>
-        <a href="mailto:noreply@kretase.com">İletişim</a>
+      <div class="footer-bottom">
+        <p>&copy; 2026 Kretase. Released under the <a href="https://github.com/mwlih28/mc-manage-panel/blob/main/LICENSE" target="_blank">MIT License</a>.</p>
+        <p>Not affiliated with Pterodactyl&reg; or Mojang Studios&reg;.</p>
       </div>
     </div>
   </footer>
 
   <script>
+    window.addEventListener('scroll', () => {
+      document.getElementById('navbar').classList.toggle('scrolled', window.scrollY > 20);
+    });
+    document.getElementById('mobileMenuBtn').addEventListener('click', () => {
+      document.getElementById('mobileMenu').classList.toggle('open');
+      document.getElementById('mobileMenuBtn').classList.toggle('open');
+    });
     function copyInstall() {
-      const cmd = 'bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/install-panel.sh)';
-      navigator.clipboard.writeText(cmd).then(() => {
-        const btns = document.querySelectorAll('.copy-btn');
-        btns.forEach(b => { b.textContent = 'Kopyalandı!'; setTimeout(() => b.textContent = 'Kopyala', 2000); });
+      navigator.clipboard.writeText('bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/install-panel.sh)').then(() => {
+        document.querySelectorAll('.t-copy').forEach(b => {
+          b.textContent = 'Copied!';
+          b.classList.add('copied');
+          setTimeout(() => { b.textContent = 'Copy'; b.classList.remove('copied'); }, 2000);
+        });
       });
     }
+    document.querySelectorAll('.step-item').forEach(item => {
+      item.addEventListener('click', () => {
+        document.querySelectorAll('.step-item').forEach(s => s.classList.remove('active'));
+        item.classList.add('active');
+      });
+    });
   </script>
 </body>
 </html>
