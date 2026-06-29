@@ -136,6 +136,28 @@ router.post('/test-smtp', authenticate, requireAdmin, async (_req: AuthRequest, 
   return res.json({ message: `Test email sent to ${ownerEmail}.` });
 });
 
+// GET /api/v1/installer/subscribers — returns opted-in emails for n8n / Make.com / Zapier
+// Auth: JWT admin OR X-Notify-Secret header (so external tools can call it)
+router.get(
+  '/subscribers',
+  (req: Request, res: Response, next: NextFunction) => {
+    const secret = process.env.NOTIFY_WEBHOOK_SECRET;
+    if (secret && req.headers['x-notify-secret'] === secret) return next();
+    return authenticate(req as AuthRequest, res, (err?: unknown) => {
+      if (err) return next(err);
+      return requireAdmin(req as AuthRequest, res, next);
+    });
+  },
+  async (_req: Request, res: Response) => {
+    const rows = await prisma.installerRegistration.findMany({
+      where: { notifyUpdates: true },
+      select: { email: true, name: true, serverIp: true, panelDomain: true, installedAt: true },
+      orderBy: { installedAt: 'desc' },
+    });
+    return res.json({ count: rows.length, subscribers: rows });
+  }
+);
+
 // DELETE /api/v1/installer/registrations/:id — admin only
 router.delete('/registrations/:id', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
   await prisma.installerRegistration.delete({ where: { id: req.params.id } });
