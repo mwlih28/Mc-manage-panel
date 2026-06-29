@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { body, validationResult } from 'express-validator';
 import { prisma } from '../utils/prisma';
 import { authenticate, requireAdmin } from '../middleware/auth';
@@ -80,17 +80,48 @@ router.get('/registrations/stats', authenticate, requireAdmin, async (_req: Auth
   return res.json({ total, withNotify, today: todayCount });
 });
 
-// POST /api/v1/installer/notify-updates — admin only: blast update emails
-router.post('/notify-updates', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
+// POST /api/v1/installer/notify-updates
+// Accepts either:
+//   - JWT admin auth (from the Admin UI)
+//   - X-Notify-Secret header matching NOTIFY_WEBHOOK_SECRET env var (for GitHub Actions / CI)
+async function notifyUpdatesHandler(req: Request, res: Response) {
   const { version = 'latest', changelogUrl } = req.body;
+  if (!version || version === 'latest') {
+    return res.status(400).json({ message: 'Provide a version string, e.g. "v1.2.0"' });
+  }
   const registrations = await prisma.installerRegistration.findMany({ where: { notifyUpdates: true } });
+  if (registrations.length === 0) {
+    return res.json({ sent: 0, failed: 0, total: 0, message: 'No opted-in subscribers.' });
+  }
   let sent = 0; let failed = 0;
   for (const reg of registrations) {
     const ok = await sendUpdateNotification(reg.email, version, changelogUrl);
     if (ok) sent++; else failed++;
   }
   return res.json({ sent, failed, total: registrations.length });
-});
+}
+
+function webhookSecretAuth(req: Request, res: Response, next: NextFunction) {
+  const secret = process.env.NOTIFY_WEBHOOK_SECRET;
+  if (secret && req.headers['x-notify-secret'] === secret) return next();
+  return res.status(401).json({ message: 'Unauthorized' });
+}
+
+router.post(
+  '/notify-updates',
+  (req: Request, res: Response, next: NextFunction) => {
+    const secret = process.env.NOTIFY_WEBHOOK_SECRET;
+    // Allow webhook secret auth as alternative to JWT
+    if (secret && req.headers['x-notify-secret'] === secret) return next();
+    // Otherwise require JWT admin
+    return authenticate(req as AuthRequest, res, (err?: unknown) => {
+      if (err) return next(err);
+      return requireAdmin(req as AuthRequest, res, next);
+    });
+  },
+  notifyUpdatesHandler
+);
+void webhookSecretAuth;
 
 // POST /api/v1/installer/test-smtp — admin only: send test email to owner
 router.post('/test-smtp', authenticate, requireAdmin, async (_req: AuthRequest, res: Response) => {
