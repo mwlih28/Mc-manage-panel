@@ -89,31 +89,45 @@
     },
     {
       "parameters": {
-        "sendTo": "={{ $('Webhook').item.json.body.email }}",
+        "fromEmail": "noreply@kretase.com",
+        "toEmail": "={{ $('Webhook').item.json.body.email }}",
         "subject": "MC Manage Panel kurulumu için teşekkürler! 🎉",
         "emailType": "html",
-        "message": "={{ '<div style=\"font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#111113;border:1px solid #1e1e22;border-radius:12px;overflow:hidden;\">' + '<div style=\"background:linear-gradient(135deg,#1a3a2a,#112218);padding:32px;text-align:center;\">' + '<h1 style=\"margin:0;color:#fff;font-size:22px;\">🛡️ MC Manage Panel</h1>' + '<p style=\"margin:6px 0 0;color:#86efac;font-size:13px;\">Game Server Management Platform</p>' + '</div>' + '<div style=\"padding:32px;\">' + '<p style=\"color:#e4e4e7;font-size:15px;\">Merhaba ' + ($('Webhook').item.json.body.name || 'kullanıcı') + ',</p>' + '<p style=\"color:#a1a1aa;font-size:14px;\">MC Manage Panel\\'i kurduğun için teşekkürler! Kurulumun başarıyla kaydedildi.</p>' + '<div style=\"background:#0d1f15;border:1px solid #1a3a2a;border-radius:8px;padding:16px;margin:20px 0;\">' + '<p style=\"color:#86efac;font-size:12px;font-weight:600;\">KURULUM BİLGİLERİ</p>' + '<p style=\"color:#d4d4d8;font-family:monospace;\">IP: ' + $('Webhook').item.json.body.serverIp + '</p>' + '<p style=\"color:#d4d4d8;font-family:monospace;\">Domain: ' + ($('Webhook').item.json.body.panelDomain || '—') + '</p>' + '</div>' + '<a href=\"https://github.com/mwlih28/mc-manage-panel\" style=\"display:inline-block;background:#16a34a;color:#fff;font-size:13px;font-weight:600;text-decoration:none;padding:10px 20px;border-radius:8px;\">GitHub</a>' + '</div>' + '<div style=\"padding:16px;background:#0d0f11;border-top:1px solid #1e1e22;text-align:center;\">' + '<p style=\"color:#52525b;font-size:11px;\">MC Manage Panel · mwlih28</p>' + '</div></div>' }}",
+        "html": "={{ '<div style=\"font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#111113;border:1px solid #1e1e22;border-radius:12px;overflow:hidden;\">' + '<div style=\"background:linear-gradient(135deg,#1a3a2a,#112218);padding:32px;text-align:center;\">' + '<h1 style=\"margin:0;color:#fff;font-size:22px;\">🛡️ MC Manage Panel</h1>' + '<p style=\"margin:6px 0 0;color:#86efac;font-size:13px;\">Game Server Management Platform</p>' + '</div>' + '<div style=\"padding:32px;\">' + '<p style=\"color:#e4e4e7;font-size:15px;\">Merhaba ' + ($('Webhook').item.json.body.name || 'kullanıcı') + ',</p>' + '<p style=\"color:#a1a1aa;font-size:14px;\">MC Manage Panel\\'i kurduğun için teşekkürler! Kurulumun başarıyla kaydedildi.</p>' + '<div style=\"background:#0d1f15;border:1px solid #1a3a2a;border-radius:8px;padding:16px;margin:20px 0;\">' + '<p style=\"color:#86efac;font-size:12px;font-weight:600;\">KURULUM BİLGİLERİ</p>' + '<p style=\"color:#d4d4d8;font-family:monospace;\">IP: ' + $('Webhook').item.json.body.serverIp + '</p>' + '<p style=\"color:#d4d4d8;font-family:monospace;\">Domain: ' + ($('Webhook').item.json.body.panelDomain || '—') + '</p>' + '</div>' + '<a href=\"https://kretase.com\" style=\"display:inline-block;background:#16a34a;color:#fff;font-size:13px;font-weight:600;text-decoration:none;padding:10px 20px;border-radius:8px;\">kretase.com</a>' + '</div>' + '<div style=\"padding:16px;background:#0d0f11;border-top:1px solid #1e1e22;text-align:center;\">' + '<p style=\"color:#52525b;font-size:11px;\">MC Manage Panel · kretase.com</p>' + '</div></div>' }}",
         "options": {}
       },
       "id": "a1b2c3d4-0001-0001-0001-000000000004",
-      "name": "Gmail — Kurucuya Teşekkür",
-      "type": "n8n-nodes-base.gmail",
+      "name": "SMTP — Kurucuya Teşekkür",
+      "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
-      "position": [900, 200]
+      "position": [900, 200],
+      "credentials": {
+        "smtp": {
+          "id": "1",
+          "name": "Resend SMTP"
+        }
+      }
     },
     {
       "parameters": {
-        "sendTo": "mwlih28@gmail.com",
+        "fromEmail": "noreply@kretase.com",
+        "toEmail": "mwlih28@gmail.com",
         "subject": "={{ 'Yeni kurulum: ' + ($('Webhook').item.json.body.panelDomain || $('Webhook').item.json.body.serverIp) }}",
         "emailType": "html",
-        "message": "={{ '<div style=\"font-family:sans-serif;max-width:480px;padding:24px;background:#111;color:#e4e4e7;border-radius:8px;\">' + '<h2 style=\"margin:0 0 16px;color:#86efac;\">📥 Yeni Kurulum</h2>' + '<table style=\"width:100%;font-size:14px;\">' + '<tr><td style=\"padding:6px 0;color:#71717a;width:120px;\">İsim</td><td>' + ($('Webhook').item.json.body.name || '—') + '</td></tr>' + '<tr><td style=\"padding:6px 0;color:#71717a;\">Email</td><td>' + $('Webhook').item.json.body.email + '</td></tr>' + '<tr><td style=\"padding:6px 0;color:#71717a;\">Sunucu IP</td><td style=\"font-family:monospace;\">' + $('Webhook').item.json.body.serverIp + '</td></tr>' + '<tr><td style=\"padding:6px 0;color:#71717a;\">Domain</td><td>' + ($('Webhook').item.json.body.panelDomain || '—') + '</td></tr>' + '<tr><td style=\"padding:6px 0;color:#71717a;\">Güncelleme</td><td>' + ($('Webhook').item.json.body.notifyUpdates ? 'Evet' : 'Hayır') + '</td></tr>' + '</table></div>' }}",
+        "html": "={{ '<div style=\"font-family:sans-serif;max-width:480px;padding:24px;background:#111;color:#e4e4e7;border-radius:8px;\">' + '<h2 style=\"margin:0 0 16px;color:#86efac;\">📥 Yeni Kurulum</h2>' + '<table style=\"width:100%;font-size:14px;\">' + '<tr><td style=\"padding:6px 0;color:#71717a;width:120px;\">İsim</td><td>' + ($('Webhook').item.json.body.name || '—') + '</td></tr>' + '<tr><td style=\"padding:6px 0;color:#71717a;\">Email</td><td>' + $('Webhook').item.json.body.email + '</td></tr>' + '<tr><td style=\"padding:6px 0;color:#71717a;\">Sunucu IP</td><td style=\"font-family:monospace;\">' + $('Webhook').item.json.body.serverIp + '</td></tr>' + '<tr><td style=\"padding:6px 0;color:#71717a;\">Domain</td><td>' + ($('Webhook').item.json.body.panelDomain || '—') + '</td></tr>' + '<tr><td style=\"padding:6px 0;color:#71717a;\">Güncelleme</td><td>' + ($('Webhook').item.json.body.notifyUpdates ? 'Evet' : 'Hayır') + '</td></tr>' + '</table></div>' }}",
         "options": {}
       },
       "id": "a1b2c3d4-0001-0001-0001-000000000005",
-      "name": "Gmail — Kendine Bildirim",
-      "type": "n8n-nodes-base.gmail",
+      "name": "SMTP — Kendine Bildirim",
+      "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
-      "position": [900, 380]
+      "position": [900, 380],
+      "credentials": {
+        "smtp": {
+          "id": "1",
+          "name": "Resend SMTP"
+        }
+      }
     },
     {
       "parameters": {
@@ -146,22 +160,22 @@
     "Email var mı?": {
       "main": [
         [
-          { "node": "Gmail — Kurucuya Teşekkür", "type": "main", "index": 0 },
-          { "node": "Gmail — Kendine Bildirim", "type": "main", "index": 0 }
+          { "node": "SMTP — Kurucuya Teşekkür", "type": "main", "index": 0 },
+          { "node": "SMTP — Kendine Bildirim", "type": "main", "index": 0 }
         ],
         [
           { "node": "Yanıt Dön", "type": "main", "index": 0 }
         ]
       ]
     },
-    "Gmail — Kurucuya Teşekkür": {
+    "SMTP — Kurucuya Teşekkür": {
       "main": [
         [
           { "node": "Yanıt Dön", "type": "main", "index": 0 }
         ]
       ]
     },
-    "Gmail — Kendine Bildirim": {
+    "SMTP — Kendine Bildirim": {
       "main": [
         [
           { "node": "Yanıt Dön", "type": "main", "index": 0 }
