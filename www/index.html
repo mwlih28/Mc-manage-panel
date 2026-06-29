@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kretase — Game Server Management</title>
+  <meta name="description" content="Açık kaynak, güçlü ve kullanımı kolay oyun sunucusu yönetim paneli. Minecraft ve diğer oyun sunucularını tek panelden yönet." />
+  <meta property="og:title" content="Kretase — Game Server Management" />
+  <meta property="og:description" content="Açık kaynak oyun sunucusu yönetim paneli." />
+  <meta property="og:url" content="https://kretase.com" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <div class="nav-inner">
+      <a href="/" class="logo">
+        <span class="logo-icon">⚡</span>
+        <span class="logo-text">Kretase</span>
+      </a>
+      <div class="nav-links">
+        <a href="#features">Özellikler</a>
+        <a href="#install">Kurulum</a>
+        <a href="https://github.com/mwlih28/mc-manage-panel" target="_blank">Docs</a>
+        <a href="https://github.com/mwlih28/mc-manage-panel" target="_blank" class="btn-nav">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+          GitHub
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-badge">Açık Kaynak · Ücretsiz</div>
+    <h1>Sunucularını <span class="gradient-text">tek panelden</span> yönet</h1>
+    <p class="hero-sub">Kretase, Minecraft ve diğer oyun sunucularını yönetmek için tasarlanmış güçlü, modern ve açık kaynaklı bir yönetim panelidir.</p>
+    <div class="hero-actions">
+      <a href="#install" class="btn-primary">Hemen Kur</a>
+      <a href="https://github.com/mwlih28/mc-manage-panel" target="_blank" class="btn-secondary">GitHub'da İncele</a>
+    </div>
+    <div class="hero-code">
+      <span class="code-label">Tek komutla kur</span>
+      <div class="code-block">
+        <code>bash &lt;(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/install-panel.sh)</code>
+        <button class="copy-btn" onclick="copyInstall()">Kopyala</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section class="features" id="features">
+    <div class="section-inner">
+      <div class="section-label">Özellikler</div>
+      <h2>İhtiyacın olan her şey<br/>tek bir yerde</h2>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">🖥️</div>
+          <h3>Gerçek Zamanlı Konsol</h3>
+          <p>Sunucu konsoluna anlık eriş, komut gönder, logları takip et.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📊</div>
+          <h3>Kaynak İzleme</h3>
+          <p>CPU, RAM ve disk kullanımını canlı grafiklerle izle.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">💾</div>
+          <h3>Otomatik Yedekleme</h3>
+          <p>Sunucu verilerini otomatik yedekle, tek tıkla geri yükle.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">👥</div>
+          <h3>Çoklu Kullanıcı</h3>
+          <p>Ekibine farklı yetki seviyeleriyle erişim ver.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔒</div>
+          <h3>Güvenli Erişim</h3>
+          <p>JWT tabanlı kimlik doğrulama ve 2FA desteği.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">⚡</div>
+          <h3>Kolay Kurulum</h3>
+          <p>Tek komutla kur, SSL otomatik yapılandırılsın.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- INSTALL -->
+  <section class="install" id="install">
+    <div class="section-inner">
+      <div class="section-label">Kurulum</div>
+      <h2>Dakikalar içinde çalışır hale gel</h2>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <h3>Sunucuya bağlan</h3>
+            <p>Ubuntu 20.04 / 22.04 / 24.04 veya Debian 11 / 12 çalıştıran bir sunucuya root erişimiyle bağlan.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <h3>Kurulum scriptini çalıştır</h3>
+            <div class="code-block small">
+              <code>bash &lt;(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/install-panel.sh)</code>
+              <button class="copy-btn" onclick="copyInstall()">Kopyala</button>
+            </div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <h3>Paneli aç, kullanmaya başla</h3>
+            <p>Domain adresinizi tarayıcıda açın. SSL otomatik kurulur, admin hesabınız hazır olur.</p>
+          </div>
+        </div>
+      </div>
+      <div class="install-note">
+        <span>📋</span>
+        <span>Gereksinimler: Ubuntu/Debian, min. 1GB RAM, 10GB disk, root erişimi</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- OPEN SOURCE -->
+  <section class="opensource">
+    <div class="section-inner center">
+      <div class="section-label">Açık Kaynak</div>
+      <h2>Toplulukla birlikte<br/>büyüyor</h2>
+      <p class="os-sub">Kretase tamamen açık kaynaklıdır. Katkıda bulunabilir, fork'layabilir veya kendi sunucunda çalıştırabilirsin.</p>
+      <a href="https://github.com/mwlih28/mc-manage-panel" target="_blank" class="btn-primary">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+        GitHub'da Gör
+      </a>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="footer-inner">
+      <div class="footer-logo">
+        <span class="logo-icon">⚡</span>
+        <span class="logo-text">Kretase</span>
+      </div>
+      <p class="footer-copy">© 2026 Kretase. MIT Lisansı ile dağıtılmaktadır.</p>
+      <div class="footer-links">
+        <a href="https://github.com/mwlih28/mc-manage-panel" target="_blank">GitHub</a>
+        <a href="mailto:noreply@kretase.com">İletişim</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    function copyInstall() {
+      const cmd = 'bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/install-panel.sh)';
+      navigator.clipboard.writeText(cmd).then(() => {
+        const btns = document.querySelectorAll('.copy-btn');
+        btns.forEach(b => { b.textContent = 'Kopyalandı!'; setTimeout(() => b.textContent = 'Kopyala', 2000); });
+      });
+    }
+  </script>
+</body>
+</html>
