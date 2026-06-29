@@ -33,7 +33,7 @@
         "operation": "read",
         "documentId": {
           "__rl": true,
-          "value": "BURAYA_GOOGLE_SHEET_ID",
+          "value": "1oaW6EQMvRmvNVwQs1XbfgaTjvvMDC8e4zLArMn6aJMw",
           "mode": "id"
         },
         "sheetName": {

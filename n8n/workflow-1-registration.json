@@ -20,7 +20,7 @@
         "operation": "append",
         "documentId": {
           "__rl": true,
-          "value": "BURAYA_GOOGLE_SHEET_ID",
+          "value": "1oaW6EQMvRmvNVwQs1XbfgaTjvvMDC8e4zLArMn6aJMw",
           "mode": "id"
         },
         "sheetName": {
@@ -95,7 +95,7 @@
     },
     {
       "parameters": {
-        "sendTo": "BURAYA_KENDİ_EMAİLİNİ_YAZ",
+        "sendTo": "mwlih28@gmail.com",
         "subject": "Yeni kurulum: {{ $('Webhook').item.json.body.panelDomain || $('Webhook').item.json.body.serverIp }}",
         "emailType": "html",
         "message": "<div style='font-family:sans-serif;max-width:480px;padding:24px;background:#111;color:#e4e4e7;border-radius:8px;'>\n<h2 style='margin:0 0 16px;color:#86efac;'>📥 Yeni Kurulum</h2>\n<table style='width:100%;font-size:14px;'>\n<tr><td style='padding:6px 0;color:#71717a;width:120px;'>İsim</td><td>{{ $('Webhook').item.json.body.name || '—' }}</td></tr>\n<tr><td style='padding:6px 0;color:#71717a;'>Email</td><td>{{ $('Webhook').item.json.body.email }}</td></tr>\n<tr><td style='padding:6px 0;color:#71717a;'>Sunucu IP</td><td style='font-family:monospace;'>{{ $('Webhook').item.json.body.serverIp }}</td></tr>\n<tr><td style='padding:6px 0;color:#71717a;'>Domain</td><td>{{ $('Webhook').item.json.body.panelDomain || '—' }}</td></tr>\n<tr><td style='padding:6px 0;color:#71717a;'>Güncelleme</td><td>{{ $('Webhook').item.json.body.notifyUpdates ? 'Evet' : 'Hayır' }}</td></tr>\n</table>\n</div>",
