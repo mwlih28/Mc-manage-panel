@@ -40,7 +40,15 @@
             "Tarih": "={{ $now }}"
           },
           "matchingColumns": [],
-          "schema": []
+          "schema": [
+            { "id": "Email", "displayName": "Email", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "İsim", "displayName": "İsim", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Sunucu IP", "displayName": "Sunucu IP", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Domain", "displayName": "Domain", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Versiyon", "displayName": "Versiyon", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Güncelleme Bildir", "displayName": "Güncelleme Bildir", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Tarih", "displayName": "Tarih", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true }
+          ]
         },
         "options": {}
       },
