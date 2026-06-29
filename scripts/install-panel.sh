@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# MC Manage Panel — Panel Installer
+# Kretase — Panel Installer
 # Supported: Ubuntu 20.04 / 22.04 / 24.04, Debian 11 / 12
 #
 # One-liner install:
@@ -48,7 +48,7 @@ echo "──── Install started: $(date) ────"
 # ── Banner ────────────────────────────────────────────────────────────
 echo -e "\n${BOLD}"
 echo "  ╔═══════════════════════════════════════════════════╗"
-echo "  ║       MC Manage Panel — Installer v1.0            ║"
+echo "  ║            Kretase — Installer v1.0               ║"
 echo "  ║        Game Server Management Platform            ║"
 echo "  ╚═══════════════════════════════════════════════════╝"
 echo -e "${NC}"
@@ -120,15 +120,11 @@ read -rp "  Setup SSL with Let's Encrypt? [Y/n]: " SETUP_SSL
 SETUP_SSL="${SETUP_SSL:-y}"
 
 echo ""
-echo -e "  ${CYAN}${BOLD}Optional:${NC} Help us improve MC Manage Panel"
-read -rp "  Your name (for the thank-you email) [press Enter to skip]: " INSTALLER_NAME
-read -rp "  Your contact email (optional): " INSTALLER_EMAIL
+echo -e "  ${CYAN}${BOLD}Optional:${NC} Get notified about updates"
+read -rp "  Email for update notifications (or Enter to skip): " INSTALLER_EMAIL
+INSTALLER_NAME=""
 NOTIFY_UPDATES="false"
-if [[ -n "$INSTALLER_EMAIL" ]]; then
-  read -rp "  Get notified when updates are released? [Y/n]: " NOTIFY_OPT
-  NOTIFY_OPT="${NOTIFY_OPT:-y}"
-  [[ "${NOTIFY_OPT,,}" != "n" ]] && NOTIFY_UPDATES="true"
-fi
+[[ -n "$INSTALLER_EMAIL" ]] && NOTIFY_UPDATES="true"
 
 echo ""
 echo -e "  ${BOLD}Summary:${NC}"
@@ -228,7 +224,7 @@ JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
 JWT_EXPIRES_IN=15m
 JWT_REFRESH_EXPIRES_IN=7d
 CORS_ORIGIN=http://${PANEL_DOMAIN}
-APP_NAME=MC Manage Panel
+APP_NAME=Kretase
 APP_URL=http://${PANEL_DOMAIN}
 PANEL_VERSION=1.0.0
 ENV
@@ -295,25 +291,34 @@ const bcrypt = require('bcryptjs');
 const prisma = new PrismaClient();
 (async () => {
   const hash = await bcrypt.hash(process.env.SEED_PASSWORD, 12);
-  await prisma.user.upsert({
-    where:  { email: process.env.SEED_EMAIL },
-    update: {
-      password: hash,
-      firstName: process.env.SEED_FIRSTNAME,
-      lastName:  process.env.SEED_LASTNAME,
-      role: 'ADMIN', rootAdmin: true,
-    },
-    create: {
-      email:     process.env.SEED_EMAIL,
-      username:  process.env.SEED_USERNAME,
-      password:  hash,
-      firstName: process.env.SEED_FIRSTNAME,
-      lastName:  process.env.SEED_LASTNAME,
-      role: 'ADMIN', rootAdmin: true,
-    },
+  const existing = await prisma.user.findFirst({
+    where: { OR: [{ email: process.env.SEED_EMAIL }, { username: process.env.SEED_USERNAME }] }
   });
+  if (existing) {
+    await prisma.user.update({
+      where: { id: existing.id },
+      data: {
+        email:     process.env.SEED_EMAIL,
+        password:  hash,
+        firstName: process.env.SEED_FIRSTNAME,
+        lastName:  process.env.SEED_LASTNAME,
+        role: 'ADMIN', rootAdmin: true,
+      },
+    });
+  } else {
+    await prisma.user.create({
+      data: {
+        email:     process.env.SEED_EMAIL,
+        username:  process.env.SEED_USERNAME,
+        password:  hash,
+        firstName: process.env.SEED_FIRSTNAME,
+        lastName:  process.env.SEED_LASTNAME,
+        role: 'ADMIN', rootAdmin: true,
+      },
+    });
+  }
   const settings = [
-    { key: 'app:name',          value: 'MC Manage Panel' },
+    { key: 'app:name',          value: 'Kretase' },
     { key: 'app:url',           value: process.env.SEED_APP_URL },
     { key: 'app:version',       value: '1.0.0' },
     { key: 'recaptcha:enabled', value: 'false' },
@@ -327,6 +332,152 @@ const prisma = new PrismaClient();
 "
 success "Admin account created: ${ADMIN_EMAIL}"
 
+# ── Optional: Email Setup (Resend) ────────────────────────────────────
+step "Email Setup (optional)"
+echo ""
+echo -e "  Configure email so your panel can send notifications to users."
+echo -e "  ${CYAN}Recommended:${NC} Resend.com — free plan includes 3,000 emails/month"
+echo ""
+read -rp "  Set up email now? (y/N): " DO_EMAIL
+DO_EMAIL="${DO_EMAIL:-n}"
+
+if [[ "${DO_EMAIL,,}" == "y" ]]; then
+  echo ""
+  echo -e "  ${BOLD}Step 1:${NC} Sign up at https://resend.com (free)"
+  echo -e "  ${BOLD}Step 2:${NC} Create an API key in Resend dashboard"
+  echo ""
+  read -rp "  Resend API Key (re_...): " RESEND_API_KEY
+
+  if [[ -z "$RESEND_API_KEY" ]]; then
+    warn "No API key provided — skipping email setup. Configure later in Admin → Settings."
+  else
+    # Default: Resend's shared test address (works immediately, no domain needed)
+    read -rp "  From address [onboarding@resend.dev]: " SMTP_FROM_INPUT
+    SMTP_FROM="${SMTP_FROM_INPUT:-onboarding@resend.dev}"
+
+    read -rp "  Your notification email [${ADMIN_EMAIL}]: " OWNER_EMAIL_INPUT
+    OWNER_EMAIL="${OWNER_EMAIL_INPUT:-${ADMIN_EMAIL}}"
+
+    # Write SMTP settings into DB via Prisma
+    cd "${PANEL_DIR}"
+    SMTP_HOST_VAL="smtp.resend.com" \
+    SMTP_PORT_VAL="465" \
+    SMTP_USER_VAL="resend" \
+    SMTP_PASS_VAL="$RESEND_API_KEY" \
+    SMTP_FROM_VAL="$SMTP_FROM" \
+    SMTP_OWNER_VAL="$OWNER_EMAIL" \
+    node -e "
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
+(async () => {
+  const entries = [
+    { key: 'smtp.host',        value: process.env.SMTP_HOST_VAL },
+    { key: 'smtp.port',        value: process.env.SMTP_PORT_VAL },
+    { key: 'smtp.user',        value: process.env.SMTP_USER_VAL },
+    { key: 'smtp.pass',        value: process.env.SMTP_PASS_VAL },
+    { key: 'smtp.from',        value: process.env.SMTP_FROM_VAL },
+    { key: 'smtp.owner_email', value: process.env.SMTP_OWNER_VAL },
+  ];
+  for (const e of entries) {
+    await prisma.setting.upsert({ where: { key: e.key }, update: { value: e.value }, create: e });
+  }
+  console.log('SMTP settings saved to database');
+  await prisma.\$disconnect();
+})().catch(e => { console.error(e.message); process.exit(1); });
+"
+    success "Email configured — using Resend SMTP (smtp.resend.com:465)"
+
+    # ── Optional: auto-configure DNS via Cloudflare ─────────────────
+    # Only relevant when using a custom domain (not @resend.dev)
+    SMTP_DOMAIN=""
+    if [[ "$SMTP_FROM" == *"@"* && "$SMTP_FROM" != *"@resend.dev"* ]]; then
+      SMTP_DOMAIN=$(echo "$SMTP_FROM" | sed 's/.*@//' | tr -d '>')
+    fi
+
+    if [[ -n "$SMTP_DOMAIN" ]]; then
+      echo ""
+      echo -e "  ${CYAN}Optional:${NC} Auto-add SPF/DKIM/MX records for ${SMTP_DOMAIN} via Cloudflare API"
+      echo "  Requires a Cloudflare API token with DNS Edit permission."
+      read -rp "  Cloudflare API Token (or Enter to skip): " CF_TOKEN
+
+      if [[ -n "$CF_TOKEN" ]]; then
+        read -rp "  Cloudflare Zone ID: " CF_ZONE_ID
+
+        if [[ -n "$CF_ZONE_ID" ]]; then
+          info "Registering ${SMTP_DOMAIN} with Resend..."
+
+          # Install jq if missing
+          command -v jq &>/dev/null || apt-get install -y -q jq >/dev/null 2>&1 || true
+
+          RESEND_RESP=$(curl -sf --max-time 15 -X POST "https://api.resend.com/domains" \
+            -H "Authorization: Bearer ${RESEND_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{\"name\":\"${SMTP_DOMAIN}\"}" 2>/dev/null || echo "")
+
+          if [[ -z "$RESEND_RESP" ]] || ! echo "$RESEND_RESP" | grep -q '"id"'; then
+            warn "Could not register domain with Resend — add DNS records manually in Resend dashboard"
+          else
+            RESEND_DOMAIN_ID=$(echo "$RESEND_RESP" | grep -oP '"id":"\K[^"]+' | head -1)
+
+            if command -v jq &>/dev/null; then
+              DNS_ERRORS=0
+              while IFS= read -r RECORD; do
+                R_TYPE=$(echo "$RECORD" | jq -r '.type // empty')
+                R_NAME=$(echo "$RECORD" | jq -r '.name // empty')
+                R_VALUE=$(echo "$RECORD" | jq -r '.value // empty')
+                R_PRIORITY=$(echo "$RECORD" | jq -r '.priority // empty')
+                [[ -z "$R_TYPE" || -z "$R_NAME" || -z "$R_VALUE" ]] && continue
+
+                if [[ "$R_TYPE" == "MX" && -n "$R_PRIORITY" ]]; then
+                  CF_PAYLOAD="{\"type\":\"MX\",\"name\":\"${R_NAME}\",\"content\":\"${R_VALUE}\",\"priority\":${R_PRIORITY},\"ttl\":1,\"proxied\":false}"
+                else
+                  CF_PAYLOAD="{\"type\":\"${R_TYPE}\",\"name\":\"${R_NAME}\",\"content\":\"${R_VALUE}\",\"ttl\":1,\"proxied\":false}"
+                fi
+
+                CF_RESP=$(curl -sf --max-time 10 -X POST \
+                  "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/dns_records" \
+                  -H "Authorization: Bearer ${CF_TOKEN}" \
+                  -H "Content-Type: application/json" \
+                  -d "$CF_PAYLOAD" 2>/dev/null || echo "")
+
+                if echo "$CF_RESP" | grep -q '"success":true'; then
+                  info "DNS added: ${R_TYPE} ${R_NAME}"
+                else
+                  warn "DNS record skipped (may already exist): ${R_TYPE} ${R_NAME}"
+                  DNS_ERRORS=$((DNS_ERRORS + 1))
+                fi
+              done < <(echo "$RESEND_RESP" | jq -c '.records[]?' 2>/dev/null)
+
+              # Trigger Resend domain verification
+              sleep 5
+              VERIFY_RESP=$(curl -sf --max-time 10 -X POST \
+                "https://api.resend.com/domains/${RESEND_DOMAIN_ID}/verify" \
+                -H "Authorization: Bearer ${RESEND_API_KEY}" 2>/dev/null || echo "")
+
+              if echo "$VERIFY_RESP" | grep -q '"status"'; then
+                success "Domain ${SMTP_DOMAIN} verification triggered"
+                info "DNS propagation may take up to 48h — check status at resend.com/domains"
+              else
+                warn "Verification trigger failed — check Resend dashboard manually"
+              fi
+            else
+              warn "jq not available — add DNS records manually from Resend dashboard"
+            fi
+          fi
+        else
+          info "No Zone ID provided — add DNS records manually in Resend dashboard"
+        fi
+      else
+        info "Cloudflare setup skipped — add DNS records manually in Resend dashboard"
+      fi
+    elif [[ "$SMTP_FROM" == *"@resend.dev"* ]]; then
+      info "Using Resend test address — add your domain in Resend dashboard for branded emails"
+    fi
+  fi
+else
+  info "Email setup skipped — configure later in Admin → Settings → Email"
+fi
+
 # ── Permissions ───────────────────────────────────────────────────────
 chown -R "${PANEL_USER}:${PANEL_USER}" "$PANEL_DIR"
 chmod 750 "${PANEL_DIR}/apps/api/dist"
@@ -336,7 +487,7 @@ step "Creating systemd service"
 NODE_BIN="$(which node)"
 cat > /etc/systemd/system/mc-panel.service <<SERVICE
 [Unit]
-Description=MC Manage Panel API
+Description=Kretase API
 Documentation=https://github.com/mwlih28/mc-manage-panel
 After=network.target postgresql.service
 Wants=postgresql.service
@@ -505,10 +656,14 @@ else
 fi
 
 # ── Save installer config & send notifications ────────────────────────
+# n8n webhook URL — buraya kendi n8n webhook adresinizi yazın
+# n8n Cloud → Workflow 1 → Webhook node → Production URL
+MC_PANEL_REGISTRY_URL="https://mcpanel.app.n8n.cloud/webhook/mc-panel-register"
+
 INSTALLER_CONF_DIR="/etc/mc-panel"
 mkdir -p "$INSTALLER_CONF_DIR"
 cat > "${INSTALLER_CONF_DIR}/installer.conf" <<CONF
-# MC Manage Panel — Installer configuration
+# Kretase — Installer configuration
 # Do not delete — used by update and uninstall scripts
 INSTALLED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 INSTALLED_VERSION="main"
@@ -518,19 +673,21 @@ PANEL_DOMAIN_ORIGINAL="${PANEL_DOMAIN}"
 INSTALLER_NAME="${INSTALLER_NAME:-}"
 INSTALLER_EMAIL="${INSTALLER_EMAIL:-}"
 NOTIFY_UPDATES="${NOTIFY_UPDATES}"
-# Set your webhook URL below (see docs for setup instructions)
-MC_PANEL_WEBHOOK_URL=""
+MC_PANEL_REGISTRY_URL="${MC_PANEL_REGISTRY_URL}"
 CONF
 chmod 600 "${INSTALLER_CONF_DIR}/installer.conf"
 success "Installer config saved: ${INSTALLER_CONF_DIR}/installer.conf"
 
-# Send webhook notification (thank-you email + registration)
-WEBHOOK_URL="${MC_PANEL_WEBHOOK_URL:-}"
-if [[ -n "$WEBHOOK_URL" && -n "${INSTALLER_EMAIL:-}" ]]; then
-  curl -sf -X POST "$WEBHOOK_URL" \
-    -H "Content-Type: application/json" \
-    -d "{\"type\":\"install\",\"name\":\"${INSTALLER_NAME:-}\",\"email\":\"${INSTALLER_EMAIL}\",\"notify_updates\":${NOTIFY_UPDATES},\"server_ip\":\"${SERVER_IP}\",\"domain\":\"${PANEL_DOMAIN}\",\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" \
-    >/dev/null 2>&1 && info "Registration sent" || true
+# Register installation — thank-you email + update opt-in
+if [[ -n "${INSTALLER_EMAIL:-}" ]]; then
+  REGISTER_PAYLOAD="{\"email\":\"${INSTALLER_EMAIL}\",\"name\":\"${INSTALLER_NAME:-}\",\"serverIp\":\"${SERVER_IP}\",\"panelDomain\":\"${PANEL_DOMAIN}\",\"panelVersion\":\"1.0.0\",\"notifyUpdates\":${NOTIFY_UPDATES}}"
+  if curl -sf --max-time 10 -X POST "${MC_PANEL_REGISTRY_URL}" \
+      -H "Content-Type: application/json" \
+      -d "${REGISTER_PAYLOAD}" >/dev/null 2>&1; then
+    info "Registration sent — thank-you email queued"
+  else
+    info "Could not reach registry (non-fatal) — install continues"
+  fi
 fi
 
 # ── Final health check ────────────────────────────────────────────────

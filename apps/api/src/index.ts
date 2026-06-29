@@ -29,6 +29,7 @@ import backupRoutes from './routes/backups';
 import statsRoutes from './routes/stats';
 import wingsRoutes from './routes/wings';
 import settingsRoutes from './routes/settings';
+import installerRoutes from './routes/installer';
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -64,6 +65,7 @@ api.use('/eggs', eggRoutes);
 api.use('/stats', statsRoutes);
 api.use('/wings', wingsRoutes);
 api.use('/settings', settingsRoutes);
+api.use('/installer', installerRoutes);
 
 app.use('/api/v1', api);
 
@@ -77,7 +79,7 @@ app.use(errorHandler);
 
 // Start server
 httpServer.listen(PORT, '0.0.0.0', () => {
-  logger.info(`MC Manage Panel API running on port ${PORT}`);
+  logger.info(`Kretase API running on port ${PORT}`);
   logger.info(`Environment: ${process.env.NODE_ENV}`);
   logger.info(`CORS Origin: ${CORS_ORIGIN}`);
 });

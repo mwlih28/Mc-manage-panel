@@ -62,7 +62,7 @@ export function SetupPage() {
           <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-panel-500 to-panel-700 flex items-center justify-center shadow-xl shadow-panel-900/30 mb-4">
             <Server size={28} className="text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-100">MC Manage Panel</h1>
+          <h1 className="text-2xl font-bold text-slate-100">Kretase</h1>
           <p className="text-slate-500 text-sm mt-1">Initial Setup</p>
         </div>
 

@@ -14,6 +14,7 @@ import { AdminServersPage } from '@/pages/admin/AdminServersPage';
 import { AdminEggsPage } from '@/pages/admin/AdminEggsPage';
 import { AdminActivityPage } from '@/pages/admin/AdminActivityPage';
 import { AdminSettingsPage } from '@/pages/admin/AdminSettingsPage';
+import { AdminInstallersPage } from '@/pages/admin/AdminInstallersPage';
 import { PanelLayout } from '@/components/layout/PanelLayout';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { RequireAuth } from '@/components/layout/RequireAuth';
@@ -53,6 +54,7 @@ export default function App() {
           <Route path="/admin/eggs" element={<AdminEggsPage />} />
           <Route path="/admin/activity" element={<AdminActivityPage />} />
           <Route path="/admin/settings" element={<AdminSettingsPage />} />
+          <Route path="/admin/installers" element={<AdminInstallersPage />} />
         </Route>
       </Route>
 

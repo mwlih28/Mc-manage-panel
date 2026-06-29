@@ -6,8 +6,8 @@ import { AuthRequest } from '../types';
 const router = Router();
 
 const DEFAULTS: Record<string, string> = {
-  'app.name': 'MC Manage Panel',
-  'app.title': 'MC Manage Panel',
+  'app.name': 'Kretase',
+  'app.title': 'Kretase',
   'app.logo': '',
   'app.description': 'High-performance game server management',
 };
@@ -24,7 +24,10 @@ router.get('/', async (_req: Request, res: Response) => {
 });
 
 router.put('/', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
-  const allowed = ['app.name', 'app.title', 'app.logo', 'app.description'];
+  const allowed = [
+    'app.name', 'app.title', 'app.logo', 'app.description',
+    'smtp.host', 'smtp.port', 'smtp.user', 'smtp.pass', 'smtp.from', 'smtp.owner_email',
+  ];
   const updates: Array<{ key: string; value: string }> = [];
   for (const key of allowed) {
     if (req.body[key] !== undefined) {

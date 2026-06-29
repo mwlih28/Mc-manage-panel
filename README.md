@@ -1,4 +1,4 @@
-# MC Manage Panel
+# Kretase
 
 **Self-hosted, open-source game server management panel — a modern alternative to Pterodactyl.**
 
@@ -27,7 +27,7 @@ Manage Minecraft and other game servers from a web UI — with a Wings daemon on
 
 ---
 
-## Why MC Manage Panel?
+## Why Kretase?
 
 Pterodactyl is a great project, but it comes with real tradeoffs. Here's where this panel takes a different approach:
 

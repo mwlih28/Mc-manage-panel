@@ -22,7 +22,7 @@ export function Sidebar() {
     queryFn: () => api.get('/settings').then(r => r.data as Record<string, string>),
     staleTime: 60000,
   });
-  const siteName = settings?.['app.name'] || 'MC Panel';
+  const siteName = settings?.['app.name'] || 'Kretase';
   const logoUrl = settings?.['app.logo'];
 
   const handleLogout = async () => {

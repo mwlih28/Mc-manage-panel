@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Server, Users, Cpu, Package,
-  Activity, Wrench, LogOut, ChevronLeft
+  Activity, Wrench, LogOut, ChevronLeft, Download
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { cn } from '@/lib/utils';
@@ -15,8 +15,9 @@ const adminNavItems = [
   { to: '/admin/users',    icon: Users,           label: 'Users' },
   { to: '/admin/nodes',    icon: Cpu,             label: 'Nodes' },
   { to: '/admin/eggs',     icon: Package,         label: 'Eggs' },
-  { to: '/admin/activity', icon: Activity,        label: 'Activity' },
-  { to: '/admin/settings', icon: Wrench,          label: 'Settings' },
+  { to: '/admin/activity',   icon: Activity,  label: 'Activity' },
+  { to: '/admin/installers', icon: Download,  label: 'Installers' },
+  { to: '/admin/settings',   icon: Wrench,    label: 'Settings' },
 ];
 
 export function AdminSidebar() {
@@ -28,7 +29,7 @@ export function AdminSidebar() {
     queryFn: () => api.get('/settings').then(r => r.data as Record<string, string>),
     staleTime: 60000,
   });
-  const siteName = settings?.['app.name'] || 'MC Panel';
+  const siteName = settings?.['app.name'] || 'Kretase';
   const logoUrl = settings?.['app.logo'];
 
   const handleLogout = async () => {

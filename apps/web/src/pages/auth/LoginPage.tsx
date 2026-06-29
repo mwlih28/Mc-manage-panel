@@ -29,7 +29,7 @@ export function LoginPage() {
     queryFn: () => api.get('/settings').then(r => r.data as Record<string, string>),
     staleTime: 60000,
   });
-  const siteName = settings?.['app.name'] || 'MC Manage Panel';
+  const siteName = settings?.['app.name'] || 'Kretase';
   const siteDesc = settings?.['app.description'] || 'Game server management';
   const logoUrl  = settings?.['app.logo'];
 

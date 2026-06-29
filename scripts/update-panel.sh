@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# MC Manage Panel — Panel Updater
+# Kretase — Panel Updater
 # Updates code, rebuilds, restarts — does NOT touch database data or .env
 #
 # Usage:
@@ -35,7 +35,7 @@ echo "──── Update started: $(date) ────"
 
 echo -e "\n${BOLD}"
 echo "  ╔═══════════════════════════════════════════════════╗"
-echo "  ║       MC Manage Panel — Updater                   ║"
+echo "  ║             Kretase — Updater                     ║"
 echo "  ╚═══════════════════════════════════════════════════╝"
 echo -e "${NC}"
 
@@ -126,14 +126,12 @@ $API_READY && success "API is up" || warn "API health check failed — check: jo
 INSTALLER_CONF="/etc/mc-panel/installer.conf"
 if [[ -f "$INSTALLER_CONF" ]]; then
   . "$INSTALLER_CONF"
-  if [[ "${NOTIFY_UPDATES:-false}" == "true" && -n "${INSTALLER_EMAIL:-}" ]]; then
-    WEBHOOK_URL="${MC_PANEL_WEBHOOK_URL:-}"
-    if [[ -n "$WEBHOOK_URL" ]]; then
-      curl -sf -X POST "$WEBHOOK_URL" \
-        -H "Content-Type: application/json" \
-        -d "{\"type\":\"update\",\"email\":\"${INSTALLER_EMAIL}\",\"from\":\"${CURRENT_COMMIT}\",\"to\":\"${NEW_COMMIT}\",\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" \
-        >/dev/null 2>&1 && info "Update notification sent" || true
-    fi
+  REGISTRY_URL="${MC_PANEL_REGISTRY_URL:-https://mcpanel.app.n8n.cloud/webhook/mc-panel-register}"
+  if [[ -n "${INSTALLER_EMAIL:-}" ]]; then
+    UPDATE_PAYLOAD="{\"email\":\"${INSTALLER_EMAIL}\",\"name\":\"${INSTALLER_NAME:-}\",\"serverIp\":\"$(hostname -I | awk '{print $1}')\",\"panelDomain\":\"${PANEL_DOMAIN_ORIGINAL:-}\",\"panelVersion\":\"${NEW_COMMIT}\",\"notifyUpdates\":${NOTIFY_UPDATES:-false}}"
+    curl -sf --max-time 10 -X POST "${REGISTRY_URL}" \
+      -H "Content-Type: application/json" \
+      -d "${UPDATE_PAYLOAD}" >/dev/null 2>&1 && info "Registration updated" || true
   fi
 fi
 

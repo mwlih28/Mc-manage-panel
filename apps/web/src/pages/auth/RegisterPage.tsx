@@ -41,7 +41,7 @@ export function RegisterPage() {
             <Server size={28} className="text-white" />
           </div>
           <h1 className="text-2xl font-bold text-slate-100">Create Account</h1>
-          <p className="text-slate-500 text-sm mt-1">Join MC Manage Panel</p>
+          <p className="text-slate-500 text-sm mt-1">Join Kretase</p>
         </div>
 
         <div className="card">

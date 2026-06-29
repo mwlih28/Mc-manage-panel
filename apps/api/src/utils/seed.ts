@@ -593,7 +593,7 @@ echo "TShock installed."`;
 
   // Create settings
   const settings = [
-    { key: 'app:name', value: 'MC Manage Panel' },
+    { key: 'app:name', value: 'Kretase' },
     { key: 'app:url', value: 'http://localhost:3001' },
     { key: 'app:version', value: '1.0.0' },
     { key: 'recaptcha:enabled', value: 'false' },

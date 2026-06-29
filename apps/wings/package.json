@@ -1,7 +1,7 @@
 {
   "name": "@mc-panel/wings",
   "version": "1.0.0",
-  "description": "MC Manage Panel Wings Daemon",
+  "description": "Kretase Wings Daemon",
   "main": "dist/index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
