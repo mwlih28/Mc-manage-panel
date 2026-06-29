@@ -1,0 +1,97 @@
+{
+  "name": "MC Panel — Güncelleme Bildirimi Gönder",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Güncelleme Bildirimi Gönder",
+        "formDescription": "Opted-in tüm panel sahiplerine güncelleme maili gönderir.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Versiyon",
+              "placeholder": "v1.2.0",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Changelog URL",
+              "placeholder": "https://github.com/mwlih28/mc-manage-panel/releases/tag/v1.2.0",
+              "requiredField": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b1b2c3d4-0002-0002-0002-000000000001",
+      "name": "Form — Versiyon Gir",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [240, 300],
+      "webhookId": "mc-panel-update-form"
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "BURAYA_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Kurulumlar",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Güncelleme Bildir",
+              "lookupValue": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b1b2c3d4-0002-0002-0002-000000000002",
+      "name": "Google Sheets — Aboneleri Çek",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json['Email'] }}",
+        "subject": "MC Manage Panel {{ $('Form — Versiyon Gir').item.json['Versiyon'] }} çıktı! 🚀",
+        "emailType": "html",
+        "message": "<!DOCTYPE html>\n<html>\n<head><meta charset='utf-8'></head>\n<body style='margin:0;padding:0;background:#0a0a0c;font-family:system-ui,sans-serif;'>\n<table width='100%' cellpadding='0' cellspacing='0' style='background:#0a0a0c;padding:40px 20px;'>\n<tr><td align='center'>\n  <table width='520' cellpadding='0' cellspacing='0' style='background:#111113;border:1px solid #1e1e22;border-radius:12px;overflow:hidden;'>\n    <tr><td style='background:linear-gradient(135deg,#1a2a3a,#111827);padding:32px 36px;text-align:center;'>\n      <h1 style='margin:0;color:#fff;font-size:22px;'>🚀 MC Manage Panel</h1>\n      <p style='margin:6px 0 0;color:#93c5fd;font-size:13px;'>{{ $('Form — Versiyon Gir').item.json['Versiyon'] }} yayında!</p>\n    </td></tr>\n    <tr><td style='padding:32px 36px;'>\n      <p style='margin:0 0 16px;color:#e4e4e7;font-size:15px;'>Merhaba {{ $json['İsim'] || 'kullanıcı' }},</p>\n      <p style='margin:0 0 16px;color:#a1a1aa;font-size:14px;line-height:1.6;'>MC Manage Panel'in yeni versiyonu çıktı. Verilerini kaybetmeden tek komutla güncelleyebilirsin:</p>\n      <div style='background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px 20px;margin:20px 0;'>\n        <p style='margin:0 0 8px;color:#93c5fd;font-size:12px;font-weight:600;text-transform:uppercase;'>Güncelleme Komutu</p>\n        <code style='color:#86efac;font-size:12px;font-family:monospace;word-break:break-all;'>bash &lt;(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/update-panel.sh)</code>\n      </div>\n      {{ $('Form — Versiyon Gir').item.json['Changelog URL'] ? '<a href=\"' + $('Form — Versiyon Gir').item.json['Changelog URL'] + '\" style=\"display:inline-block;background:#2563eb;color:#fff;font-size:13px;font-weight:600;text-decoration:none;padding:10px 20px;border-radius:8px;\">Changelog</a>' : '' }}\n    </td></tr>\n    <tr><td style='padding:16px 36px;background:#0d0f11;border-top:1px solid #1e1e22;text-align:center;'>\n      <p style='margin:0;color:#52525b;font-size:11px;'>MC Manage Panel · Güncelleme bildirimine kayıtlısın. Aboneliğini iptal etmek için yanıtla.</p>\n    </td></tr>\n  </table>\n</td></tr>\n</table>\n</body></html>",
+        "options": {}
+      },
+      "id": "b1b2c3d4-0002-0002-0002-000000000003",
+      "name": "Gmail — Güncelleme Maili",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "Form — Versiyon Gir": {
+      "main": [
+        [
+          { "node": "Google Sheets — Aboneleri Çek", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Google Sheets — Aboneleri Çek": {
+      "main": [
+        [
+          { "node": "Gmail — Güncelleme Maili", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [{ "name": "mc-panel" }],
+  "pinData": {}
+}

@@ -1,0 +1,170 @@
+{
+  "name": "MC Panel — Kurulum Kaydı + Teşekkür Maili",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "mc-panel-register",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "mc-panel-register"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "BURAYA_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Kurulumlar",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Email": "={{ $json.body.email }}",
+            "İsim": "={{ $json.body.name }}",
+            "Sunucu IP": "={{ $json.body.serverIp }}",
+            "Domain": "={{ $json.body.panelDomain }}",
+            "Versiyon": "={{ $json.body.panelVersion }}",
+            "Güncelleme Bildir": "={{ $json.body.notifyUpdates }}",
+            "Tarih": "={{ $now }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000002",
+      "name": "Google Sheets — Kaydet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-email",
+              "leftValue": "={{ $('Webhook').item.json.body.email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000003",
+      "name": "Email var mı?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Webhook').item.json.body.email }}",
+        "subject": "MC Manage Panel kurulumu için teşekkürler! 🎉",
+        "emailType": "html",
+        "message": "<!DOCTYPE html>\n<html>\n<head><meta charset='utf-8'></head>\n<body style='margin:0;padding:0;background:#0a0a0c;font-family:system-ui,sans-serif;'>\n<table width='100%' cellpadding='0' cellspacing='0' style='background:#0a0a0c;padding:40px 20px;'>\n<tr><td align='center'>\n  <table width='520' cellpadding='0' cellspacing='0' style='background:#111113;border:1px solid #1e1e22;border-radius:12px;overflow:hidden;'>\n    <tr><td style='background:linear-gradient(135deg,#1a3a2a,#112218);padding:32px 36px;text-align:center;'>\n      <h1 style='margin:0;color:#fff;font-size:22px;'>🛡️ MC Manage Panel</h1>\n      <p style='margin:6px 0 0;color:#86efac;font-size:13px;'>Game Server Management Platform</p>\n    </td></tr>\n    <tr><td style='padding:32px 36px;'>\n      <p style='margin:0 0 16px;color:#e4e4e7;font-size:15px;'>Merhaba {{ $('Webhook').item.json.body.name || 'kullanıcı' }},</p>\n      <p style='margin:0 0 16px;color:#a1a1aa;font-size:14px;line-height:1.6;'>MC Manage Panel'i kurduğun için teşekkürler! Kurulumun başarıyla kaydedildi.</p>\n      <div style='background:#0d1f15;border:1px solid #1a3a2a;border-radius:8px;padding:16px 20px;margin:20px 0;'>\n        <p style='margin:0 0 8px;color:#86efac;font-size:12px;font-weight:600;text-transform:uppercase;'>Kurulum Bilgileri</p>\n        <p style='margin:0 0 4px;color:#d4d4d8;font-size:13px;font-family:monospace;'>IP: {{ $('Webhook').item.json.body.serverIp }}</p>\n        <p style='margin:0;color:#d4d4d8;font-size:13px;font-family:monospace;'>Domain: {{ $('Webhook').item.json.body.panelDomain || '—' }}</p>\n      </div>\n      <p style='margin:0 0 16px;color:#a1a1aa;font-size:14px;'>Sorun yaşarsan GitHub üzerinden destek alabilirsin.</p>\n      <a href='https://github.com/mwlih28/mc-manage-panel' style='display:inline-block;background:#16a34a;color:#fff;font-size:13px;font-weight:600;text-decoration:none;padding:10px 20px;border-radius:8px;'>GitHub</a>\n    </td></tr>\n    <tr><td style='padding:16px 36px;background:#0d0f11;border-top:1px solid #1e1e22;text-align:center;'>\n      <p style='margin:0;color:#52525b;font-size:11px;'>MC Manage Panel · mwlih28</p>\n    </td></tr>\n  </table>\n</td></tr>\n</table>\n</body></html>",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000004",
+      "name": "Gmail — Kurucuya Teşekkür",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "sendTo": "BURAYA_KENDİ_EMAİLİNİ_YAZ",
+        "subject": "Yeni kurulum: {{ $('Webhook').item.json.body.panelDomain || $('Webhook').item.json.body.serverIp }}",
+        "emailType": "html",
+        "message": "<div style='font-family:sans-serif;max-width:480px;padding:24px;background:#111;color:#e4e4e7;border-radius:8px;'>\n<h2 style='margin:0 0 16px;color:#86efac;'>📥 Yeni Kurulum</h2>\n<table style='width:100%;font-size:14px;'>\n<tr><td style='padding:6px 0;color:#71717a;width:120px;'>İsim</td><td>{{ $('Webhook').item.json.body.name || '—' }}</td></tr>\n<tr><td style='padding:6px 0;color:#71717a;'>Email</td><td>{{ $('Webhook').item.json.body.email }}</td></tr>\n<tr><td style='padding:6px 0;color:#71717a;'>Sunucu IP</td><td style='font-family:monospace;'>{{ $('Webhook').item.json.body.serverIp }}</td></tr>\n<tr><td style='padding:6px 0;color:#71717a;'>Domain</td><td>{{ $('Webhook').item.json.body.panelDomain || '—' }}</td></tr>\n<tr><td style='padding:6px 0;color:#71717a;'>Güncelleme</td><td>{{ $('Webhook').item.json.body.notifyUpdates ? 'Evet' : 'Hayır' }}</td></tr>\n</table>\n</div>",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000005",
+      "name": "Gmail — Kendine Bildirim",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [900, 380]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"message\": \"Kayıt alındı\" }",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000006",
+      "name": "Yanıt Dön",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1120, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          { "node": "Google Sheets — Kaydet", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Google Sheets — Kaydet": {
+      "main": [
+        [
+          { "node": "Email var mı?", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Email var mı?": {
+      "main": [
+        [
+          { "node": "Gmail — Kurucuya Teşekkür", "type": "main", "index": 0 },
+          { "node": "Gmail — Kendine Bildirim", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Yanıt Dön", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Gmail — Kurucuya Teşekkür": {
+      "main": [
+        [
+          { "node": "Yanıt Dön", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Gmail — Kendine Bildirim": {
+      "main": [
+        [
+          { "node": "Yanıt Dön", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [{ "name": "mc-panel" }],
+  "pinData": {}
+}
