@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# MC Manage Panel — Panel Updater
+# Kretase — Panel Updater
 # Updates code, rebuilds, restarts — does NOT touch database data or .env
 #
 # Usage:
@@ -35,7 +35,7 @@ echo "──── Update started: $(date) ────"
 
 echo -e "\n${BOLD}"
 echo "  ╔═══════════════════════════════════════════════════╗"
-echo "  ║       MC Manage Panel — Updater                   ║"
+echo "  ║             Kretase — Updater                     ║"
 echo "  ╚═══════════════════════════════════════════════════╝"
 echo -e "${NC}"
 

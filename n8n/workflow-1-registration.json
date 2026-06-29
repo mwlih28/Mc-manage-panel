@@ -1,5 +1,5 @@
 {
-  "name": "MC Panel — Kurulum Kaydı + Teşekkür Maili",
+  "name": "Kretase — Kurulum Kaydı + Teşekkür Maili",
   "nodes": [
     {
       "parameters": {
@@ -91,9 +91,9 @@
       "parameters": {
         "fromEmail": "noreply@kretase.com",
         "toEmail": "={{ $('Webhook').item.json.body.email }}",
-        "subject": "MC Manage Panel kurulumu için teşekkürler! 🎉",
+        "subject": "Kretase kurulumu için teşekkürler! 🎉",
         "emailType": "html",
-        "html": "={{ '<div style=\"font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#111113;border:1px solid #1e1e22;border-radius:12px;overflow:hidden;\">' + '<div style=\"background:linear-gradient(135deg,#1a3a2a,#112218);padding:32px;text-align:center;\">' + '<h1 style=\"margin:0;color:#fff;font-size:22px;\">🛡️ MC Manage Panel</h1>' + '<p style=\"margin:6px 0 0;color:#86efac;font-size:13px;\">Game Server Management Platform</p>' + '</div>' + '<div style=\"padding:32px;\">' + '<p style=\"color:#e4e4e7;font-size:15px;\">Merhaba ' + ($('Webhook').item.json.body.name || 'kullanıcı') + ',</p>' + '<p style=\"color:#a1a1aa;font-size:14px;\">MC Manage Panel\\'i kurduğun için teşekkürler! Kurulumun başarıyla kaydedildi.</p>' + '<div style=\"background:#0d1f15;border:1px solid #1a3a2a;border-radius:8px;padding:16px;margin:20px 0;\">' + '<p style=\"color:#86efac;font-size:12px;font-weight:600;\">KURULUM BİLGİLERİ</p>' + '<p style=\"color:#d4d4d8;font-family:monospace;\">IP: ' + $('Webhook').item.json.body.serverIp + '</p>' + '<p style=\"color:#d4d4d8;font-family:monospace;\">Domain: ' + ($('Webhook').item.json.body.panelDomain || '—') + '</p>' + '</div>' + '<a href=\"https://kretase.com\" style=\"display:inline-block;background:#16a34a;color:#fff;font-size:13px;font-weight:600;text-decoration:none;padding:10px 20px;border-radius:8px;\">kretase.com</a>' + '</div>' + '<div style=\"padding:16px;background:#0d0f11;border-top:1px solid #1e1e22;text-align:center;\">' + '<p style=\"color:#52525b;font-size:11px;\">MC Manage Panel · kretase.com</p>' + '</div></div>' }}",
+        "html": "={{ '<div style=\"font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#111113;border:1px solid #1e1e22;border-radius:12px;overflow:hidden;\">' + '<div style=\"background:linear-gradient(135deg,#1a3a2a,#112218);padding:32px;text-align:center;\">' + '<h1 style=\"margin:0;color:#fff;font-size:22px;\">🛡️ Kretase</h1>' + '<p style=\"margin:6px 0 0;color:#86efac;font-size:13px;\">Game Server Management Platform</p>' + '</div>' + '<div style=\"padding:32px;\">' + '<p style=\"color:#e4e4e7;font-size:15px;\">Merhaba ' + ($('Webhook').item.json.body.name || 'kullanıcı') + ',</p>' + '<p style=\"color:#a1a1aa;font-size:14px;\">Kretase\\'i kurduğun için teşekkürler! Kurulumun başarıyla kaydedildi.</p>' + '<div style=\"background:#0d1f15;border:1px solid #1a3a2a;border-radius:8px;padding:16px;margin:20px 0;\">' + '<p style=\"color:#86efac;font-size:12px;font-weight:600;\">KURULUM BİLGİLERİ</p>' + '<p style=\"color:#d4d4d8;font-family:monospace;\">IP: ' + $('Webhook').item.json.body.serverIp + '</p>' + '<p style=\"color:#d4d4d8;font-family:monospace;\">Domain: ' + ($('Webhook').item.json.body.panelDomain || '—') + '</p>' + '</div>' + '<a href=\"https://kretase.com\" style=\"display:inline-block;background:#16a34a;color:#fff;font-size:13px;font-weight:600;text-decoration:none;padding:10px 20px;border-radius:8px;\">kretase.com</a>' + '</div>' + '<div style=\"padding:16px;background:#0d0f11;border-top:1px solid #1e1e22;text-align:center;\">' + '<p style=\"color:#52525b;font-size:11px;\">Kretase · kretase.com</p>' + '</div></div>' }}",
         "options": {}
       },
       "id": "a1b2c3d4-0001-0001-0001-000000000004",

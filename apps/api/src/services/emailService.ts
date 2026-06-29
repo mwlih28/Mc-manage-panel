@@ -57,13 +57,13 @@ function thankYouHtml(name: string, serverIp: string): string {
       <div style="display:inline-block;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px;margin-bottom:16px;">
         <span style="font-size:28px;">🛡️</span>
       </div>
-      <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700;letter-spacing:-0.3px;">MC Manage Panel</h1>
+      <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700;letter-spacing:-0.3px;">Kretase</h1>
       <p style="margin:6px 0 0;color:#86efac;font-size:13px;">Game Server Management Platform</p>
     </td></tr>
     <tr><td style="padding:32px 36px;">
       <p style="margin:0 0 16px;color:#e4e4e7;font-size:15px;">Hi ${displayName},</p>
       <p style="margin:0 0 16px;color:#a1a1aa;font-size:14px;line-height:1.6;">
-        Thank you for installing <strong style="color:#e4e4e7;">MC Manage Panel</strong>! We hope it makes managing your game servers easier and more enjoyable.
+        Thank you for installing <strong style="color:#e4e4e7;">Kretase</strong>! We hope it makes managing your game servers easier and more enjoyable.
       </p>
       <div style="background:#0d1f15;border:1px solid #1a3a2a;border-radius:8px;padding:16px 20px;margin:20px 0;">
         <p style="margin:0 0 8px;color:#86efac;font-size:12px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;">Your Installation</p>
@@ -75,10 +75,10 @@ function thankYouHtml(name: string, serverIp: string): string {
       <div style="margin:24px 0;">
         <a href="https://github.com/mwlih28/mc-manage-panel" style="display:inline-block;background:#16a34a;color:#fff;font-size:13px;font-weight:600;text-decoration:none;padding:10px 20px;border-radius:8px;">View on GitHub</a>
       </div>
-      <p style="margin:0;color:#71717a;font-size:13px;line-height:1.6;">Cheers,<br><strong style="color:#a1a1aa;">The MC Manage Panel Team</strong></p>
+      <p style="margin:0;color:#71717a;font-size:13px;line-height:1.6;">Cheers,<br><strong style="color:#a1a1aa;">The Kretase Team</strong></p>
     </td></tr>
     <tr><td style="padding:16px 36px;background:#0d0f11;border-top:1px solid #1e1e22;text-align:center;">
-      <p style="margin:0;color:#52525b;font-size:11px;">You received this email because you installed MC Manage Panel on ${serverIp}.</p>
+      <p style="margin:0;color:#52525b;font-size:11px;">You received this email because you installed Kretase on ${serverIp}.</p>
     </td></tr>
   </table>
 </td></tr>
@@ -97,11 +97,11 @@ function updateHtml(version: string, changelogUrl?: string): string {
       <div style="display:inline-block;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px;margin-bottom:16px;">
         <span style="font-size:28px;">🚀</span>
       </div>
-      <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700;">MC Manage Panel</h1>
+      <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700;">Kretase</h1>
       <p style="margin:6px 0 0;color:#93c5fd;font-size:13px;">Update Available — ${version}</p>
     </td></tr>
     <tr><td style="padding:32px 36px;">
-      <p style="margin:0 0 16px;color:#e4e4e7;font-size:15px;">A new version of MC Manage Panel is available!</p>
+      <p style="margin:0 0 16px;color:#e4e4e7;font-size:15px;">A new version of Kretase is available!</p>
       <p style="margin:0 0 20px;color:#a1a1aa;font-size:14px;line-height:1.6;">
         Run the update script to get the latest features, bug fixes, and security improvements — your data won't be affected.
       </p>
@@ -110,7 +110,7 @@ function updateHtml(version: string, changelogUrl?: string): string {
         <code style="color:#86efac;font-size:12px;font-family:monospace;word-break:break-all;">bash &lt;(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/update-panel.sh)</code>
       </div>
       ${changelogUrl ? `<div style="margin:20px 0;"><a href="${changelogUrl}" style="display:inline-block;background:#2563eb;color:#fff;font-size:13px;font-weight:600;text-decoration:none;padding:10px 20px;border-radius:8px;">View Changelog</a></div>` : ''}
-      <p style="margin:0;color:#71717a;font-size:13px;">The MC Manage Panel Team</p>
+      <p style="margin:0;color:#71717a;font-size:13px;">The Kretase Team</p>
     </td></tr>
     <tr><td style="padding:16px 36px;background:#0d0f11;border-top:1px solid #1e1e22;text-align:center;">
       <p style="margin:0;color:#52525b;font-size:11px;">You're receiving this because you opted in for update notifications during installation.</p>
@@ -128,11 +128,11 @@ export async function sendThankYouEmail(to: string, name: string, serverIp: stri
     if (!transport) return false;
     const from = conf['smtp.from'] || conf['smtp.user'];
     await transport.sendMail({
-      from: `"MC Manage Panel" <${from}>`,
+      from: `"Kretase" <${from}>`,
       to,
-      subject: 'Thank you for installing MC Manage Panel!',
+      subject: 'Thank you for installing Kretase!',
       html: thankYouHtml(name, serverIp),
-      text: `Hi ${name || 'there'},\n\nThank you for installing MC Manage Panel on ${serverIp}!\n\nUpdate command: bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/update-panel.sh)\n\nCheers,\nThe MC Manage Panel Team`,
+      text: `Hi ${name || 'there'},\n\nThank you for installing Kretase on ${serverIp}!\n\nUpdate command: bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/update-panel.sh)\n\nCheers,\nThe Kretase Team`,
     });
     logger.info(`Thank-you email sent to ${to}`);
     return true;
@@ -152,7 +152,7 @@ export async function sendOwnerNotification(name: string, email: string, serverI
     if (!ownerEmail) return false;
     const from = conf['smtp.from'] || conf['smtp.user'];
     await transport.sendMail({
-      from: `"MC Panel Registry" <${from}>`,
+      from: `"Kretase Registry" <${from}>`,
       to: ownerEmail,
       subject: `New installation: ${domain || serverIp}`,
       html: `<div style="font-family:sans-serif;max-width:480px;padding:24px;background:#111;color:#e4e4e7;border-radius:8px;">
@@ -165,7 +165,7 @@ export async function sendOwnerNotification(name: string, email: string, serverI
 <tr><td style="padding:6px 0;color:#71717a;">Time</td><td style="color:#e4e4e7;">${new Date().toUTCString()}</td></tr>
 </table>
 </div>`,
-      text: `New MC Manage Panel installation.\n\nName: ${name || '—'}\nEmail: ${email}\nServer IP: ${serverIp}\nDomain: ${domain || '—'}\nTime: ${new Date().toISOString()}`,
+      text: `New Kretase installation.\n\nName: ${name || '—'}\nEmail: ${email}\nServer IP: ${serverIp}\nDomain: ${domain || '—'}\nTime: ${new Date().toISOString()}`,
     });
     logger.info(`Owner notification sent for installation from ${serverIp}`);
     return true;
@@ -182,11 +182,11 @@ export async function sendUpdateNotification(to: string, version: string, change
     if (!transport) return false;
     const from = conf['smtp.from'] || conf['smtp.user'];
     await transport.sendMail({
-      from: `"MC Manage Panel" <${from}>`,
+      from: `"Kretase" <${from}>`,
       to,
-      subject: `MC Manage Panel ${version} is available`,
+      subject: `Kretase ${version} is available`,
       html: updateHtml(version, changelogUrl),
-      text: `MC Manage Panel ${version} is now available!\n\nUpdate: bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/update-panel.sh)`,
+      text: `Kretase ${version} is now available!\n\nUpdate: bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/update-panel.sh)`,
     });
     return true;
   } catch (err) {

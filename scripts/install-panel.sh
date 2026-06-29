@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# MC Manage Panel — Panel Installer
+# Kretase — Panel Installer
 # Supported: Ubuntu 20.04 / 22.04 / 24.04, Debian 11 / 12
 #
 # One-liner install:
@@ -48,7 +48,7 @@ echo "──── Install started: $(date) ────"
 # ── Banner ────────────────────────────────────────────────────────────
 echo -e "\n${BOLD}"
 echo "  ╔═══════════════════════════════════════════════════╗"
-echo "  ║       MC Manage Panel — Installer v1.0            ║"
+echo "  ║            Kretase — Installer v1.0               ║"
 echo "  ║        Game Server Management Platform            ║"
 echo "  ╚═══════════════════════════════════════════════════╝"
 echo -e "${NC}"
@@ -224,7 +224,7 @@ JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
 JWT_EXPIRES_IN=15m
 JWT_REFRESH_EXPIRES_IN=7d
 CORS_ORIGIN=http://${PANEL_DOMAIN}
-APP_NAME=MC Manage Panel
+APP_NAME=Kretase
 APP_URL=http://${PANEL_DOMAIN}
 PANEL_VERSION=1.0.0
 ENV
@@ -318,7 +318,7 @@ const prisma = new PrismaClient();
     });
   }
   const settings = [
-    { key: 'app:name',          value: 'MC Manage Panel' },
+    { key: 'app:name',          value: 'Kretase' },
     { key: 'app:url',           value: process.env.SEED_APP_URL },
     { key: 'app:version',       value: '1.0.0' },
     { key: 'recaptcha:enabled', value: 'false' },
@@ -487,7 +487,7 @@ step "Creating systemd service"
 NODE_BIN="$(which node)"
 cat > /etc/systemd/system/mc-panel.service <<SERVICE
 [Unit]
-Description=MC Manage Panel API
+Description=Kretase API
 Documentation=https://github.com/mwlih28/mc-manage-panel
 After=network.target postgresql.service
 Wants=postgresql.service
@@ -663,7 +663,7 @@ MC_PANEL_REGISTRY_URL="https://mcpanel.app.n8n.cloud/webhook/mc-panel-register"
 INSTALLER_CONF_DIR="/etc/mc-panel"
 mkdir -p "$INSTALLER_CONF_DIR"
 cat > "${INSTALLER_CONF_DIR}/installer.conf" <<CONF
-# MC Manage Panel — Installer configuration
+# Kretase — Installer configuration
 # Do not delete — used by update and uninstall scripts
 INSTALLED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 INSTALLED_VERSION="main"

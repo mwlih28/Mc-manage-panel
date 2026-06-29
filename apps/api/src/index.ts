@@ -79,7 +79,7 @@ app.use(errorHandler);
 
 // Start server
 httpServer.listen(PORT, '0.0.0.0', () => {
-  logger.info(`MC Manage Panel API running on port ${PORT}`);
+  logger.info(`Kretase API running on port ${PORT}`);
   logger.info(`Environment: ${process.env.NODE_ENV}`);
   logger.info(`CORS Origin: ${CORS_ORIGIN}`);
 });

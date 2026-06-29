@@ -96,7 +96,7 @@ export function AdminSettingsPage() {
               className="input"
               value={form['app.name']}
               onChange={e => setForm(f => ({ ...f, 'app.name': e.target.value }))}
-              placeholder="MC Manage Panel"
+              placeholder="Kretase"
             />
             <p className="text-xs text-zinc-600 mt-1">Shown in the sidebar and login page.</p>
           </div>
@@ -107,7 +107,7 @@ export function AdminSettingsPage() {
               className="input"
               value={form['app.title']}
               onChange={e => setForm(f => ({ ...f, 'app.title': e.target.value }))}
-              placeholder="MC Manage Panel"
+              placeholder="Kretase"
             />
             <p className="text-xs text-zinc-600 mt-1">The text shown in the browser tab.</p>
           </div>
@@ -231,7 +231,7 @@ export function AdminSettingsPage() {
               className="input"
               value={form['smtp.from']}
               onChange={e => setForm(f => ({ ...f, 'smtp.from': e.target.value }))}
-              placeholder="MC Manage Panel <noreply@yourdomain.com>"
+              placeholder="Kretase <noreply@kretase.com>"
             />
             <p className="text-xs text-zinc-600 mt-1">Shown in the "From" field of outgoing emails.</p>
           </div>

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# MC Manage Panel — Uninstaller
+# Kretase — Uninstaller
 # Removes the panel cleanly. Optionally keeps or drops the database.
 #
 # Usage:
@@ -25,11 +25,11 @@ DB_USER="mcpanel"
 
 echo -e "\n${BOLD}"
 echo "  ╔═══════════════════════════════════════════════════╗"
-echo "  ║       MC Manage Panel — Uninstaller               ║"
+echo "  ║            Kretase — Uninstaller                  ║"
 echo "  ╚═══════════════════════════════════════════════════╝"
 echo -e "${NC}"
 
-echo -e "  ${RED}${BOLD}WARNING:${NC} This will remove the MC Manage Panel from this server."
+echo -e "  ${RED}${BOLD}WARNING:${NC} This will remove Kretase from this server."
 echo ""
 
 read -rp "  Keep database (users, servers, settings)? [Y/n]: " KEEP_DB
@@ -90,7 +90,7 @@ echo "  ╔═══════════════════════
 echo "  ║          Uninstall Complete!                      ║"
 echo "  ╚═══════════════════════════════════════════════════╝"
 echo -e "${NC}"
-echo "  MC Manage Panel has been removed from this server."
+echo "  Kretase has been removed from this server."
 if [[ "${KEEP_DB,,}" != "n" ]]; then
   echo "  Database '${DB_NAME}' was kept."
 fi

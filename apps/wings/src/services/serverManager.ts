@@ -176,7 +176,7 @@ class ServerManager extends EventEmitter {
             config.environment['SERVER_PORT'] || config.environment['PORT'] || '25565', 10
           );
           const props = [
-            '#Minecraft server properties — optimized defaults by MC Manage Panel',
+            '#Minecraft server properties — optimized defaults by Kretase',
             `server-port=${serverPort}`,
             'online-mode=false',
             'view-distance=7',

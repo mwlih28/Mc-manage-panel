@@ -159,7 +159,7 @@ async function main() {
 
   httpServer.listen(port, host, () => {
     logger.info('================================================');
-    logger.info('  MC Manage Panel - Wings Daemon');
+    logger.info('  Kretase - Wings Daemon');
     logger.info(`  Listening: ${host}:${port}`);
     logger.info(`  Panel: ${cfg.remote}`);
     logger.info(`  Node UUID: ${cfg.uuid}`);

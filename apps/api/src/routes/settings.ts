@@ -6,8 +6,8 @@ import { AuthRequest } from '../types';
 const router = Router();
 
 const DEFAULTS: Record<string, string> = {
-  'app.name': 'MC Manage Panel',
-  'app.title': 'MC Manage Panel',
+  'app.name': 'Kretase',
+  'app.title': 'Kretase',
   'app.logo': '',
   'app.description': 'High-performance game server management',
 };

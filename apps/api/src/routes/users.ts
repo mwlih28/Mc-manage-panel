@@ -205,7 +205,7 @@ router.post('/profile/2fa/setup', authenticate, async (req: AuthRequest, res: Re
   if (user.twoFactor) return res.status(400).json({ message: '2FA is already enabled' });
 
   const secret = generateSecret();
-  const otpauthUrl = generateURI({ issuer: 'MC Manage Panel', label: user.email, secret });
+  const otpauthUrl = generateURI({ issuer: 'Kretase', label: user.email, secret });
   const qrCode = await QRCode.toDataURL(otpauthUrl);
 
   // Store secret temporarily (unconfirmed)
@@ -278,7 +278,7 @@ router.post('/profile/smtp/test', authenticate, async (req: AuthRequest, res: Re
     await transporter.sendMail({
       from: user.smtpFrom || user.smtpUser || 'noreply@example.com',
       to: user.email,
-      subject: 'MC Manage Panel - SMTP Test',
+      subject: 'Kretase - SMTP Test',
       text: 'Your SMTP configuration is working correctly.',
     });
     return res.json({ message: `Test email sent to ${user.email}` });

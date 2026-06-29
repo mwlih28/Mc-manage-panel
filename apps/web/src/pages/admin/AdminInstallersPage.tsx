@@ -67,7 +67,7 @@ export function AdminInstallersPage() {
     <div className="space-y-6 animate-fade-in">
       <div>
         <h1 className="text-xl font-bold text-white">Installers</h1>
-        <p className="text-sm text-zinc-500 mt-1">Everyone who installed MC Manage Panel.</p>
+        <p className="text-sm text-zinc-500 mt-1">Everyone who installed Kretase.</p>
       </div>
 
       {/* Stats */}
