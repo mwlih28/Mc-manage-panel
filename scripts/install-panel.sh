@@ -327,6 +327,152 @@ const prisma = new PrismaClient();
 "
 success "Admin account created: ${ADMIN_EMAIL}"
 
+# ── Optional: Email Setup (Resend) ────────────────────────────────────
+step "Email Setup (optional)"
+echo ""
+echo -e "  Configure email so your panel can send notifications to users."
+echo -e "  ${CYAN}Recommended:${NC} Resend.com — free plan includes 3,000 emails/month"
+echo ""
+read -rp "  Set up email now? (y/N): " DO_EMAIL
+DO_EMAIL="${DO_EMAIL:-n}"
+
+if [[ "${DO_EMAIL,,}" == "y" ]]; then
+  echo ""
+  echo -e "  ${BOLD}Step 1:${NC} Sign up at https://resend.com (free)"
+  echo -e "  ${BOLD}Step 2:${NC} Create an API key in Resend dashboard"
+  echo ""
+  read -rp "  Resend API Key (re_...): " RESEND_API_KEY
+
+  if [[ -z "$RESEND_API_KEY" ]]; then
+    warn "No API key provided — skipping email setup. Configure later in Admin → Settings."
+  else
+    # Default: Resend's shared test address (works immediately, no domain needed)
+    read -rp "  From address [onboarding@resend.dev]: " SMTP_FROM_INPUT
+    SMTP_FROM="${SMTP_FROM_INPUT:-onboarding@resend.dev}"
+
+    read -rp "  Your notification email [${ADMIN_EMAIL}]: " OWNER_EMAIL_INPUT
+    OWNER_EMAIL="${OWNER_EMAIL_INPUT:-${ADMIN_EMAIL}}"
+
+    # Write SMTP settings into DB via Prisma
+    cd "${PANEL_DIR}"
+    SMTP_HOST_VAL="smtp.resend.com" \
+    SMTP_PORT_VAL="465" \
+    SMTP_USER_VAL="resend" \
+    SMTP_PASS_VAL="$RESEND_API_KEY" \
+    SMTP_FROM_VAL="$SMTP_FROM" \
+    SMTP_OWNER_VAL="$OWNER_EMAIL" \
+    node -e "
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
+(async () => {
+  const entries = [
+    { key: 'smtp.host',        value: process.env.SMTP_HOST_VAL },
+    { key: 'smtp.port',        value: process.env.SMTP_PORT_VAL },
+    { key: 'smtp.user',        value: process.env.SMTP_USER_VAL },
+    { key: 'smtp.pass',        value: process.env.SMTP_PASS_VAL },
+    { key: 'smtp.from',        value: process.env.SMTP_FROM_VAL },
+    { key: 'smtp.owner_email', value: process.env.SMTP_OWNER_VAL },
+  ];
+  for (const e of entries) {
+    await prisma.setting.upsert({ where: { key: e.key }, update: { value: e.value }, create: e });
+  }
+  console.log('SMTP settings saved to database');
+  await prisma.\$disconnect();
+})().catch(e => { console.error(e.message); process.exit(1); });
+"
+    success "Email configured — using Resend SMTP (smtp.resend.com:465)"
+
+    # ── Optional: auto-configure DNS via Cloudflare ─────────────────
+    # Only relevant when using a custom domain (not @resend.dev)
+    SMTP_DOMAIN=""
+    if [[ "$SMTP_FROM" == *"@"* && "$SMTP_FROM" != *"@resend.dev"* ]]; then
+      SMTP_DOMAIN=$(echo "$SMTP_FROM" | sed 's/.*@//' | tr -d '>')
+    fi
+
+    if [[ -n "$SMTP_DOMAIN" ]]; then
+      echo ""
+      echo -e "  ${CYAN}Optional:${NC} Auto-add SPF/DKIM/MX records for ${SMTP_DOMAIN} via Cloudflare API"
+      echo "  Requires a Cloudflare API token with DNS Edit permission."
+      read -rp "  Cloudflare API Token (or Enter to skip): " CF_TOKEN
+
+      if [[ -n "$CF_TOKEN" ]]; then
+        read -rp "  Cloudflare Zone ID: " CF_ZONE_ID
+
+        if [[ -n "$CF_ZONE_ID" ]]; then
+          info "Registering ${SMTP_DOMAIN} with Resend..."
+
+          # Install jq if missing
+          command -v jq &>/dev/null || apt-get install -y -q jq >/dev/null 2>&1 || true
+
+          RESEND_RESP=$(curl -sf --max-time 15 -X POST "https://api.resend.com/domains" \
+            -H "Authorization: Bearer ${RESEND_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{\"name\":\"${SMTP_DOMAIN}\"}" 2>/dev/null || echo "")
+
+          if [[ -z "$RESEND_RESP" ]] || ! echo "$RESEND_RESP" | grep -q '"id"'; then
+            warn "Could not register domain with Resend — add DNS records manually in Resend dashboard"
+          else
+            RESEND_DOMAIN_ID=$(echo "$RESEND_RESP" | grep -oP '"id":"\K[^"]+' | head -1)
+
+            if command -v jq &>/dev/null; then
+              DNS_ERRORS=0
+              while IFS= read -r RECORD; do
+                R_TYPE=$(echo "$RECORD" | jq -r '.type // empty')
+                R_NAME=$(echo "$RECORD" | jq -r '.name // empty')
+                R_VALUE=$(echo "$RECORD" | jq -r '.value // empty')
+                R_PRIORITY=$(echo "$RECORD" | jq -r '.priority // empty')
+                [[ -z "$R_TYPE" || -z "$R_NAME" || -z "$R_VALUE" ]] && continue
+
+                if [[ "$R_TYPE" == "MX" && -n "$R_PRIORITY" ]]; then
+                  CF_PAYLOAD="{\"type\":\"MX\",\"name\":\"${R_NAME}\",\"content\":\"${R_VALUE}\",\"priority\":${R_PRIORITY},\"ttl\":1,\"proxied\":false}"
+                else
+                  CF_PAYLOAD="{\"type\":\"${R_TYPE}\",\"name\":\"${R_NAME}\",\"content\":\"${R_VALUE}\",\"ttl\":1,\"proxied\":false}"
+                fi
+
+                CF_RESP=$(curl -sf --max-time 10 -X POST \
+                  "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/dns_records" \
+                  -H "Authorization: Bearer ${CF_TOKEN}" \
+                  -H "Content-Type: application/json" \
+                  -d "$CF_PAYLOAD" 2>/dev/null || echo "")
+
+                if echo "$CF_RESP" | grep -q '"success":true'; then
+                  info "DNS added: ${R_TYPE} ${R_NAME}"
+                else
+                  warn "DNS record skipped (may already exist): ${R_TYPE} ${R_NAME}"
+                  DNS_ERRORS=$((DNS_ERRORS + 1))
+                fi
+              done < <(echo "$RESEND_RESP" | jq -c '.records[]?' 2>/dev/null)
+
+              # Trigger Resend domain verification
+              sleep 5
+              VERIFY_RESP=$(curl -sf --max-time 10 -X POST \
+                "https://api.resend.com/domains/${RESEND_DOMAIN_ID}/verify" \
+                -H "Authorization: Bearer ${RESEND_API_KEY}" 2>/dev/null || echo "")
+
+              if echo "$VERIFY_RESP" | grep -q '"status"'; then
+                success "Domain ${SMTP_DOMAIN} verification triggered"
+                info "DNS propagation may take up to 48h — check status at resend.com/domains"
+              else
+                warn "Verification trigger failed — check Resend dashboard manually"
+              fi
+            else
+              warn "jq not available — add DNS records manually from Resend dashboard"
+            fi
+          fi
+        else
+          info "No Zone ID provided — add DNS records manually in Resend dashboard"
+        fi
+      else
+        info "Cloudflare setup skipped — add DNS records manually in Resend dashboard"
+      fi
+    elif [[ "$SMTP_FROM" == *"@resend.dev"* ]]; then
+      info "Using Resend test address — add your domain in Resend dashboard for branded emails"
+    fi
+  fi
+else
+  info "Email setup skipped — configure later in Admin → Settings → Email"
+fi
+
 # ── Permissions ───────────────────────────────────────────────────────
 chown -R "${PANEL_USER}:${PANEL_USER}" "$PANEL_DIR"
 chmod 750 "${PANEL_DIR}/apps/api/dist"
