@@ -229,7 +229,7 @@ export function ServerDetailPage() {
       const json = await res.json();
       setPluginResults(json.hits ?? []);
     } catch {
-      toast.error('Failed to search Modrinth');
+      toast.error('Failed to search plugins');
     } finally {
       setPluginLoading(false);
     }
@@ -950,10 +950,10 @@ export function ServerDetailPage() {
             </div>
           </div>
 
-          {/* Modrinth search */}
+          {/* Plugin search */}
           <div className="card">
             <div className="card-header">
-              <h3 className="text-sm font-semibold text-slate-100">Install from Modrinth</h3>
+              <h3 className="text-sm font-semibold text-slate-100">Plugin Marketplace</h3>
               <p className="text-xs text-slate-500 mt-0.5">Search and install plugins directly to your server</p>
             </div>
             <div className="p-4 border-b border-dark-800">
