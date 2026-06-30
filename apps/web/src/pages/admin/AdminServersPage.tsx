@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Plus, Search, Trash2, ExternalLink, Pencil } from 'lucide-react';
+import { Plus, Search, Trash2, ExternalLink, Pencil, Zap } from 'lucide-react';
 import api from '@/lib/axios';
 import { Server } from '@/types';
 import { getServerStatusBadge, getServerStatusDot, formatDate } from '@/lib/utils';
@@ -190,6 +190,15 @@ export function AdminServersPage() {
   );
 }
 
+interface ServerTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  memory?: number;
+  disk?: number;
+  cpu?: number;
+}
+
 function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const [form, setForm] = useState({
     name: '', description: '', userId: '', nodeId: '', eggId: '',
@@ -198,6 +207,14 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
   const [paperVersion, setPaperVersion] = useState('latest');
   const [paperVersions, setPaperVersions] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
+
+  // Fetch templates
+  const { data: templatesData } = useQuery({
+    queryKey: ['server-templates'],
+    queryFn: () => api.get('/templates').then((r) => r.data.data ?? r.data ?? []).catch(() => []),
+  });
+  const templates: ServerTemplate[] = templatesData || [];
 
   const { data: usersData } = useQuery({
     queryKey: ['users-list'],
@@ -257,9 +274,55 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
   const f = (key: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm({ ...form, [key]: e.target.value });
 
+  const applyTemplate = (template: ServerTemplate) => {
+    setSelectedTemplate(template.id);
+    setForm(prev => ({
+      ...prev,
+      memory: template.memory ? String(template.memory) : prev.memory,
+      disk: template.disk ? String(template.disk) : prev.disk,
+      cpu: template.cpu !== undefined ? String(template.cpu) : prev.cpu,
+    }));
+  };
+
   return (
     <Modal isOpen onClose={onClose} title="Create Server" size="xl">
       <form onSubmit={handleSubmit} className="space-y-4">
+
+        {/* Quick Templates */}
+        {templates.length > 0 && (
+          <div className="rounded-xl border border-dark-700 bg-dark-800/50 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Zap size={14} className="text-panel-400" />
+              <h3 className="text-sm font-semibold text-slate-100">Quick Templates</h3>
+              <span className="text-xs text-slate-500">Select a template to pre-fill resources</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {templates.map((tpl) => (
+                <button
+                  key={tpl.id}
+                  type="button"
+                  onClick={() => applyTemplate(tpl)}
+                  className={`text-left p-3 rounded-lg border transition-all ${
+                    selectedTemplate === tpl.id
+                      ? 'border-panel-500/60 bg-panel-500/10 text-panel-300'
+                      : 'border-dark-600 bg-dark-700/50 text-slate-300 hover:border-dark-500 hover:bg-dark-700'
+                  }`}
+                >
+                  <p className="text-sm font-medium truncate">{tpl.name}</p>
+                  {(tpl.memory || tpl.disk) && (
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {tpl.memory ? `${tpl.memory} MB RAM` : ''}{tpl.memory && tpl.disk ? ' · ' : ''}{tpl.disk ? `${tpl.disk} MB Disk` : ''}
+                    </p>
+                  )}
+                  {tpl.description && (
+                    <p className="text-xs text-slate-600 mt-0.5 truncate">{tpl.description}</p>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2">
             <label className="label">Server Name</label>

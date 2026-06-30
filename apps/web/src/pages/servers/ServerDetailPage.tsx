@@ -7,7 +7,7 @@ import {
   Folder, FolderOpen, File, ChevronRight, ArrowLeft, Pencil, Trash2, Plus, X, Check,
   Package, Users, Search, Download, RefreshCw, Tag, AlertTriangle, Shield, ShieldOff,
   MapPin, Clock, Sword, Hammer, Footprints, Ban, LogOut, Wifi, Navigation,
-  StickyNote, CalendarClock, UserCog, ChevronDown, Save, ArrowRight
+  StickyNote, CalendarClock, UserCog, Save
 } from 'lucide-react';
 import { io as ioClient, Socket } from 'socket.io-client';
 import api from '@/lib/axios';
@@ -2134,5 +2134,98 @@ function InfoRow({ label, value, mono, small }: {
         {value}
       </dd>
     </div>
+  );
+}
+
+function StatsSparklines({ history }: { history: StatsHistoryPoint[] }) {
+  const W = 300;
+  const H = 80;
+  const PAD = { top: 8, right: 8, bottom: 20, left: 28 };
+  const innerW = W - PAD.left - PAD.right;
+  const innerH = H - PAD.top - PAD.bottom;
+
+  if (!history || history.length === 0) {
+    return (
+      <div
+        className="flex items-center justify-center text-slate-600 text-xs rounded-lg"
+        style={{ width: W, height: H, background: '#0b0f14' }}
+      >
+        No history data yet
+      </div>
+    );
+  }
+
+  const n = history.length;
+
+  const cpuVals = history.map((p) => Math.min(p.cpuAbsolute ?? 0, 100));
+  const ramVals = history.map((p) =>
+    p.memoryLimitBytes > 0 ? Math.min((p.memoryBytes / p.memoryLimitBytes) * 100, 100) : 0
+  );
+
+  const buildPath = (vals: number[]) => {
+    const xStep = n > 1 ? innerW / (n - 1) : innerW;
+    return vals.map((v, i) => {
+      const x = PAD.left + i * xStep;
+      const y = PAD.top + innerH - (v / 100) * innerH;
+      return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`;
+    }).join(' ');
+  };
+
+  const cpuPath = buildPath(cpuVals);
+  const ramPath = buildPath(ramVals);
+
+  // axis labels
+  const yLabels = [0, 25, 50, 75, 100];
+
+  return (
+    <svg
+      width="100%"
+      viewBox={`0 0 ${W} ${H}`}
+      style={{ background: '#0b0f14', borderRadius: 8, display: 'block' }}
+      aria-label="Resource usage graph"
+    >
+      {/* Grid lines */}
+      {yLabels.map((pct) => {
+        const y = PAD.top + innerH - (pct / 100) * innerH;
+        return (
+          <g key={pct}>
+            <line
+              x1={PAD.left} y1={y} x2={PAD.left + innerW} y2={y}
+              stroke="#1e293b" strokeWidth="0.5"
+            />
+            <text x={PAD.left - 3} y={y + 3.5} textAnchor="end" fill="#475569" fontSize="7">
+              {pct}%
+            </text>
+          </g>
+        );
+      })}
+
+      {/* X axis label */}
+      <text x={PAD.left + innerW / 2} y={H - 3} textAnchor="middle" fill="#475569" fontSize="7">
+        Time
+      </text>
+
+      {/* CPU line (green) */}
+      <path d={cpuPath} fill="none" stroke="#4ade80" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+
+      {/* RAM line (blue) */}
+      <path d={ramPath} fill="none" stroke="#60a5fa" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+
+      {/* Latest values */}
+      {n > 0 && (() => {
+        const lastCpu = cpuVals[n - 1];
+        const lastRam = ramVals[n - 1];
+        const xStep = n > 1 ? innerW / (n - 1) : innerW;
+        const cx = PAD.left + (n - 1) * xStep;
+        const cpuY = PAD.top + innerH - (lastCpu / 100) * innerH;
+        const ramY = PAD.top + innerH - (lastRam / 100) * innerH;
+        return (
+          <>
+            <circle cx={cx} cy={cpuY} r="2.5" fill="#4ade80" />
+            <circle cx={cx} cy={ramY} r="2.5" fill="#60a5fa" />
+          </>
+        );
+      })()}
+    </svg>
   );
 }

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { User, Lock, Key, ShieldCheck, Mail } from 'lucide-react';
+import { User, Lock, Key, ShieldCheck, Mail, ShieldAlert, ArrowRight } from 'lucide-react';
 import api from '@/lib/axios';
 import { useAuthStore } from '@/store/authStore';
 import { Spinner } from '@/components/ui/Spinner';
@@ -151,12 +151,33 @@ export function AccountPage() {
     }
   };
 
+  const scrollTo2fa = () => {
+    document.getElementById('two-factor-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
   return (
     <div className="space-y-6 max-w-2xl animate-fade-in">
       <div>
         <h1 className="text-xl font-bold text-white">Account Settings</h1>
         <p className="text-zinc-500 text-sm mt-1">Manage your account preferences</p>
       </div>
+
+      {/* 2FA warning banner — shown only when 2FA is not enabled */}
+      {!user?.twoFactor && (
+        <button
+          onClick={scrollTo2fa}
+          className="w-full flex items-center gap-4 px-5 py-4 rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/15 hover:border-amber-500/50 transition-all text-left group"
+        >
+          <div className="flex-shrink-0 p-2.5 rounded-lg bg-amber-500/20">
+            <ShieldAlert size={20} className="text-amber-400" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-amber-300">Secure your account</p>
+            <p className="text-xs text-amber-400/70 mt-0.5">Enable two-factor authentication to protect against unauthorized access</p>
+          </div>
+          <ArrowRight size={16} className="text-amber-400/60 group-hover:text-amber-300 group-hover:translate-x-0.5 transition-all shrink-0" />
+        </button>
+      )}
 
       {/* Profile info */}
       <div className="card">
@@ -274,10 +295,20 @@ export function AccountPage() {
       </div>
 
       {/* Two-Factor Authentication */}
-      <div className="card">
+      <div className="card" id="two-factor-section">
         <div className="card-header flex items-center gap-2">
-          <ShieldCheck size={14} className="text-zinc-400" />
+          <ShieldCheck size={14} className={user?.twoFactor ? 'text-emerald-400' : 'text-amber-400'} />
           <h2 className="text-sm font-semibold text-zinc-100">Two-Factor Authentication</h2>
+          {!user?.twoFactor && (
+            <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/20 font-medium uppercase tracking-wide">
+              Not Enabled
+            </span>
+          )}
+          {user?.twoFactor && (
+            <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 font-medium uppercase tracking-wide">
+              Active
+            </span>
+          )}
         </div>
         <div className="p-6">
           {user?.twoFactor ? (
