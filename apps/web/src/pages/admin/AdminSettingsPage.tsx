@@ -5,6 +5,18 @@ import toast from 'react-hot-toast';
 import { Spinner } from '@/components/ui/Spinner';
 import { useQueryClient } from '@tanstack/react-query';
 
+// Resend's name/wordmark, used with their written permission (not an official
+// or approved integration — see their reply: "you can use these as long as
+// it's not presented as an official or approved integration").
+function ResendMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 16 16" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="16" height="16" rx="4" fill="currentColor" className="text-zinc-950" />
+      <path d="M4.5 11.5V4.5H8.2C9.6 4.5 10.6 5.4 10.6 6.7C10.6 7.7 10 8.5 9.1 8.8L11 11.5H9.3L7.6 9.1H6V11.5H4.5ZM6 7.8H8.1C8.7 7.8 9.1 7.3 9.1 6.7C9.1 6.1 8.7 5.7 8.1 5.7H6V7.8Z" fill="white" />
+    </svg>
+  );
+}
+
 export function AdminSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -182,12 +194,16 @@ export function AdminSettingsPage() {
           <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-4">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-sm font-medium text-blue-300 flex items-center gap-1.5"><Zap size={13} />Quick Setup with Resend</p>
+                <p className="text-sm font-medium text-blue-300 flex items-center gap-2">
+                  <ResendMark className="h-4 w-4 shrink-0" />
+                  Quick Setup with Resend
+                </p>
                 <p className="text-xs text-zinc-500 mt-1">
                   Free up to 3,000 emails/month. Get your API key at{' '}
                   <a href="https://resend.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">resend.com</a>
                   , then paste it below and click this button.
                 </p>
+                <p className="text-[10px] text-zinc-600 mt-1.5">Not an official Resend integration.</p>
               </div>
               <button
                 type="button"
