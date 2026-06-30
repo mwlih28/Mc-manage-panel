@@ -90,24 +90,28 @@ export function logoSpecToSvgString(spec: LogoSpec, gradId: string): string {
 </svg>`;
 }
 
-// Rasterizes the SVG to a square PNG via <canvas> — used to apply a logo as the
-// server's server-icon.png (Minecraft requires a real PNG, not SVG).
-export function svgToPngDataUrl(svg: string, size = 64): Promise<string> {
+// Rasterizes any image source (SVG markup, PNG data URL, etc.) to a square PNG
+// via <canvas> — used to apply a logo as the server's server-icon.png
+// (Minecraft requires a real PNG, not SVG).
+export function imageSrcToPngDataUrl(src: string, size = 64): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new window.Image();
-    const svgBlob = new Blob([svg], { type: 'image/svg+xml' });
-    const url = URL.createObjectURL(svgBlob);
     img.onload = () => {
       const canvas = document.createElement('canvas');
       canvas.width = size;
       canvas.height = size;
       const ctx = canvas.getContext('2d');
-      if (!ctx) { URL.revokeObjectURL(url); reject(new Error('Canvas not supported')); return; }
+      if (!ctx) { reject(new Error('Canvas not supported')); return; }
       ctx.drawImage(img, 0, 0, size, size);
-      URL.revokeObjectURL(url);
       resolve(canvas.toDataURL('image/png'));
     };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Failed to render logo')); };
-    img.src = url;
+    img.onerror = () => reject(new Error('Failed to render logo'));
+    img.src = src;
   });
+}
+
+export function svgToPngDataUrl(svg: string, size = 64): Promise<string> {
+  const svgBlob = new Blob([svg], { type: 'image/svg+xml' });
+  const url = URL.createObjectURL(svgBlob);
+  return imageSrcToPngDataUrl(url, size).finally(() => URL.revokeObjectURL(url));
 }

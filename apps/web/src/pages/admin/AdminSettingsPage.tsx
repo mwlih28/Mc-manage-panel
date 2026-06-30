@@ -30,7 +30,9 @@ export function AdminSettingsPage() {
     'smtp.from': '',
     'smtp.owner_email': '',
     'features.aiTools': 'true',
+    'ai.openaiKey': '',
   });
+  const [showOpenaiKey, setShowOpenaiKey] = useState(false);
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -47,6 +49,7 @@ export function AdminSettingsPage() {
         'smtp.from':        data['smtp.from']         || '',
         'smtp.owner_email': data['smtp.owner_email']  || '',
         'features.aiTools': data['features.aiTools']  || 'true',
+        'ai.openaiKey':     data['ai.openaiKey']       || '',
       });
     }).finally(() => setLoading(false));
   }, []);
@@ -161,7 +164,7 @@ export function AdminSettingsPage() {
           <h2 className="text-sm font-semibold text-zinc-100 flex items-center gap-2"><Sparkles size={14} />AI Tools</h2>
           <p className="text-xs text-zinc-500 mt-0.5">MOTD Generator and Logo Generator, available to all panel users.</p>
         </div>
-        <div className="p-6">
+        <div className="p-6 space-y-5">
           <label className="flex items-center justify-between gap-4 cursor-pointer">
             <div>
               <p className="text-sm font-medium text-zinc-200">Enable AI Tools</p>
@@ -176,6 +179,31 @@ export function AdminSettingsPage() {
               className="shrink-0 w-9 h-5 accent-panel-500"
             />
           </label>
+
+          <div>
+            <label className="label">OpenAI API Key (optional)</label>
+            <div className="relative">
+              <input
+                type={showOpenaiKey ? 'text' : 'password'}
+                className="input pr-10"
+                value={form['ai.openaiKey']}
+                onChange={e => setForm(f => ({ ...f, 'ai.openaiKey': e.target.value }))}
+                placeholder="sk-..."
+              />
+              <button
+                type="button"
+                onClick={() => setShowOpenaiKey(p => !p)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-300 transition-colors"
+              >
+                {showOpenaiKey ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+            </div>
+            <p className="text-xs text-zinc-600 mt-1">
+              Without a key, MOTD/Logo generation uses a free built-in algorithm. With a key, users also get a
+              "Generate with AI" option that calls OpenAI directly — billed to your own account at{' '}
+              <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-panel-400 hover:underline">platform.openai.com</a>.
+            </p>
+          </div>
         </div>
       </div>
 

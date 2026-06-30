@@ -1,12 +1,59 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Sparkles, RefreshCw, Download, Lock, ImagePlus } from 'lucide-react';
+import { Sparkles, RefreshCw, Download, Lock, ImagePlus, Wand2 } from 'lucide-react';
 import api from '@/lib/axios';
 import { Server } from '@/types';
-import { generateLogos, logoSpecToSvgString, svgToPngDataUrl, LogoSpec } from '@/lib/logoGenerator';
+import { generateLogos, logoSpecToSvgString, svgToPngDataUrl, imageSrcToPngDataUrl, LogoSpec } from '@/lib/logoGenerator';
 import { Spinner } from '@/components/ui/Spinner';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
+
+function AiLogoCard({ imageB64, index, targetServerId }: { imageB64: string; index: number; targetServerId: string }) {
+  const dataUrl = `data:image/png;base64,${imageB64}`;
+  const [applying, setApplying] = useState(false);
+
+  const download = () => {
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = `server-logo-ai-${index + 1}.png`;
+    a.click();
+  };
+
+  const applyAsIcon = async () => {
+    if (!targetServerId) { toast.error('Select a server first'); return; }
+    setApplying(true);
+    try {
+      const resized = await imageSrcToPngDataUrl(dataUrl, 64);
+      const base64 = resized.split(',')[1];
+      await api.post(`/servers/${targetServerId}/files/write`, {
+        file: 'server-icon.png',
+        content: base64,
+        encoding: 'base64',
+      });
+      toast.success('Applied as server icon — restart the server for it to take effect');
+    } catch {
+      toast.error('Failed to apply icon');
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  return (
+    <div className="card p-4 flex flex-col items-center gap-3">
+      <img src={dataUrl} alt="" className="w-32 h-32 rounded-lg object-cover" />
+      <button className="btn-secondary btn-sm w-full" onClick={download}>
+        <Download size={13} /> Download PNG
+      </button>
+      <button
+        className={cn('btn-secondary btn-sm w-full', !targetServerId && 'opacity-50 cursor-not-allowed')}
+        disabled={!targetServerId || applying}
+        onClick={applyAsIcon}
+      >
+        {applying ? <Spinner size="sm" /> : <><ImagePlus size={13} /> Apply as Server Icon</>}
+      </button>
+    </div>
+  );
+}
 
 function LogoCard({ spec, index, targetServerId }: { spec: LogoSpec; index: number; targetServerId: string }) {
   const gradId = `kretase-logo-grad-${index}`;
@@ -74,8 +121,11 @@ export function LogoGeneratorPage() {
   const [serverId, setServerId] = useState('');
   const [serverName, setServerName] = useState('');
   const [logos, setLogos] = useState<LogoSpec[]>([]);
+  const [aiImages, setAiImages] = useState<string[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
 
   const enabled = settings?.['features.aiTools'] !== 'false';
+  const aiAvailable = settings?.['ai.openaiConfigured'] === 'true';
 
   const pickServer = (id: string) => {
     setServerId(id);
@@ -83,7 +133,21 @@ export function LogoGeneratorPage() {
     if (s) setServerName(s.name);
   };
 
-  const generate = () => setLogos(generateLogos(serverName, 6));
+  const generate = () => { setLogos(generateLogos(serverName, 6)); setAiImages([]); };
+
+  const generateWithAi = async () => {
+    setAiLoading(true);
+    try {
+      const { data } = await api.post('/ai/logo', { serverName });
+      setAiImages(data.images || []);
+      setLogos([]);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'AI generation failed';
+      toast.error(msg);
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   if (settingsLoading) {
     return <div className="flex justify-center py-20"><Spinner size="lg" /></div>;
@@ -131,15 +195,30 @@ export function LogoGeneratorPage() {
             <p className="text-xs text-slate-600 mt-1">The first letter is used as the logo's initial.</p>
           </div>
         </div>
-        <button className="btn-primary" onClick={generate}>
-          <RefreshCw size={14} /> Generate Logos
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button className="btn-primary" onClick={generate}>
+            <RefreshCw size={14} /> Generate (Free)
+          </button>
+          {aiAvailable && (
+            <button className="btn-secondary" onClick={generateWithAi} disabled={aiLoading}>
+              {aiLoading ? <Spinner size="sm" /> : <Wand2 size={14} />} Generate with AI
+            </button>
+          )}
+        </div>
       </div>
 
       {logos.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           {logos.map((spec, i) => (
             <LogoCard key={i} spec={spec} index={i} targetServerId={serverId} />
+          ))}
+        </div>
+      )}
+
+      {aiImages.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          {aiImages.map((img, i) => (
+            <AiLogoCard key={i} imageB64={img} index={i} targetServerId={serverId} />
           ))}
         </div>
       )}

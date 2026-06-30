@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Sparkles, RefreshCw, Copy, Check, Lock } from 'lucide-react';
+import { Sparkles, RefreshCw, Copy, Check, Lock, Wand2 } from 'lucide-react';
 import api from '@/lib/axios';
 import { Server } from '@/types';
 import { generateMotd, parseMotdLines, MotdTheme } from '@/lib/motdGenerator';
@@ -59,8 +59,10 @@ export function MotdGeneratorPage() {
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [applyTarget, setApplyTarget] = useState<Record<number, string>>({});
   const [applying, setApplying] = useState<number | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
 
   const enabled = settings?.['features.aiTools'] !== 'false';
+  const aiAvailable = settings?.['ai.openaiConfigured'] === 'true';
 
   const { data: currentPropertiesData } = useQuery({
     queryKey: ['server-properties-motd', serverId],
@@ -79,11 +81,25 @@ export function MotdGeneratorPage() {
     if (s) setServerName(s.name);
   };
 
-  const generate = () => {
-    const motds = generateMotd(serverName, theme);
+  const applyResults = (motds: string[]) => {
     setResults(motds);
     if (serverId) {
       setApplyTarget(Object.fromEntries(motds.map((_, i) => [i, serverId])));
+    }
+  };
+
+  const generate = () => applyResults(generateMotd(serverName, theme));
+
+  const generateWithAi = async () => {
+    setAiLoading(true);
+    try {
+      const { data } = await api.post('/ai/motd', { serverName, theme });
+      applyResults(data.results || []);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'AI generation failed';
+      toast.error(msg);
+    } finally {
+      setAiLoading(false);
     }
   };
 
@@ -175,9 +191,16 @@ export function MotdGeneratorPage() {
             <MotdPreview motd={currentMotd} />
           </div>
         )}
-        <button className="btn-primary" onClick={generate}>
-          <RefreshCw size={14} /> Generate MOTDs
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button className="btn-primary" onClick={generate}>
+            <RefreshCw size={14} /> Generate (Free)
+          </button>
+          {aiAvailable && (
+            <button className="btn-secondary" onClick={generateWithAi} disabled={aiLoading}>
+              {aiLoading ? <Spinner size="sm" /> : <Wand2 size={14} />} Generate with AI
+            </button>
+          )}
+        </div>
       </div>
 
       {results.length > 0 && (

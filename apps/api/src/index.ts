@@ -30,6 +30,7 @@ import statsRoutes from './routes/stats';
 import wingsRoutes from './routes/wings';
 import settingsRoutes from './routes/settings';
 import installerRoutes from './routes/installer';
+import aiRoutes from './routes/ai';
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -70,6 +71,7 @@ api.use('/stats', statsRoutes);
 api.use('/wings', wingsRoutes);
 api.use('/settings', settingsRoutes);
 api.use('/installer', installerRoutes);
+api.use('/ai', aiRoutes);
 
 app.use('/api/v1', api);
 
