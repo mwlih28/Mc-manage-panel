@@ -16,7 +16,7 @@ warn()    { echo -e "  ${YELLOW}⚠${NC} $*"; }
 error()   { echo -e "\n  ${RED}✖ ERROR:${NC} $*\n" >&2; exit 1; }
 step()    { echo -e "\n${BOLD}${BLUE}┌─ $* ${NC}"; }
 
-PANEL_DIR="/var/www/mc-panel"
+PANEL_DIR="/var/www/kretase"
 PANEL_USER="mcpanel"
 DB_NAME="mcpanel"
 DB_USER="mcpanel"
@@ -40,17 +40,17 @@ read -rp "  Are you sure you want to uninstall? Type 'yes' to confirm: " CONFIRM
 
 # ── Stop & remove systemd service ────────────────────────────────────
 step "Removing systemd service"
-systemctl stop mc-panel 2>/dev/null || true
-systemctl disable mc-panel 2>/dev/null || true
-rm -f /etc/systemd/system/mc-panel.service
+systemctl stop kretase 2>/dev/null || true
+systemctl disable kretase 2>/dev/null || true
+rm -f /etc/systemd/system/kretase.service
 systemctl daemon-reload
 success "Service removed"
 
 # ── Remove nginx config ───────────────────────────────────────────────
 step "Removing Nginx config"
-rm -f /etc/nginx/sites-enabled/mc-panel
-rm -f /etc/nginx/sites-available/mc-panel
-rm -f /etc/nginx/sites-available/mc-panel.bak
+rm -f /etc/nginx/sites-enabled/kretase
+rm -f /etc/nginx/sites-available/kretase
+rm -f /etc/nginx/sites-available/kretase.bak
 nginx -t 2>/dev/null && systemctl reload nginx 2>/dev/null || true
 success "Nginx config removed"
 
@@ -60,7 +60,7 @@ rm -rf "$PANEL_DIR"
 success "Panel files removed from ${PANEL_DIR}"
 
 # ── Remove installer config ───────────────────────────────────────────
-rm -rf /etc/mc-panel
+rm -rf /etc/kretase
 success "Installer config removed"
 
 # ── Database ──────────────────────────────────────────────────────────
@@ -68,7 +68,7 @@ PG() { cd /tmp && sudo -u postgres "$@"; cd - >/dev/null; }
 
 if [[ "${KEEP_DB,,}" == "n" ]]; then
   step "Dropping database"
-  BACKUP_FILE="/tmp/mc-panel-db-final-$(date +%Y%m%d%H%M%S).sql"
+  BACKUP_FILE="/tmp/kretase-db-final-$(date +%Y%m%d%H%M%S).sql"
   info "Creating final backup at ${BACKUP_FILE}..."
   PG pg_dump "$DB_NAME" > "$BACKUP_FILE" 2>/dev/null || true
   PG psql -c "DROP DATABASE IF EXISTS ${DB_NAME};" >/dev/null 2>&1 || true

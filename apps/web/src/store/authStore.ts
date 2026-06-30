@@ -28,7 +28,7 @@ export const useAuthStore = create<AuthState>()(
       logout: () => set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false }),
     }),
     {
-      name: 'mc-panel-auth',
+      name: 'kretase-auth',
       partialize: (state) => ({
         accessToken: state.accessToken,
         refreshToken: state.refreshToken,

@@ -16,13 +16,13 @@ warn()    { echo -e "  ${YELLOW}⚠${NC} $*"; }
 error()   { echo -e "\n  ${RED}✖ ERROR:${NC} $*\n" >&2; exit 1; }
 step()    { echo -e "\n${BOLD}${BLUE}┌─ $* ${NC}"; }
 
-PANEL_DIR="/var/www/mc-panel"
+PANEL_DIR="/var/www/kretase"
 PANEL_USER="mcpanel"
 BRANCH="main"
-LOGFILE="/var/log/mc-panel-update.log"
+LOGFILE="/var/log/kretase-update.log"
 
 # ── Lock file ─────────────────────────────────────────────────────────
-LOCKFILE="/tmp/mc-panel-update.lock"
+LOCKFILE="/tmp/kretase-update.lock"
 if [[ -f "$LOCKFILE" ]]; then
   error "Another update is in progress. Remove lock if stuck: rm -f $LOCKFILE"
 fi
@@ -68,7 +68,7 @@ success "Code updated"
 # ── Backup database before schema changes ─────────────────────────────
 step "Backing up database"
 PG() { cd /tmp && sudo -u postgres "$@"; cd - >/dev/null; }
-BACKUP_FILE="/tmp/mc-panel-db-$(date +%Y%m%d%H%M%S).sql"
+BACKUP_FILE="/tmp/kretase-db-$(date +%Y%m%d%H%M%S).sql"
 PG pg_dump mcpanel > "$BACKUP_FILE" 2>/dev/null && \
   success "Database backed up: ${BACKUP_FILE}" || \
   warn "Database backup failed — continuing anyway"
@@ -110,7 +110,7 @@ success "Schema up to date"
 step "Restarting service"
 chown -R "${PANEL_USER}:${PANEL_USER}" "$PANEL_DIR"
 chmod 750 "${PANEL_DIR}/apps/api/dist"
-systemctl restart mc-panel
+systemctl restart kretase
 
 # Wait for API (up to 20s)
 API_READY=false
@@ -120,10 +120,10 @@ for i in {1..20}; do
   fi
   sleep 1
 done
-$API_READY && success "API is up" || warn "API health check failed — check: journalctl -u mc-panel -n 50"
+$API_READY && success "API is up" || warn "API health check failed — check: journalctl -u kretase -n 50"
 
 # ── Send update notification (if opt-in stored) ───────────────────────
-INSTALLER_CONF="/etc/mc-panel/installer.conf"
+INSTALLER_CONF="/etc/kretase/installer.conf"
 if [[ -f "$INSTALLER_CONF" ]]; then
   . "$INSTALLER_CONF"
   REGISTRY_URL="${MC_PANEL_REGISTRY_URL:-https://mcpanel.app.n8n.cloud/webhook/mc-panel-register}"
@@ -145,6 +145,6 @@ echo -e "  ${BOLD}Updated:${NC}   ${CURRENT_COMMIT} → ${NEW_COMMIT}"
 echo -e "  ${BOLD}DB backup:${NC} ${BACKUP_FILE}"
 echo -e "  ${BOLD}Log:${NC}       ${LOGFILE}"
 echo ""
-echo -e "  ${BOLD}Service:${NC}   systemctl status mc-panel"
+echo -e "  ${BOLD}Service:${NC}   systemctl status kretase"
 echo ""
 echo "──── Update finished: $(date) ────"

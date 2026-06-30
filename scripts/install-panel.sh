@@ -18,7 +18,7 @@ error()   { echo -e "\n  ${RED}✖ ERROR:${NC} $*\n" >&2; exit 1; }
 step()    { echo -e "\n${BOLD}${BLUE}┌─ $* ${NC}"; }
 
 # ── Defaults ──────────────────────────────────────────────────────────
-PANEL_DIR="/var/www/mc-panel"
+PANEL_DIR="/var/www/kretase"
 PANEL_USER="mcpanel"
 NODE_VERSION="20"
 REPO_URL="https://github.com/mwlih28/mc-manage-panel"
@@ -32,7 +32,7 @@ SSL_ATTEMPTED="false"
 SCHEME="http"
 
 # ── Lock file (prevent parallel installs) ────────────────────────────
-LOCKFILE="/tmp/mc-panel-install.lock"
+LOCKFILE="/tmp/kretase-install.lock"
 if [[ -f "$LOCKFILE" ]]; then
   error "Another install may be in progress.\n  If it crashed, remove the lock and retry: rm -f $LOCKFILE"
 fi
@@ -40,7 +40,7 @@ touch "$LOCKFILE"
 trap "rm -f $LOCKFILE" EXIT INT TERM
 
 # ── Install log ───────────────────────────────────────────────────────
-LOGFILE="/var/log/mc-panel-install.log"
+LOGFILE="/var/log/kretase-install.log"
 mkdir -p /var/log
 exec > >(tee -a "$LOGFILE") 2>&1
 echo "──── Install started: $(date) ────"
@@ -268,7 +268,7 @@ TABLE_COUNT=$(PG psql -d "${DB_NAME}" -qtc \
   "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public'" \
   2>/dev/null | tr -d ' \n' || echo 0)
 if [[ "${TABLE_COUNT:-0}" -gt 0 ]]; then
-  BACKUP_FILE="/tmp/mc-panel-db-$(date +%Y%m%d%H%M%S).sql"
+  BACKUP_FILE="/tmp/kretase-db-$(date +%Y%m%d%H%M%S).sql"
   info "Existing database detected — backing up to ${BACKUP_FILE}..."
   PG pg_dump "${DB_NAME}" > "$BACKUP_FILE"
   success "Database backed up: $BACKUP_FILE"
@@ -485,7 +485,7 @@ chmod 750 "${PANEL_DIR}/apps/api/dist"
 # ── Systemd service ───────────────────────────────────────────────────
 step "Creating systemd service"
 NODE_BIN="$(which node)"
-cat > /etc/systemd/system/mc-panel.service <<SERVICE
+cat > /etc/systemd/system/kretase.service <<SERVICE
 [Unit]
 Description=Kretase API
 Documentation=https://github.com/mwlih28/mc-manage-panel
@@ -501,15 +501,15 @@ Restart=always
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=mc-panel
+SyslogIdentifier=kretase
 
 [Install]
 WantedBy=multi-user.target
 SERVICE
 
 systemctl daemon-reload
-systemctl enable mc-panel --quiet
-systemctl restart mc-panel
+systemctl enable kretase --quiet
+systemctl restart kretase
 
 # Wait for API (up to 20s)
 info "Waiting for API to start..."
@@ -523,12 +523,12 @@ done
 if $API_READY; then
   success "API is up and responding"
 else
-  warn "API did not respond in 20s. Continuing — check: journalctl -u mc-panel -n 50"
+  warn "API did not respond in 20s. Continuing — check: journalctl -u kretase -n 50"
 fi
 
 # ── Nginx ─────────────────────────────────────────────────────────────
 step "Configuring Nginx"
-cat > /etc/nginx/sites-available/mc-panel <<NGINX
+cat > /etc/nginx/sites-available/kretase <<NGINX
 server {
     listen 80;
     listen [::]:80;
@@ -572,7 +572,7 @@ server {
 }
 NGINX
 
-ln -sf /etc/nginx/sites-available/mc-panel /etc/nginx/sites-enabled/mc-panel
+ln -sf /etc/nginx/sites-available/kretase /etc/nginx/sites-enabled/kretase
 rm -f /etc/nginx/sites-enabled/default
 nginx -t
 systemctl reload nginx
@@ -597,7 +597,7 @@ if [[ "${SETUP_SSL,,}" != "n" ]]; then
   else
     info "DNS check passed: ${PANEL_DOMAIN} → ${RESOLVED_IP}"
     # Backup nginx config — certbot may modify it; restore on failure
-    cp /etc/nginx/sites-available/mc-panel /etc/nginx/sites-available/mc-panel.bak
+    cp /etc/nginx/sites-available/kretase /etc/nginx/sites-available/kretase.bak
 
     if certbot --nginx -d "$PANEL_DOMAIN" \
         --non-interactive --agree-tos \
@@ -606,11 +606,11 @@ if [[ "${SETUP_SSL,,}" != "n" ]]; then
       SSL_OK="true"
       SCHEME="https"
       success "SSL certificate installed — HTTPS enabled"
-      rm -f /etc/nginx/sites-available/mc-panel.bak
+      rm -f /etc/nginx/sites-available/kretase.bak
       # Update CORS and APP_URL to https://
       sed -i "s|CORS_ORIGIN=http://|CORS_ORIGIN=https://|" "${PANEL_DIR}/apps/api/.env"
       sed -i "s|APP_URL=http://|APP_URL=https://|" "${PANEL_DIR}/apps/api/.env"
-      systemctl restart mc-panel
+      systemctl restart kretase
       # Auto-renewal hook
       mkdir -p /etc/letsencrypt/renewal-hooks/deploy
       cat > /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh <<'HOOK'
@@ -621,8 +621,8 @@ HOOK
       success "Certbot auto-renewal hook installed"
     else
       warn "Certbot failed — restoring original nginx config."
-      cp /etc/nginx/sites-available/mc-panel.bak /etc/nginx/sites-available/mc-panel
-      rm -f /etc/nginx/sites-available/mc-panel.bak
+      cp /etc/nginx/sites-available/kretase.bak /etc/nginx/sites-available/kretase
+      rm -f /etc/nginx/sites-available/kretase.bak
       nginx -t && systemctl reload nginx
     fi
   fi
@@ -633,13 +633,13 @@ if [[ "$SSL_ATTEMPTED" = "true" && "$SSL_OK" != "true" ]]; then
   SCHEME="http"
   info "SSL not active — making panel accessible via IP: http://${SERVER_IP}"
   # Switch nginx to catch-all so any IP request is served
-  sed -i "s|server_name ${PANEL_DOMAIN};|server_name _;|" /etc/nginx/sites-available/mc-panel
+  sed -i "s|server_name ${PANEL_DOMAIN};|server_name _;|" /etc/nginx/sites-available/kretase
   # Escape dots in domain for sed safety
   SAFE_DOMAIN="${PANEL_DOMAIN//./\\.}"
   sed -i "s|CORS_ORIGIN=http://${SAFE_DOMAIN}|CORS_ORIGIN=http://${SERVER_IP}|" "${PANEL_DIR}/apps/api/.env"
   sed -i "s|APP_URL=http://${SAFE_DOMAIN}|APP_URL=http://${SERVER_IP}|" "${PANEL_DIR}/apps/api/.env"
   nginx -t && systemctl reload nginx
-  systemctl restart mc-panel
+  systemctl restart kretase
   PANEL_DOMAIN="${SERVER_IP}"
 fi
 
@@ -660,7 +660,7 @@ fi
 # n8n Cloud → Workflow 1 → Webhook node → Production URL
 MC_PANEL_REGISTRY_URL="https://mcpanel.app.n8n.cloud/webhook/mc-panel-register"
 
-INSTALLER_CONF_DIR="/etc/mc-panel"
+INSTALLER_CONF_DIR="/etc/kretase"
 mkdir -p "$INSTALLER_CONF_DIR"
 cat > "${INSTALLER_CONF_DIR}/installer.conf" <<CONF
 # Kretase — Installer configuration
@@ -696,7 +696,7 @@ sleep 2
 if curl -sf --max-time 5 http://127.0.0.1:3001/health >/dev/null 2>&1; then
   success "API health: OK"
 else
-  warn "API health check failed — check: journalctl -u mc-panel -n 50"
+  warn "API health check failed — check: journalctl -u kretase -n 50"
 fi
 if curl -sf --max-time 5 http://127.0.0.1:80 >/dev/null 2>&1; then
   success "Nginx: OK"
@@ -719,13 +719,13 @@ echo ""
 if [[ "$SSL_OK" != "true" ]]; then
   echo -e "  ${YELLOW}${BOLD}SSL not active.${NC} Once DNS is configured, enable HTTPS:"
   echo -e "  ${CYAN}certbot --nginx -d <your-domain> --email ${ADMIN_EMAIL} --agree-tos --redirect${NC}"
-  echo -e "  Then update CORS_ORIGIN in ${PANEL_DIR}/apps/api/.env and restart mc-panel."
+  echo -e "  Then update CORS_ORIGIN in ${PANEL_DIR}/apps/api/.env and restart kretase."
   echo ""
 fi
 echo -e "  ${BOLD}Service commands:${NC}"
-echo "    systemctl status  mc-panel"
-echo "    systemctl restart mc-panel"
-echo "    journalctl -u mc-panel -f"
+echo "    systemctl status  kretase"
+echo "    systemctl restart kretase"
+echo "    journalctl -u kretase -f"
 echo ""
 echo -e "  ${BOLD}Management:${NC}"
 echo -e "  Update panel:    ${CYAN}bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/update-panel.sh)${NC}"
