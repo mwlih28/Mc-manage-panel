@@ -76,6 +76,8 @@ model Allocation {
 
   node       Node     @relation(fields: [nodeId], references: [id], onDelete: Cascade)
   server     Server?  @relation("ServerAllocation")
+
+  @@unique([nodeId, port])
 }
 
 model Egg {

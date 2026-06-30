@@ -147,69 +147,88 @@ router.post('/', auth_1.authenticate, auth_1.requireAdmin, [
     if (!isBedrockEgg && env?.EULA_ACCEPTED !== 'true') {
         return res.status(422).json({ message: 'You must accept the Minecraft EULA to create this server.' });
     }
-    // Handle allocation — pick a free one, or auto-create if none exist
-    let finalAllocationId = allocationId;
-    if (!finalAllocationId) {
-        let freeAlloc = await prisma_1.prisma.allocation.findFirst({
-            where: { nodeId, assigned: false },
-            orderBy: { port: 'asc' },
+    // Handle allocation + server creation atomically — claiming a "free" port
+    // and creating the server must happen in the same transaction, otherwise
+    // two concurrent requests can both read the same allocation as free
+    // before either one marks it assigned, handing out the same port twice.
+    let server;
+    try {
+        server = await prisma_1.prisma.$transaction(async (tx) => {
+            let finalAllocationId = allocationId;
+            if (finalAllocationId) {
+                const requested = await tx.allocation.findUnique({ where: { id: finalAllocationId } });
+                if (!requested)
+                    throw new Error('ALLOCATION_NOT_FOUND');
+                if (requested.assigned)
+                    throw new Error('ALLOCATION_IN_USE');
+                await tx.allocation.update({ where: { id: finalAllocationId }, data: { assigned: true } });
+            }
+            else {
+                const freeAlloc = await tx.allocation.findFirst({
+                    where: { nodeId, assigned: false },
+                    orderBy: { port: 'asc' },
+                });
+                if (freeAlloc) {
+                    await tx.allocation.update({ where: { id: freeAlloc.id }, data: { assigned: true } });
+                    finalAllocationId = freeAlloc.id;
+                }
+                else {
+                    // Auto-generate the next available port starting from 25565
+                    const highest = await tx.allocation.findFirst({
+                        where: { nodeId },
+                        orderBy: { port: 'desc' },
+                    });
+                    const basePort = isBedrockEgg ? 19132 : 25565;
+                    const nextPort = highest ? highest.port + 1 : basePort;
+                    const nodeRecord = await tx.node.findUnique({ where: { id: nodeId } });
+                    const created = await tx.allocation.create({
+                        data: { nodeId, ip: nodeRecord?.fqdn || '0.0.0.0', port: nextPort, assigned: true },
+                    });
+                    finalAllocationId = created.id;
+                }
+            }
+            return tx.server.create({
+                data: {
+                    uuid: (0, uuid_1.v4)(),
+                    uuidShort: generateShortUuid(),
+                    name, description, userId, nodeId, eggId,
+                    allocationId: finalAllocationId,
+                    memory: parseInt(memory),
+                    swap: parseInt(swap) || 0,
+                    disk: parseInt(disk),
+                    io: parseInt(io) || 500,
+                    cpu: parseInt(cpu) || 0,
+                    startup: startup || egg.startup,
+                    image: image || egg.dockerImage,
+                    env: JSON.stringify({
+                        // Always seed the two variables the JVM startup template depends on
+                        SERVER_MEMORY: String(parseInt(memory)),
+                        SERVER_JARFILE: 'server.jar',
+                        ...Object.fromEntries((egg.variables || []).map(v => [v.envVariable, v.defaultValue])),
+                        ...(env || {}),
+                    }),
+                    databaseLimit: parseInt(databaseLimit) || 0,
+                    allocationLimit: parseInt(allocationLimit) || 0,
+                    backupLimit: parseInt(backupLimit) || 0,
+                    status: 'INSTALLING',
+                },
+                include: {
+                    user: { select: { id: true, email: true, username: true } },
+                    node: { select: { id: true, name: true, fqdn: true } },
+                    egg: { select: { id: true, name: true } },
+                    allocation: true,
+                },
+            });
         });
-        if (!freeAlloc) {
-            // Auto-generate next available port starting from 25565
-            const highest = await prisma_1.prisma.allocation.findFirst({
-                where: { nodeId },
-                orderBy: { port: 'desc' },
-            });
-            // Check if the egg is Bedrock to choose the right default port
-            const eggForPort = egg; // Already fetched above
-            const isBedrockEgg = eggForPort.name.toLowerCase().includes('bedrock') ||
-                eggForPort.startup.includes('bedrock_server');
-            const basePort = isBedrockEgg ? 19132 : 25565;
-            const nextPort = highest ? highest.port + 1 : basePort;
-            const nodeRecord = await prisma_1.prisma.node.findUnique({ where: { id: nodeId } });
-            freeAlloc = await prisma_1.prisma.allocation.create({
-                data: { nodeId, ip: nodeRecord?.fqdn || '0.0.0.0', port: nextPort },
-            });
-        }
-        finalAllocationId = freeAlloc.id;
     }
-    const server = await prisma_1.prisma.server.create({
-        data: {
-            uuid: (0, uuid_1.v4)(),
-            uuidShort: generateShortUuid(),
-            name, description, userId, nodeId, eggId,
-            allocationId: finalAllocationId,
-            memory: parseInt(memory),
-            swap: parseInt(swap) || 0,
-            disk: parseInt(disk),
-            io: parseInt(io) || 500,
-            cpu: parseInt(cpu) || 0,
-            startup: startup || egg.startup,
-            image: image || egg.dockerImage,
-            env: JSON.stringify({
-                // Always seed the two variables the JVM startup template depends on
-                SERVER_MEMORY: String(parseInt(memory)),
-                SERVER_JARFILE: 'server.jar',
-                ...Object.fromEntries((egg.variables || []).map(v => [v.envVariable, v.defaultValue])),
-                ...(env || {}),
-            }),
-            databaseLimit: parseInt(databaseLimit) || 0,
-            allocationLimit: parseInt(allocationLimit) || 0,
-            backupLimit: parseInt(backupLimit) || 0,
-            status: 'INSTALLING',
-        },
-        include: {
-            user: { select: { id: true, email: true, username: true } },
-            node: { select: { id: true, name: true, fqdn: true } },
-            egg: { select: { id: true, name: true } },
-            allocation: true,
-        },
-    });
-    // Mark allocation as assigned
-    await prisma_1.prisma.allocation.update({
-        where: { id: finalAllocationId },
-        data: { assigned: true },
-    });
+    catch (err) {
+        const msg = err.message;
+        if (msg === 'ALLOCATION_NOT_FOUND')
+            return res.status(422).json({ message: 'Allocation not found' });
+        if (msg === 'ALLOCATION_IN_USE')
+            return res.status(422).json({ message: 'Allocation already in use' });
+        throw err;
+    }
     await prisma_1.prisma.activity.create({
         data: {
             userId: req.user.id,
@@ -295,19 +314,30 @@ router.patch('/:id', auth_1.authenticate, async (req, res) => {
                 return res.status(422).json({ message: 'User not found' });
             updateData.userId = userId;
         }
-        // Allocation change
+        // Allocation change — claim the new allocation and free the old one
+        // atomically so a concurrent request can't grab the same port in between.
         if (allocationId && allocationId !== server.allocationId) {
-            const newAlloc = await prisma_1.prisma.allocation.findUnique({ where: { id: allocationId } });
-            if (!newAlloc)
-                return res.status(422).json({ message: 'Allocation not found' });
-            if (newAlloc.assigned && newAlloc.id !== server.allocationId) {
-                return res.status(422).json({ message: 'Allocation already in use' });
+            try {
+                await prisma_1.prisma.$transaction(async (tx) => {
+                    const newAlloc = await tx.allocation.findUnique({ where: { id: allocationId } });
+                    if (!newAlloc)
+                        throw new Error('ALLOCATION_NOT_FOUND');
+                    if (newAlloc.assigned && newAlloc.id !== server.allocationId)
+                        throw new Error('ALLOCATION_IN_USE');
+                    if (server.allocationId) {
+                        await tx.allocation.update({ where: { id: server.allocationId }, data: { assigned: false } });
+                    }
+                    await tx.allocation.update({ where: { id: allocationId }, data: { assigned: true } });
+                });
             }
-            // Free old allocation
-            if (server.allocationId) {
-                await prisma_1.prisma.allocation.update({ where: { id: server.allocationId }, data: { assigned: false } });
+            catch (err) {
+                const msg = err.message;
+                if (msg === 'ALLOCATION_NOT_FOUND')
+                    return res.status(422).json({ message: 'Allocation not found' });
+                if (msg === 'ALLOCATION_IN_USE')
+                    return res.status(422).json({ message: 'Allocation already in use' });
+                throw err;
             }
-            await prisma_1.prisma.allocation.update({ where: { id: allocationId }, data: { assigned: true } });
             updateData.allocationId = allocationId;
         }
     }
