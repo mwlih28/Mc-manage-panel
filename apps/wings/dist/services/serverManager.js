@@ -12,6 +12,13 @@ const logger_1 = require("../utils/logger");
 const dockerService_1 = require("./dockerService");
 const panelClient_1 = require("./panelClient");
 const MAX_LOG_BUFFER = 500;
+// TTY-attached containers (used for proper console interaction) often emit ANSI color
+// codes that break the join/leave regex matching below — strip them before processing.
+// eslint-disable-next-line no-control-regex
+const ANSI_PATTERN = /\x1b\[[0-9;]*[a-zA-Z]/g;
+function stripAnsi(line) {
+    return line.replace(ANSI_PATTERN, '');
+}
 class ServerManager extends events_1.EventEmitter {
     constructor() {
         super(...arguments);
@@ -148,7 +155,7 @@ class ServerManager extends events_1.EventEmitter {
                 if (!fs_1.default.existsSync(propsFile)) {
                     const serverPort = parseInt(config.environment['SERVER_PORT'] || config.environment['PORT'] || '25565', 10);
                     const props = [
-                        '#Minecraft server properties — optimized defaults by MC Manage Panel',
+                        '#Minecraft server properties — optimized defaults by Kretase',
                         `server-port=${serverPort}`,
                         'online-mode=false',
                         'view-distance=7',
@@ -752,14 +759,16 @@ class ServerManager extends events_1.EventEmitter {
                 const lines = buffer.split('\n');
                 buffer = lines.pop() || '';
                 lines.forEach(line => {
-                    if (line.trim())
-                        this.sendConsole(uuid, line);
+                    const clean = stripAnsi(line);
+                    if (clean.trim())
+                        this.sendConsole(uuid, clean);
                 });
             });
             stream.on('end', () => {
                 // Flush any remaining buffered output
-                if (buffer.trim()) {
-                    this.sendConsole(uuid, buffer);
+                const clean = stripAnsi(buffer);
+                if (clean.trim()) {
+                    this.sendConsole(uuid, clean);
                     buffer = '';
                 }
                 const server = this.servers.get(uuid);

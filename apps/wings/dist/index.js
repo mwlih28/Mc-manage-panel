@@ -187,7 +187,7 @@ async function main() {
     const host = cfg.api.host || '0.0.0.0';
     httpServer.listen(port, host, () => {
         logger_1.logger.info('================================================');
-        logger_1.logger.info('  MC Manage Panel - Wings Daemon');
+        logger_1.logger.info('  Kretase - Wings Daemon');
         logger_1.logger.info(`  Listening: ${host}:${port}`);
         logger_1.logger.info(`  Panel: ${cfg.remote}`);
         logger_1.logger.info(`  Node UUID: ${cfg.uuid}`);

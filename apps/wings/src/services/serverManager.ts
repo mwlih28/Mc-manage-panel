@@ -15,6 +15,14 @@ import type { ServerConfig, ServerStatus, ResourceUsage } from '../types';
 
 const MAX_LOG_BUFFER = 500;
 
+// TTY-attached containers (used for proper console interaction) often emit ANSI color
+// codes that break the join/leave regex matching below — strip them before processing.
+// eslint-disable-next-line no-control-regex
+const ANSI_PATTERN = /\x1b\[[0-9;]*[a-zA-Z]/g;
+function stripAnsi(line: string): string {
+  return line.replace(ANSI_PATTERN, '');
+}
+
 interface ManagedServer {
   config: ServerConfig;
   status: ServerStatus;
@@ -778,14 +786,16 @@ class ServerManager extends EventEmitter {
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
         lines.forEach(line => {
-          if (line.trim()) this.sendConsole(uuid, line);
+          const clean = stripAnsi(line);
+          if (clean.trim()) this.sendConsole(uuid, clean);
         });
       });
 
       stream.on('end', () => {
         // Flush any remaining buffered output
-        if (buffer.trim()) {
-          this.sendConsole(uuid, buffer);
+        const clean = stripAnsi(buffer);
+        if (clean.trim()) {
+          this.sendConsole(uuid, clean);
           buffer = '';
         }
         const server = this.servers.get(uuid);

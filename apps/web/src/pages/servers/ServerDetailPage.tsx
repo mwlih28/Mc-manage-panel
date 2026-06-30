@@ -235,8 +235,8 @@ export function ServerDetailPage() {
   const { data: allPlayersData, isLoading: allPlayersLoading, refetch: refetchAllPlayers } = useQuery({
     queryKey: ['server-players-all', id],
     queryFn: () => api.get(`/servers/${id}/players/all`).then((r) => r.data),
-    enabled: activeTab === 'players' && !!id,
-    refetchInterval: activeTab === 'players' ? 30000 : false,
+    enabled: (activeTab === 'players' || activeTab === 'console') && !!id,
+    refetchInterval: (activeTab === 'players' || activeTab === 'console') ? 30000 : false,
   });
 
   const openFile = async (filePath: string) => {
@@ -792,6 +792,20 @@ export function ServerDetailPage() {
     return data?.egg?.name?.toLowerCase().includes('bedrock') ?? false;
   })();
 
+  // Recent players widget: online players first (live from socket), then most
+  // recently seen offline players — so the list doesn't go blank when everyone leaves.
+  const recentPlayers = (() => {
+    const onlineNames = new Set(onlinePlayers.map((p) => p.name));
+    const history: PlayerHistoryEntry[] = allPlayersData?.players ?? [];
+    const offlineRecent = history
+      .filter((p) => !onlineNames.has(p.name))
+      .sort((a, b) => new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime());
+    return [
+      ...onlinePlayers.map((p) => ({ name: p.name, uuid: p.uuid, online: true })),
+      ...offlineRecent.slice(0, 8).map((p) => ({ name: p.name, uuid: p.uuid, online: false })),
+    ];
+  })();
+
   const cpuUsage = stats && !isNaN(stats.cpuAbsolute) ? Math.min(stats.cpuAbsolute, 100) : 0;
   const memUsage = stats && stats.memoryLimitBytes > 0
     ? Math.min((stats.memoryBytes / stats.memoryLimitBytes) * 100, 100)
@@ -1007,28 +1021,36 @@ export function ServerDetailPage() {
               </span>
             </div>
             <div className="p-3 space-y-1.5 max-h-80 overflow-y-auto">
-              {!isRunning ? (
-                <p className="text-xs text-slate-600">Server offline</p>
-              ) : onlinePlayers.length === 0 ? (
-                <p className="text-xs text-slate-600">No players online</p>
+              {recentPlayers.length === 0 ? (
+                <p className="text-xs text-slate-600">No players seen yet</p>
               ) : (
-                onlinePlayers.map((p) => (
+                recentPlayers.map((p) => (
                   <button
                     key={p.name}
                     onClick={() => !isBedrock && openInventory(p)}
                     className={cn(
-                      'flex items-center gap-2 w-full px-2 py-1.5 rounded-lg bg-dark-700 border border-dark-600 transition-all group',
+                      'flex items-center gap-2 w-full px-2 py-1.5 rounded-lg border transition-all group',
+                      p.online ? 'bg-dark-700 border-dark-600' : 'bg-dark-800/40 border-dark-800',
                       isBedrock ? 'cursor-default' : 'hover:bg-dark-600 hover:border-panel-500/40'
                     )}
-                    title={isBedrock ? p.name : 'Click to view inventory'}
+                    title={isBedrock ? p.name : p.online ? 'Click to view inventory' : `${p.name} (offline) — click to view inventory`}
                   >
-                    <img
-                      src={`https://mc-heads.net/avatar/${p.name}/24`}
-                      alt={p.name}
-                      className="w-6 h-6 rounded pixelated"
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                    />
-                    <span className="text-xs font-medium text-slate-300 group-hover:text-slate-100 flex-1 text-left truncate">{p.name}</span>
+                    <span className="relative shrink-0">
+                      <img
+                        src={`https://mc-heads.net/avatar/${p.name}/24`}
+                        alt={p.name}
+                        className={cn('w-6 h-6 rounded pixelated', !p.online && 'opacity-50')}
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      />
+                      <span className={cn(
+                        'absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-dark-900',
+                        p.online ? 'bg-green-400' : 'bg-slate-600'
+                      )} />
+                    </span>
+                    <span className={cn(
+                      'text-xs font-medium flex-1 text-left truncate',
+                      p.online ? 'text-slate-300 group-hover:text-slate-100' : 'text-slate-500'
+                    )}>{p.name}</span>
                     {!isBedrock && <Package size={10} className="text-slate-600 group-hover:text-panel-400 shrink-0" />}
                   </button>
                 ))

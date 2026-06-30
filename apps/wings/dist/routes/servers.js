@@ -184,7 +184,7 @@ router.post('/:uuid/players/:playerUuid/ban', async (req, res) => {
     bans.push({
         uuid: playerUuid, name: name || 'Unknown',
         created: new Date().toISOString().replace('T', ' ').slice(0, 19) + ' +0000',
-        source: 'MC Manage Panel', expires: 'forever', reason,
+        source: 'Kretase', expires: 'forever', reason,
     });
     fs_1.default.writeFileSync(bannedPath, JSON.stringify(bans, null, 2));
     if (name && serverManager_1.serverManager.getStatus(uuid) === 'running') {
@@ -239,7 +239,7 @@ router.post('/:uuid/players/:playerUuid/ipban', (req, res) => {
             catch { /* ignore */ }
         }
         bans = bans.filter(b => b.ip !== ip);
-        bans.push({ ip, created: new Date().toISOString().replace('T', ' ').slice(0, 19) + ' +0000', source: 'MC Manage Panel', expires: 'forever', reason });
+        bans.push({ ip, created: new Date().toISOString().replace('T', ' ').slice(0, 19) + ' +0000', source: 'Kretase', expires: 'forever', reason });
         fs_1.default.writeFileSync(ipBanPath, JSON.stringify(bans, null, 2));
     }
     if (name && serverManager_1.serverManager.getStatus(uuid) === 'running') {
