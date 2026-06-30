@@ -7,7 +7,7 @@ import {
   Folder, FolderOpen, File, ChevronRight, ArrowLeft, Pencil, Trash2, Plus, X, Check,
   Package, Users, Search, Download, RefreshCw, Tag, AlertTriangle, Shield, ShieldOff,
   MapPin, Clock, Sword, Hammer, Footprints, Ban, LogOut, Wifi, Navigation,
-  StickyNote, CalendarClock, UserCog, Save
+  StickyNote, CalendarClock, UserCog, Save, Copy, CheckCircle2
 } from 'lucide-react';
 import { io as ioClient, Socket } from 'socket.io-client';
 import api from '@/lib/axios';
@@ -21,6 +21,34 @@ import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
 type Tab = 'console' | 'files' | 'plugins' | 'versions' | 'stats' | 'backups' | 'players' | 'notes' | 'schedule' | 'access';
+
+const TAB_GROUPS: { label: string; tabs: { id: Tab; label: string; icon: typeof Terminal }[] }[] = [
+  {
+    label: 'manage',
+    tabs: [
+      { id: 'console', label: 'Console', icon: Terminal },
+      { id: 'files', label: 'Files', icon: Folder },
+      { id: 'plugins', label: 'Plugins', icon: Package },
+      { id: 'versions', label: 'Versions', icon: Tag },
+    ],
+  },
+  {
+    label: 'monitor',
+    tabs: [
+      { id: 'stats', label: 'Stats', icon: BarChart2 },
+      { id: 'backups', label: 'Backups', icon: Archive },
+      { id: 'players', label: 'Players', icon: Users },
+    ],
+  },
+  {
+    label: 'admin',
+    tabs: [
+      { id: 'notes', label: 'Notes', icon: StickyNote },
+      { id: 'schedule', label: 'Schedule', icon: CalendarClock },
+      { id: 'access', label: 'Access', icon: UserCog },
+    ],
+  },
+];
 
 // ── Schedule types ─────────────────────────────────────────────────────────────
 interface ScheduledTask {
@@ -113,6 +141,7 @@ export function ServerDetailPage() {
   const [command, setCommand] = useState('');
   const [stats, setStats] = useState<ServerStats | null>(null);
   const [currentStatus, setCurrentStatus] = useState<ServerStatus>('OFFLINE');
+  const [ipCopied, setIpCopied] = useState(false);
   const socketRef = useRef<Socket | null>(null);
   const consoleEndRef = useRef<HTMLDivElement>(null);
 
@@ -725,6 +754,13 @@ export function ServerDetailPage() {
     toast.success(`Server ${action} command sent`);
   };
 
+  const copyAddress = (address: string) => {
+    navigator.clipboard.writeText(address);
+    setIpCopied(true);
+    toast.success('Address copied');
+    setTimeout(() => setIpCopied(false), 1500);
+  };
+
   const createBackup = async () => {
     try {
       await api.post(`/servers/${id}/backups`, { name: `Backup ${new Date().toLocaleString()}` });
@@ -789,13 +825,25 @@ export function ServerDetailPage() {
               {isBedrock && (
                 <span className="badge badge-blue text-[10px] uppercase tracking-wide">Bedrock</span>
               )}
-              {data.allocation && (
-                <span className="text-xs font-mono text-slate-400 bg-dark-800/60 px-1.5 py-0.5 rounded">
-                  {(data.node as typeof data.node & { gameSubdomain?: string })?.gameSubdomain
-                    ? `${data.uuidShort}.${(data.node as typeof data.node & { gameSubdomain?: string }).gameSubdomain}:${data.allocation.port}`
-                    : `${data.allocation.ip}:${data.allocation.port}`}
-                </span>
-              )}
+              {data.allocation && (() => {
+                const address = (data.node as typeof data.node & { gameSubdomain?: string })?.gameSubdomain
+                  ? `${data.uuidShort}.${(data.node as typeof data.node & { gameSubdomain?: string }).gameSubdomain}:${data.allocation.port}`
+                  : `${data.allocation.ip}:${data.allocation.port}`;
+                return (
+                  <button
+                    onClick={() => copyAddress(address)}
+                    className="flex items-center gap-1.5 text-xs font-mono text-slate-400 bg-dark-800/60 hover:bg-dark-700 hover:text-slate-200 px-1.5 py-0.5 rounded transition-colors group"
+                    title="Copy address"
+                  >
+                    {address}
+                    {ipCopied ? (
+                      <CheckCircle2 size={12} className="text-green-400" />
+                    ) : (
+                      <Copy size={12} className="opacity-50 group-hover:opacity-100" />
+                    )}
+                  </button>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -874,30 +922,26 @@ export function ServerDetailPage() {
 
       {/* Tabs */}
       <div className="border-b border-dark-800 overflow-x-auto">
-        <div className="flex gap-1 min-w-max">
-          {(['console', 'files', 'plugins', 'versions', 'stats', 'backups', 'players', 'notes', 'schedule', 'access'] as Tab[]).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={cn(
-                'px-4 py-2.5 text-sm font-medium capitalize border-b-2 transition-colors whitespace-nowrap',
-                activeTab === tab
-                  ? 'border-panel-500 text-panel-400'
-                  : 'border-transparent text-slate-400 hover:text-slate-200'
-              )}
-            >
-              {tab === 'console' && <Terminal size={14} className="inline mr-1.5" />}
-              {tab === 'files' && <Folder size={14} className="inline mr-1.5" />}
-              {tab === 'plugins' && <Package size={14} className="inline mr-1.5" />}
-              {tab === 'versions' && <Tag size={14} className="inline mr-1.5" />}
-              {tab === 'stats' && <BarChart2 size={14} className="inline mr-1.5" />}
-              {tab === 'backups' && <Archive size={14} className="inline mr-1.5" />}
-              {tab === 'players' && <Users size={14} className="inline mr-1.5" />}
-              {tab === 'notes' && <StickyNote size={14} className="inline mr-1.5" />}
-              {tab === 'schedule' && <CalendarClock size={14} className="inline mr-1.5" />}
-              {tab === 'access' && <UserCog size={14} className="inline mr-1.5" />}
-              {tab}
-            </button>
+        <div className="flex items-center gap-1 min-w-max">
+          {TAB_GROUPS.map((group, gi) => (
+            <div key={group.label} className="flex items-center gap-1">
+              {gi > 0 && <span className="mx-1.5 h-5 w-px bg-dark-700" />}
+              {group.tabs.map(({ id: tab, label, icon: Icon }) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3.5 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
+                    activeTab === tab
+                      ? 'border-panel-500 text-panel-400'
+                      : 'border-transparent text-slate-400 hover:text-slate-200'
+                  )}
+                >
+                  <Icon size={14} />
+                  {label}
+                </button>
+              ))}
+            </div>
           ))}
         </div>
       </div>
