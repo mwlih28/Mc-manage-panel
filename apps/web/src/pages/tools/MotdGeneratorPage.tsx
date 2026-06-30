@@ -62,7 +62,7 @@ export function MotdGeneratorPage() {
   const [aiLoading, setAiLoading] = useState(false);
 
   const enabled = settings?.['features.aiTools'] !== 'false';
-  const aiAvailable = settings?.['ai.openaiConfigured'] === 'true';
+  const aiAvailable = settings?.['ai.configured'] === 'true';
 
   const { data: currentPropertiesData } = useQuery({
     queryKey: ['server-properties-motd', serverId],

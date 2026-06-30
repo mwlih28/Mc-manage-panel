@@ -13,6 +13,14 @@ function ResendMark({ className }: { className?: string }) {
   return <img src="/brand/resend-icon-white.svg" alt="Resend" className={className} />;
 }
 
+type AiProvider = 'openai' | 'gemini' | 'anthropic';
+
+const AI_PROVIDERS: { id: AiProvider; label: string; logo: string; supportsImages: boolean }[] = [
+  { id: 'openai', label: 'OpenAI', logo: '/brand/openai.svg', supportsImages: true },
+  { id: 'gemini', label: 'Gemini', logo: '/brand/gemini.svg', supportsImages: true },
+  { id: 'anthropic', label: 'Anthropic', logo: '/brand/anthropic.svg', supportsImages: false },
+];
+
 export function AdminSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -30,9 +38,12 @@ export function AdminSettingsPage() {
     'smtp.from': '',
     'smtp.owner_email': '',
     'features.aiTools': 'true',
+    'ai.provider': 'openai',
     'ai.openaiKey': '',
+    'ai.geminiKey': '',
+    'ai.anthropicKey': '',
   });
-  const [showOpenaiKey, setShowOpenaiKey] = useState(false);
+  const [showKey, setShowKey] = useState<Record<string, boolean>>({});
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -49,7 +60,10 @@ export function AdminSettingsPage() {
         'smtp.from':        data['smtp.from']         || '',
         'smtp.owner_email': data['smtp.owner_email']  || '',
         'features.aiTools': data['features.aiTools']  || 'true',
+        'ai.provider':      data['ai.provider']        || 'openai',
         'ai.openaiKey':     data['ai.openaiKey']       || '',
+        'ai.geminiKey':     data['ai.geminiKey']       || '',
+        'ai.anthropicKey':  data['ai.anthropicKey']    || '',
       });
     }).finally(() => setLoading(false));
   }, []);
@@ -181,29 +195,58 @@ export function AdminSettingsPage() {
           </label>
 
           <div>
-            <label className="label">OpenAI API Key (optional)</label>
-            <div className="relative">
-              <input
-                type={showOpenaiKey ? 'text' : 'password'}
-                className="input pr-10"
-                value={form['ai.openaiKey']}
-                onChange={e => setForm(f => ({ ...f, 'ai.openaiKey': e.target.value }))}
-                placeholder="sk-..."
-              />
-              <button
-                type="button"
-                onClick={() => setShowOpenaiKey(p => !p)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-300 transition-colors"
-              >
-                {showOpenaiKey ? <EyeOff size={14} /> : <Eye size={14} />}
-              </button>
+            <label className="label">AI Provider</label>
+            <div className="grid grid-cols-3 gap-3">
+              {AI_PROVIDERS.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setForm(f => ({ ...f, 'ai.provider': p.id }))}
+                  className={`flex flex-col items-center gap-2 p-3 rounded-lg border transition-colors ${
+                    form['ai.provider'] === p.id
+                      ? 'border-panel-500 bg-panel-500/10'
+                      : 'border-zinc-800 hover:border-zinc-700'
+                  }`}
+                >
+                  <span className="h-7 w-7 rounded-md bg-zinc-950 flex items-center justify-center">
+                    <img src={p.logo} alt={p.label} className="h-4 w-4" />
+                  </span>
+                  <span className="text-xs font-medium text-zinc-200">{p.label}</span>
+                  {!p.supportsImages && <span className="text-[10px] text-zinc-600">Text only</span>}
+                </button>
+              ))}
             </div>
-            <p className="text-xs text-zinc-600 mt-1">
-              Without a key, MOTD/Logo generation uses a free built-in algorithm. With a key, users also get a
-              "Generate with AI" option that calls OpenAI directly — billed to your own account at{' '}
-              <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-panel-400 hover:underline">platform.openai.com</a>.
+            <p className="text-xs text-zinc-600 mt-2">
+              Without a matching key below, MOTD/Logo generation uses a free built-in algorithm. With a key,
+              users also get a "Generate with AI" option that calls the selected provider directly — billed to
+              your own account.
             </p>
           </div>
+
+          {AI_PROVIDERS.map((p) => {
+            const settingKey = `ai.${p.id}Key` as 'ai.openaiKey' | 'ai.geminiKey' | 'ai.anthropicKey';
+            return (
+              <div key={p.id}>
+                <label className="label">{p.label} API Key</label>
+                <div className="relative">
+                  <input
+                    type={showKey[p.id] ? 'text' : 'password'}
+                    className="input pr-10"
+                    value={form[settingKey]}
+                    onChange={e => setForm(f => ({ ...f, [settingKey]: e.target.value }))}
+                    placeholder={p.id === 'openai' ? 'sk-...' : p.id === 'anthropic' ? 'sk-ant-...' : 'AIza...'}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowKey(s => ({ ...s, [p.id]: !s[p.id] }))}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-300 transition-colors"
+                  >
+                    {showKey[p.id] ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 

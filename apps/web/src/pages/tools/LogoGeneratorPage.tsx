@@ -125,7 +125,7 @@ export function LogoGeneratorPage() {
   const [aiLoading, setAiLoading] = useState(false);
 
   const enabled = settings?.['features.aiTools'] !== 'false';
-  const aiAvailable = settings?.['ai.openaiConfigured'] === 'true';
+  const aiAvailable = settings?.['ai.configured'] === 'true' && settings?.['ai.provider'] !== 'anthropic';
 
   const pickServer = (id: string) => {
     setServerId(id);
@@ -203,6 +203,9 @@ export function LogoGeneratorPage() {
             <button className="btn-secondary" onClick={generateWithAi} disabled={aiLoading}>
               {aiLoading ? <Spinner size="sm" /> : <Wand2 size={14} />} Generate with AI
             </button>
+          )}
+          {settings?.['ai.configured'] === 'true' && settings?.['ai.provider'] === 'anthropic' && (
+            <span className="text-xs text-slate-600">Anthropic doesn't support image generation — pick OpenAI or Gemini in Admin Settings to enable AI logos.</span>
           )}
         </div>
       </div>
