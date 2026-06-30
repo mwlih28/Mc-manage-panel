@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendThankYouEmail = sendThankYouEmail;
 exports.sendOwnerNotification = sendOwnerNotification;
+exports.sendPasswordResetEmail = sendPasswordResetEmail;
 exports.sendUpdateNotification = sendUpdateNotification;
 const nodemailer_1 = __importDefault(require("nodemailer"));
 const prisma_1 = require("../utils/prisma");
@@ -179,6 +180,56 @@ async function sendOwnerNotification(name, email, serverIp, domain) {
     }
     catch (err) {
         logger_1.logger.warn(`Failed to send owner notification: ${err.message}`);
+        return false;
+    }
+}
+function resetPasswordHtml(resetUrl, appName) {
+    return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Reset your password</title></head>
+<body style="margin:0;padding:0;background:#0a0a0c;font-family:system-ui,-apple-system,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0c;padding:40px 20px;">
+<tr><td align="center">
+  <table width="520" cellpadding="0" cellspacing="0" style="background:#111113;border:1px solid #1e1e22;border-radius:12px;overflow:hidden;">
+    <tr><td style="background:linear-gradient(135deg,#1a2a3a,#111827);padding:32px 36px;text-align:center;">
+      <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700;">${appName}</h1>
+      <p style="margin:6px 0 0;color:#93c5fd;font-size:13px;">Password Reset Request</p>
+    </td></tr>
+    <tr><td style="padding:32px 36px;">
+      <p style="margin:0 0 16px;color:#e4e4e7;font-size:15px;">We received a request to reset your password.</p>
+      <p style="margin:0 0 24px;color:#a1a1aa;font-size:14px;line-height:1.6;">
+        Click the button below to choose a new password. This link expires in 1 hour. If you didn't request this, you can safely ignore this email.
+      </p>
+      <div style="text-align:center;margin:24px 0;">
+        <a href="${resetUrl}" style="display:inline-block;background:#2563eb;color:#fff;font-size:14px;font-weight:600;text-decoration:none;padding:12px 28px;border-radius:8px;">Reset Password</a>
+      </div>
+      <p style="margin:0;color:#71717a;font-size:12px;word-break:break-all;">Or paste this link in your browser: ${resetUrl}</p>
+    </td></tr>
+  </table>
+</td></tr>
+</table>
+</body></html>`;
+}
+async function sendPasswordResetEmail(to, resetUrl, appName = 'Kretase') {
+    try {
+        const conf = await getPanelSmtpConf();
+        const transport = makeTransport(conf);
+        if (!transport) {
+            logger_1.logger.warn('Password reset email not sent — panel SMTP is not configured');
+            return false;
+        }
+        const from = conf['smtp.from'] || conf['smtp.user'];
+        await transport.sendMail({
+            from: `"${appName}" <${from}>`,
+            to,
+            subject: `Reset your ${appName} password`,
+            html: resetPasswordHtml(resetUrl, appName),
+            text: `Reset your ${appName} password: ${resetUrl}\n\nThis link expires in 1 hour. If you didn't request this, ignore this email.`,
+        });
+        logger_1.logger.info(`Password reset email sent to ${to}`);
+        return true;
+    }
+    catch (err) {
+        logger_1.logger.warn(`Failed to send password reset email to ${to}: ${err.message}`);
         return false;
     }
 }

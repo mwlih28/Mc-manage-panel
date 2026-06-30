@@ -95,6 +95,16 @@ export function parseMotdLines(motd: string): MotdSegment[][] {
     for (let i = 0; i < line.length; i++) {
       if (line[i] === '§' && i + 1 < line.length) {
         const code = line[i + 1].toLowerCase();
+        // §x§R§R§G§G§B§B — Minecraft 1.16+ per-character RGB hex color
+        if (code === 'x' && line.slice(i, i + 14).match(/^§x(§[0-9a-f]){6}$/i)) {
+          flush();
+          const hexDigits = line.slice(i + 2, i + 14).replace(/§/g, '');
+          color = `#${hexDigits}`;
+          bold = false;
+          italic = false;
+          i += 13;
+          continue;
+        }
         if (COLOR_MAP[code]) {
           flush();
           color = COLOR_MAP[code];
@@ -120,4 +130,41 @@ export function parseMotdLines(motd: string): MotdSegment[][] {
     flush();
     return segments;
   });
+}
+
+// ── RGB gradient text (Minecraft 1.16+ §x§R§R§G§G§B§B per-character hex) ──────
+// Same output format as tools like birdflop.com/resources/rgb — a smooth
+// multi-stop gradient applied character-by-character, no external service.
+
+function hexToRgb(hex: string): [number, number, number] {
+  const h = hex.replace('#', '');
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+  return [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, '0')).join('');
+}
+
+export function generateGradientText(text: string, colors: string[], bold = false): string {
+  const chars = Array.from(text);
+  const n = chars.length;
+  if (n === 0 || colors.length < 2) return text;
+
+  const stops = colors.map(hexToRgb);
+  const segCount = stops.length - 1;
+  const prefix = bold ? '§l' : '';
+  let result = '';
+
+  for (let i = 0; i < n; i++) {
+    if (chars[i] === ' ') { result += ' '; continue; }
+    const t = n === 1 ? 0 : i / (n - 1);
+    const segIdx = Math.min(Math.floor(t * segCount), segCount - 1);
+    const segT = t * segCount - segIdx;
+    const [r1, g1, b1] = stops[segIdx];
+    const [r2, g2, b2] = stops[segIdx + 1];
+    const hex = rgbToHex(r1 + (r2 - r1) * segT, g1 + (g2 - g1) * segT, b1 + (b2 - b1) * segT);
+    const code = `§x${hex.split('').map((d) => `§${d}`).join('')}`;
+    result += `${code}${prefix}${chars[i]}`;
+  }
+  return result;
 }

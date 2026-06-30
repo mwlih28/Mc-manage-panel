@@ -25,6 +25,8 @@ model User {
   smtpPass         String?
   smtpFrom         String?
   avatarUrl        String?
+  resetToken        String?   @unique
+  resetTokenExpiry  DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   lastLogin    DateTime?

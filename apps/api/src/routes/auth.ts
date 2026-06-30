@@ -2,11 +2,13 @@ import { Router, Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { prisma } from '../utils/prisma';
 import { generateTokenPair } from '../utils/jwt';
 import { authenticate } from '../middleware/auth';
 import { AuthRequest } from '../types';
 import { verify } from 'otplib';
+import { sendPasswordResetEmail } from '../services/emailService';
 
 const router = Router();
 
@@ -184,6 +186,61 @@ router.post('/logout', authenticate, async (req: AuthRequest, res: Response) => 
   }).catch(() => {});
   return res.json({ message: 'Logged out successfully' });
 });
+
+// POST /auth/forgot-password — emails a reset link via the panel owner's own SMTP
+router.post('/forgot-password', [body('email').isEmail().normalizeEmail()], async (req: Request, res: Response) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) return res.status(422).json({ errors: errors.array() });
+
+  const { email } = req.body;
+  // Always return the same generic response, whether or not the email exists,
+  // so this endpoint can't be used to enumerate registered accounts.
+  const genericResponse = { message: 'If an account exists for that email, a reset link has been sent.' };
+
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) return res.json(genericResponse);
+
+  const resetToken = crypto.randomBytes(32).toString('hex');
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { resetToken, resetTokenExpiry: new Date(Date.now() + 60 * 60 * 1000) },
+  });
+
+  const appNameRow = await prisma.setting.findUnique({ where: { key: 'app.name' } });
+  const frontendOrigin = process.env.CORS_ORIGIN || 'http://localhost:5173';
+  const resetUrl = `${frontendOrigin}/reset-password?token=${resetToken}`;
+  sendPasswordResetEmail(user.email, resetUrl, appNameRow?.value || 'Kretase').catch(() => {});
+
+  return res.json(genericResponse);
+});
+
+// POST /auth/reset-password
+router.post(
+  '/reset-password',
+  [body('token').notEmpty(), body('password').isLength({ min: 8 })],
+  async (req: Request, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(422).json({ errors: errors.array() });
+
+    const { token, password } = req.body;
+    const user = await prisma.user.findUnique({ where: { resetToken: token } });
+    if (!user || !user.resetTokenExpiry || user.resetTokenExpiry < new Date()) {
+      return res.status(400).json({ message: 'Reset link is invalid or has expired' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 12);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { password: hashedPassword, resetToken: null, resetTokenExpiry: null },
+    });
+
+    await prisma.activity.create({
+      data: { userId: user.id, event: 'auth:password_reset', ip: req.ip },
+    }).catch(() => {});
+
+    return res.json({ message: 'Password updated — you can now log in' });
+  }
+);
 
 // GET /auth/setup/status - check if initial setup is needed
 router.get('/setup/status', async (_req, res) => {

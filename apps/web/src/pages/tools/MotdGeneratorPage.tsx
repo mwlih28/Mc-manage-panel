@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Sparkles, RefreshCw, Copy, Check, Lock, Wand2 } from 'lucide-react';
+import { Sparkles, RefreshCw, Copy, Check, Lock, Wand2, Palette, Plus, X } from 'lucide-react';
 import api from '@/lib/axios';
 import { Server } from '@/types';
-import { generateMotd, parseMotdLines, MotdTheme } from '@/lib/motdGenerator';
+import { generateMotd, parseMotdLines, generateGradientText, MotdTheme } from '@/lib/motdGenerator';
 import { Spinner } from '@/components/ui/Spinner';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -110,26 +110,61 @@ export function MotdGeneratorPage() {
     setTimeout(() => setCopiedIdx(null), 1500);
   };
 
+  const writeMotdToServer = async (id: string, motd: string) => {
+    const { data } = await api.get(`/servers/${id}/files/contents`, { params: { file: 'server.properties' } });
+    const lines: string[] = (data.content || '').split('\n');
+    const motdLine = `motd=${motd.replace(/\n/g, '\\n')}`;
+    let found = false;
+    const updated = lines.map((l: string) => {
+      if (l.startsWith('motd=')) { found = true; return motdLine; }
+      return l;
+    });
+    if (!found) updated.push(motdLine);
+    await api.post(`/servers/${id}/files/write`, { file: 'server.properties', content: updated.join('\n') });
+  };
+
   const applyToServer = async (motd: string, idx: number) => {
     const serverId = applyTarget[idx];
     if (!serverId) { toast.error('Select a server first'); return; }
     setApplying(idx);
     try {
-      const { data } = await api.get(`/servers/${serverId}/files/contents`, { params: { file: 'server.properties' } });
-      const lines: string[] = (data.content || '').split('\n');
-      const motdLine = `motd=${motd.replace(/\n/g, '\\n')}`;
-      let found = false;
-      const updated = lines.map((l: string) => {
-        if (l.startsWith('motd=')) { found = true; return motdLine; }
-        return l;
-      });
-      if (!found) updated.push(motdLine);
-      await api.post(`/servers/${serverId}/files/write`, { file: 'server.properties', content: updated.join('\n') });
+      await writeMotdToServer(serverId, motd);
       toast.success('MOTD applied — restart the server for it to take effect');
     } catch {
       toast.error('Failed to apply MOTD');
     } finally {
       setApplying(null);
+    }
+  };
+
+  // ── RGB Gradient tool (same output format as birdflop.com/resources/rgb) ──
+  const [gradientText, setGradientText] = useState('My Server');
+  const [gradientColors, setGradientColors] = useState(['#00C9FF', '#92FE9D']);
+  const [gradientBold, setGradientBold] = useState(false);
+  const [gradientResult, setGradientResult] = useState('');
+  const [gradientCopied, setGradientCopied] = useState(false);
+  const [gradientApplyTarget, setGradientApplyTarget] = useState('');
+  const [gradientApplying, setGradientApplying] = useState(false);
+
+  const generateGradient = () => setGradientResult(generateGradientText(gradientText, gradientColors, gradientBold));
+
+  const copyGradient = () => {
+    navigator.clipboard.writeText(gradientResult);
+    setGradientCopied(true);
+    toast.success('Copied to clipboard');
+    setTimeout(() => setGradientCopied(false), 1500);
+  };
+
+  const applyGradientToServer = async () => {
+    if (!gradientApplyTarget) { toast.error('Select a server first'); return; }
+    setGradientApplying(true);
+    try {
+      await writeMotdToServer(gradientApplyTarget, gradientResult);
+      toast.success('MOTD applied — restart the server for it to take effect');
+    } catch {
+      toast.error('Failed to apply MOTD');
+    } finally {
+      setGradientApplying(false);
     }
   };
 
@@ -235,6 +270,87 @@ export function MotdGeneratorPage() {
           ))}
         </div>
       )}
+
+      {/* RGB Gradient tool */}
+      <div className="card p-5 space-y-4">
+        <div>
+          <h2 className="text-base font-semibold text-slate-100 flex items-center gap-2">
+            <Palette size={16} className="text-panel-400" /> RGB Gradient
+          </h2>
+          <p className="text-slate-500 text-xs mt-1">Smooth per-character RGB gradient text (Minecraft 1.16+), same output as birdflop.com/resources/rgb.</p>
+        </div>
+
+        <div>
+          <label className="label">Text</label>
+          <input className="input" value={gradientText} onChange={(e) => setGradientText(e.target.value)} placeholder="My Server" />
+        </div>
+
+        <div>
+          <label className="label">Colors</label>
+          <div className="flex flex-wrap items-center gap-2">
+            {gradientColors.map((c, i) => (
+              <div key={i} className="flex items-center gap-1">
+                <input
+                  type="color"
+                  value={c}
+                  onChange={(e) => setGradientColors((cs) => cs.map((x, j) => (j === i ? e.target.value : x)))}
+                  className="h-9 w-9 rounded-md border border-dark-600 bg-transparent cursor-pointer"
+                />
+                {gradientColors.length > 2 && (
+                  <button
+                    className="text-slate-600 hover:text-red-400 transition-colors"
+                    onClick={() => setGradientColors((cs) => cs.filter((_, j) => j !== i))}
+                  ><X size={13} /></button>
+                )}
+              </div>
+            ))}
+            {gradientColors.length < 5 && (
+              <button
+                className="btn-secondary btn-sm"
+                onClick={() => setGradientColors((cs) => [...cs, '#ffffff'])}
+              ><Plus size={13} /> Stop</button>
+            )}
+          </div>
+        </div>
+
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={gradientBold} onChange={(e) => setGradientBold(e.target.checked)} className="accent-panel-500" />
+          <span className="text-sm text-slate-300">Bold</span>
+        </label>
+
+        <button className="btn-primary" onClick={generateGradient}>
+          <RefreshCw size={14} /> Generate Gradient
+        </button>
+
+        {gradientResult && (
+          <div className="space-y-3 pt-2 border-t border-dark-800">
+            <MotdPreview motd={gradientResult} />
+            <div className="flex flex-wrap items-center gap-2">
+              <button className="btn-secondary btn-sm" onClick={copyGradient}>
+                {gradientCopied ? <Check size={13} className="text-green-400" /> : <Copy size={13} />}
+                Copy
+              </button>
+              <select
+                className="input py-1.5 text-xs w-44"
+                value={gradientApplyTarget}
+                onChange={(e) => setGradientApplyTarget(e.target.value)}
+              >
+                <option value="">Select server…</option>
+                {(serversData || []).map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+              <button
+                className={cn('btn-secondary btn-sm', !gradientApplyTarget && 'opacity-50 cursor-not-allowed')}
+                disabled={!gradientApplyTarget || gradientApplying}
+                onClick={applyGradientToServer}
+              >
+                {gradientApplying ? <Spinner size="sm" /> : 'Apply to Server'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
