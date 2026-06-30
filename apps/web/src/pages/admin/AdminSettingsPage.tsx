@@ -5,16 +5,12 @@ import toast from 'react-hot-toast';
 import { Spinner } from '@/components/ui/Spinner';
 import { useQueryClient } from '@tanstack/react-query';
 
-// Resend's name/wordmark, used with their written permission (not an official
-// or approved integration — see their reply: "you can use these as long as
-// it's not presented as an official or approved integration").
+// Resend's official icon mark, used with their written permission (not an
+// official or approved integration — see their reply: "you can use these as
+// long as it's not presented as an official or approved integration").
+// Asset from resend.com/brand, served from apps/web/public/brand/.
 function ResendMark({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 16 16" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect width="16" height="16" rx="4" fill="currentColor" className="text-zinc-950" />
-      <path d="M4.5 11.5V4.5H8.2C9.6 4.5 10.6 5.4 10.6 6.7C10.6 7.7 10 8.5 9.1 8.8L11 11.5H9.3L7.6 9.1H6V11.5H4.5ZM6 7.8H8.1C8.7 7.8 9.1 7.3 9.1 6.7C9.1 6.1 8.7 5.7 8.1 5.7H6V7.8Z" fill="white" />
-    </svg>
-  );
+  return <img src="/brand/resend-icon-white.svg" alt="Resend" className={className} />;
 }
 
 export function AdminSettingsPage() {
