@@ -83,16 +83,13 @@ class ServerManager extends events_1.EventEmitter {
             const { config } = server;
             const isBedrock = this.isBedrockServer(uuid);
             if (!isBedrock) {
-                // Auto-accept Minecraft Java EULA
+                // Write eula.txt based on the operator's explicit consent (EULA_ACCEPTED env,
+                // set when the server was created) — only on first write. Once the file exists
+                // we leave it untouched instead of silently flipping eula=false to true.
                 const eulaPath = path_1.default.join(dataPath, 'eula.txt');
                 if (!fs_1.default.existsSync(eulaPath)) {
-                    fs_1.default.writeFileSync(eulaPath, 'eula=true\n', 'utf8');
-                }
-                else {
-                    const eulaContent = fs_1.default.readFileSync(eulaPath, 'utf8');
-                    if (eulaContent.includes('eula=false')) {
-                        fs_1.default.writeFileSync(eulaPath, eulaContent.replace('eula=false', 'eula=true'), 'utf8');
-                    }
+                    const accepted = config.environment.EULA_ACCEPTED === 'true';
+                    fs_1.default.writeFileSync(eulaPath, `eula=${accepted}\n`, 'utf8');
                 }
             }
             // Substitute {{VAR}} placeholders in invocation with environment values.

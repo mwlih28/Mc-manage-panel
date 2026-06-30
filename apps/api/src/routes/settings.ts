@@ -10,6 +10,7 @@ const DEFAULTS: Record<string, string> = {
   'app.title': 'Kretase',
   'app.logo': '',
   'app.description': 'High-performance game server management',
+  'features.aiTools': 'true',
 };
 
 router.get('/', async (_req: Request, res: Response) => {
@@ -27,6 +28,7 @@ router.put('/', authenticate, requireAdmin, async (req: AuthRequest, res: Respon
   const allowed = [
     'app.name', 'app.title', 'app.logo', 'app.description',
     'smtp.host', 'smtp.port', 'smtp.user', 'smtp.pass', 'smtp.from', 'smtp.owner_email',
+    'features.aiTools',
   ];
   const updates: Array<{ key: string; value: string }> = [];
   for (const key of allowed) {

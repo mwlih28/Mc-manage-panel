@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, Globe, Image, Type, FileText, Mail, Send, Eye, EyeOff, Zap } from 'lucide-react';
+import { Save, Globe, Image, Type, FileText, Mail, Send, Eye, EyeOff, Zap, Sparkles } from 'lucide-react';
 import api from '@/lib/axios';
 import toast from 'react-hot-toast';
 import { Spinner } from '@/components/ui/Spinner';
@@ -21,6 +21,7 @@ export function AdminSettingsPage() {
     'smtp.pass': '',
     'smtp.from': '',
     'smtp.owner_email': '',
+    'features.aiTools': 'true',
   });
   const queryClient = useQueryClient();
 
@@ -37,6 +38,7 @@ export function AdminSettingsPage() {
         'smtp.pass':        data['smtp.pass']         || '',
         'smtp.from':        data['smtp.from']         || '',
         'smtp.owner_email': data['smtp.owner_email']  || '',
+        'features.aiTools': data['features.aiTools']  || 'true',
       });
     }).finally(() => setLoading(false));
   }, []);
@@ -142,6 +144,30 @@ export function AdminSettingsPage() {
             </div>
             <p className="text-xs text-zinc-600 mt-1">URL of your logo image. Shown in the sidebar and login page.</p>
           </div>
+        </div>
+      </div>
+
+      {/* AI Tools */}
+      <div className="card">
+        <div className="card-header">
+          <h2 className="text-sm font-semibold text-zinc-100 flex items-center gap-2"><Sparkles size={14} />AI Tools</h2>
+          <p className="text-xs text-zinc-500 mt-0.5">MOTD Generator and Logo Generator, available to all panel users.</p>
+        </div>
+        <div className="p-6">
+          <label className="flex items-center justify-between gap-4 cursor-pointer">
+            <div>
+              <p className="text-sm font-medium text-zinc-200">Enable AI Tools</p>
+              <p className="text-xs text-zinc-500 mt-0.5">
+                Turn off to hide the MOTD and Logo generators from the sidebar for everyone — useful if you want to offer them as a paid add-on.
+              </p>
+            </div>
+            <input
+              type="checkbox"
+              checked={form['features.aiTools'] === 'true'}
+              onChange={e => setForm(f => ({ ...f, 'features.aiTools': e.target.checked ? 'true' : 'false' }))}
+              className="shrink-0 w-9 h-5 accent-panel-500"
+            />
+          </label>
         </div>
       </div>
 

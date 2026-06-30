@@ -12,7 +12,7 @@ const jwt_1 = require("../utils/jwt");
 const auth_1 = require("../middleware/auth");
 const otplib_1 = require("otplib");
 const router = (0, express_1.Router)();
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
+const JWT_SECRET = process.env.JWT_SECRET;
 function safeUser(user) {
     const { password, twoFactorSecret, smtpPass, ...rest } = user;
     void password;

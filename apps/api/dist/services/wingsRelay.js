@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.consoleBuffer = void 0;
+exports.statsBuffer = exports.consoleBuffer = void 0;
 exports.pushConsoleBuffer = pushConsoleBuffer;
 exports.getOrConnectWings = getOrConnectWings;
 exports.subscribeServerOnWings = subscribeServerOnWings;
@@ -9,8 +9,11 @@ exports.sendPowerToWings = sendPowerToWings;
 exports.disconnectNode = disconnectNode;
 const socket_io_client_1 = require("socket.io-client");
 const logger_1 = require("../utils/logger");
+const prisma_1 = require("../utils/prisma");
 const MAX_CONSOLE_BUFFER = 300;
 exports.consoleBuffer = new Map();
+const MAX_STATS_BUFFER = 120;
+exports.statsBuffer = new Map();
 function pushConsoleBuffer(uuid, line) {
     const buf = exports.consoleBuffer.get(uuid) ?? [];
     buf.push(line);
@@ -71,18 +74,33 @@ function getOrConnectWings(node, io) {
             const panelStatus = WINGS_TO_PANEL_STATUS[payload.state]
                 ?? payload.state.toUpperCase();
             relayData = { ...payload, status: panelStatus };
+            // Keep DB in sync when Wings confirms a final state
+            if ((panelStatus === 'RUNNING' || panelStatus === 'OFFLINE') && uuid) {
+                prisma_1.prisma.server.updateMany({
+                    where: { uuid },
+                    data: { status: panelStatus },
+                }).catch((err) => logger_1.logger.warn(`Status sync failed for ${uuid}: ${err.message}`));
+            }
         }
         if (event === 'server:stats') {
-            relayData = {
-                uuid,
+            const statsEntry = {
                 cpuAbsolute: typeof payload.cpu_absolute === 'number' ? payload.cpu_absolute : 0,
                 memoryBytes: typeof payload.memory_bytes === 'number' ? payload.memory_bytes : 0,
                 memoryLimitBytes: typeof payload.memory_limit_bytes === 'number' ? payload.memory_limit_bytes : 0,
                 diskBytes: typeof payload.disk_bytes === 'number' ? payload.disk_bytes : 0,
+                timestamp: Date.now(),
+            };
+            const sbuf = exports.statsBuffer.get(uuid) ?? [];
+            sbuf.push(statsEntry);
+            if (sbuf.length > MAX_STATS_BUFFER)
+                sbuf.shift();
+            exports.statsBuffer.set(uuid, sbuf);
+            relayData = {
+                uuid,
+                ...statsEntry,
                 networkRxBytes: typeof payload.network_rx_bytes === 'number' ? payload.network_rx_bytes : 0,
                 networkTxBytes: typeof payload.network_tx_bytes === 'number' ? payload.network_tx_bytes : 0,
                 uptime: typeof payload.uptime === 'number' ? payload.uptime : 0,
-                timestamp: Date.now(),
             };
         }
         if (event === 'server:console') {

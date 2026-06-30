@@ -208,6 +208,7 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
   const [paperVersions, setPaperVersions] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
+  const [eulaAccepted, setEulaAccepted] = useState(false);
 
   // Fetch templates
   const { data: templatesData } = useQuery({
@@ -246,9 +247,16 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isBedrockEgg && !eulaAccepted) {
+      toast.error('You must accept the Minecraft EULA to create this server');
+      return;
+    }
     setIsLoading(true);
     try {
-      const res = await api.post('/servers', form);
+      const res = await api.post('/servers', {
+        ...form,
+        env: { EULA_ACCEPTED: eulaAccepted ? 'true' : 'false' },
+      });
       const serverId: string = res.data?.data?.id;
       // Install selected Paper version right after creation (only for Paper egg)
       if (isPaperEgg && serverId && paperVersion && paperVersion !== 'latest') {
@@ -404,9 +412,33 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
           </div>
         </div>
 
+        {!isBedrockEgg && (
+          <label className="flex items-start gap-2.5 p-3 rounded-lg bg-zinc-900/60 border border-zinc-800 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={eulaAccepted}
+              onChange={(e) => setEulaAccepted(e.target.checked)}
+              className="mt-0.5 accent-panel-500"
+            />
+            <span className="text-xs text-zinc-400">
+              I have read and accept the{' '}
+              <a
+                href="https://www.minecraft.net/en-us/eula"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-panel-400 hover:underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                Minecraft EULA
+              </a>
+              . The server will not start until this is accepted.
+            </span>
+          </label>
+        )}
+
         <div className="flex gap-3 pt-2">
           <button type="button" className="btn-secondary flex-1" onClick={onClose}>Cancel</button>
-          <button type="submit" className="btn-primary flex-1" disabled={isLoading}>
+          <button type="submit" className="btn-primary flex-1" disabled={isLoading || (!isBedrockEgg && !eulaAccepted)}>
             {isLoading ? <Spinner size="sm" /> : 'Create Server'}
           </button>
         </div>

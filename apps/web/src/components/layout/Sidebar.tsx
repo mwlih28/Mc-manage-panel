@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Server, Settings, LogOut, Shield } from 'lucide-react';
+import { LayoutDashboard, Server, Settings, LogOut, Shield, Sparkles, Image } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { cn } from '@/lib/utils';
 import api from '@/lib/axios';
@@ -10,6 +10,11 @@ const userNavItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/servers',   icon: Server,          label: 'Servers' },
   { to: '/account',  icon: Settings,         label: 'Account' },
+];
+
+const toolNavItems = [
+  { to: '/tools/motd-generator', icon: Sparkles, label: 'MOTD Generator' },
+  { to: '/tools/logo-generator', icon: Image,    label: 'Logo Generator' },
 ];
 
 export function Sidebar() {
@@ -24,6 +29,7 @@ export function Sidebar() {
   });
   const siteName = settings?.['app.name'] || 'Kretase';
   const logoUrl = settings?.['app.logo'];
+  const aiToolsEnabled = settings?.['features.aiTools'] !== 'false';
 
   const handleLogout = async () => {
     try { await api.post('/auth/logout'); } catch { /* ignore */ }
@@ -76,6 +82,30 @@ export function Sidebar() {
             ))}
           </ul>
         </div>
+
+        {aiToolsEnabled && (
+          <div>
+            <p className="px-3 mb-1.5 text-[9px] font-bold uppercase tracking-widest text-zinc-700">Tools</p>
+            <ul className="space-y-0.5">
+              {toolNavItems.map(({ to, icon: Icon, label }) => (
+                <li key={to}>
+                  <NavLink
+                    to={to}
+                    className={({ isActive }) => cn(
+                      'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-100',
+                      isActive
+                        ? 'text-white bg-white/[0.06] border-l-2 border-white'
+                        : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.03] border-l-2 border-transparent'
+                    )}
+                  >
+                    <Icon size={14} />
+                    <span>{label}</span>
+                  </NavLink>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* Admin panel shortcut — opens in a new tab */}
         {isAdmin && (

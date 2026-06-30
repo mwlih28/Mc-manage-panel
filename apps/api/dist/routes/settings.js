@@ -5,10 +5,11 @@ const prisma_1 = require("../utils/prisma");
 const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
 const DEFAULTS = {
-    'app.name': 'MC Manage Panel',
-    'app.title': 'MC Manage Panel',
+    'app.name': 'Kretase',
+    'app.title': 'Kretase',
     'app.logo': '',
     'app.description': 'High-performance game server management',
+    'features.aiTools': 'true',
 };
 router.get('/', async (_req, res) => {
     try {
@@ -23,7 +24,11 @@ router.get('/', async (_req, res) => {
     }
 });
 router.put('/', auth_1.authenticate, auth_1.requireAdmin, async (req, res) => {
-    const allowed = ['app.name', 'app.title', 'app.logo', 'app.description'];
+    const allowed = [
+        'app.name', 'app.title', 'app.logo', 'app.description',
+        'smtp.host', 'smtp.port', 'smtp.user', 'smtp.pass', 'smtp.from', 'smtp.owner_email',
+        'features.aiTools',
+    ];
     const updates = [];
     for (const key of allowed) {
         if (req.body[key] !== undefined) {

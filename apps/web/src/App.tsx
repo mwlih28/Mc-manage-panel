@@ -7,6 +7,8 @@ import { DashboardPage } from '@/pages/DashboardPage';
 import { ServersPage } from '@/pages/servers/ServersPage';
 import { ServerDetailPage } from '@/pages/servers/ServerDetailPage';
 import { AccountPage } from '@/pages/AccountPage';
+import { MotdGeneratorPage } from '@/pages/tools/MotdGeneratorPage';
+import { LogoGeneratorPage } from '@/pages/tools/LogoGeneratorPage';
 import { AdminOverviewPage } from '@/pages/admin/AdminOverviewPage';
 import { AdminUsersPage } from '@/pages/admin/AdminUsersPage';
 import { AdminNodesPage } from '@/pages/admin/AdminNodesPage';
@@ -41,6 +43,8 @@ export default function App() {
           <Route path="/servers" element={<ServersPage />} />
           <Route path="/servers/:id" element={<ServerDetailPage />} />
           <Route path="/account" element={<AccountPage />} />
+          <Route path="/tools/motd-generator" element={<MotdGeneratorPage />} />
+          <Route path="/tools/logo-generator" element={<LogoGeneratorPage />} />
         </Route>
       </Route>
 

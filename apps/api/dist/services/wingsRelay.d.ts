@@ -13,6 +13,14 @@ export interface ConsoleLine {
     timestamp: number;
 }
 export declare const consoleBuffer: Map<string, ConsoleLine[]>;
+export interface StatsEntry {
+    cpuAbsolute: number;
+    memoryBytes: number;
+    memoryLimitBytes: number;
+    diskBytes: number;
+    timestamp: number;
+}
+export declare const statsBuffer: Map<string, StatsEntry[]>;
 export declare function pushConsoleBuffer(uuid: string, line: ConsoleLine): void;
 export declare function getOrConnectWings(node: NodeInfo, io: SocketServer): Socket;
 export declare function subscribeServerOnWings(nodeId: string, serverUuid: string): void;

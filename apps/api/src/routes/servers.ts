@@ -124,6 +124,13 @@ router.post(
     if (!node) return res.status(422).json({ message: 'Node not found' });
     if (!egg) return res.status(422).json({ message: 'Egg not found' });
 
+    // Minecraft's EULA must be explicitly accepted by whoever is creating the
+    // server — Bedrock servers have no EULA, everything else requires consent.
+    const isBedrockEgg = egg.name.toLowerCase().includes('bedrock') || egg.startup.includes('bedrock_server');
+    if (!isBedrockEgg && env?.EULA_ACCEPTED !== 'true') {
+      return res.status(422).json({ message: 'You must accept the Minecraft EULA to create this server.' });
+    }
+
     // Handle allocation — pick a free one, or auto-create if none exist
     let finalAllocationId = allocationId;
     if (!finalAllocationId) {
