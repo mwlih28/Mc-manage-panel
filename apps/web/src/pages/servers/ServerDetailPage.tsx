@@ -116,10 +116,13 @@ export function ServerDetailPage() {
   const socketRef = useRef<Socket | null>(null);
   const consoleEndRef = useRef<HTMLDivElement>(null);
 
+  const isTransitional = currentStatus === 'STARTING' || currentStatus === 'STOPPING';
+
   const { data, isLoading } = useQuery({
     queryKey: ['server', id],
     queryFn: () => api.get(`/servers/${id}`).then((r) => r.data.data as Server),
     enabled: !!id,
+    refetchInterval: isTransitional ? 3000 : false,
   });
 
   const [currentDir, setCurrentDir] = useState('/');
@@ -269,8 +272,8 @@ export function ServerDetailPage() {
   });
 
   useEffect(() => {
-    if (data) setCurrentStatus(data.status);
-  }, [data]);
+    if (data?.status) setCurrentStatus(data.status as ServerStatus);
+  }, [data?.status]);
 
   // Poll players every 15s when console tab is active
   useEffect(() => {

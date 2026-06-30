@@ -1,6 +1,7 @@
 import { io as ioClient, Socket } from 'socket.io-client';
 import { Server as SocketServer } from 'socket.io';
 import { logger } from '../utils/logger';
+import { prisma } from '../utils/prisma';
 
 interface NodeInfo {
   id: string;
@@ -105,6 +106,13 @@ export function getOrConnectWings(node: NodeInfo, io: SocketServer): Socket {
       const panelStatus = WINGS_TO_PANEL_STATUS[payload.state as string]
         ?? (payload.state as string).toUpperCase();
       relayData = { ...payload, status: panelStatus };
+      // Keep DB in sync when Wings confirms a final state
+      if ((panelStatus === 'RUNNING' || panelStatus === 'OFFLINE') && uuid) {
+        prisma.server.updateMany({
+          where: { uuid },
+          data: { status: panelStatus as 'RUNNING' | 'OFFLINE' },
+        }).catch((err: Error) => logger.warn(`Status sync failed for ${uuid}: ${err.message}`));
+      }
     }
     if (event === 'server:stats') {
       const statsEntry: StatsEntry = {
