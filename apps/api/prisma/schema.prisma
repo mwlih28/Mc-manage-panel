@@ -29,9 +29,10 @@ model User {
   updatedAt    DateTime  @updatedAt
   lastLogin    DateTime?
 
-  servers      Server[]
-  apiKeys      ApiKey[]
-  activities   Activity[]
+  servers        Server[]
+  apiKeys        ApiKey[]
+  activities     Activity[]
+  subUserServers ServerSubUser[]
 }
 
 model Node {
@@ -167,6 +168,9 @@ model Server {
   backups    Backup[]
   databases  Database[]
   activities Activity[]
+  note       ServerNote?
+  subUsers   ServerSubUser[]
+  schedules  ScheduledTask[]
 }
 
 model Backup {
@@ -264,4 +268,43 @@ model InstallerRegistration {
 
   @@index([email])
   @@index([serverIp])
+}
+
+model ServerNote {
+  id        String   @id @default(uuid())
+  serverId  String   @unique
+  content   String   @default("")
+  updatedAt DateTime @updatedAt
+
+  server    Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+}
+
+model ServerSubUser {
+  id          String   @id @default(uuid())
+  serverId    String
+  userId      String
+  permissions String   @default("[]")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  server      Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([serverId, userId])
+}
+
+model ScheduledTask {
+  id             String    @id @default(uuid())
+  serverId       String
+  name           String
+  cronExpression String
+  action         String
+  payload        String    @default("{}")
+  enabled        Boolean   @default(true)
+  lastRun        DateTime?
+  nextRun        DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  server         Server    @relation(fields: [serverId], references: [id], onDelete: Cascade)
 }

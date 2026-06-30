@@ -24,6 +24,17 @@ export interface ConsoleLine {
 const MAX_CONSOLE_BUFFER = 300;
 export const consoleBuffer = new Map<string, ConsoleLine[]>();
 
+export interface StatsEntry {
+  cpuAbsolute: number;
+  memoryBytes: number;
+  memoryLimitBytes: number;
+  diskBytes: number;
+  timestamp: number;
+}
+
+const MAX_STATS_BUFFER = 120;
+export const statsBuffer = new Map<string, StatsEntry[]>();
+
 export function pushConsoleBuffer(uuid: string, line: ConsoleLine): void {
   const buf = consoleBuffer.get(uuid) ?? [];
   buf.push(line);
@@ -96,16 +107,24 @@ export function getOrConnectWings(node: NodeInfo, io: SocketServer): Socket {
       relayData = { ...payload, status: panelStatus };
     }
     if (event === 'server:stats') {
-      relayData = {
-        uuid,
+      const statsEntry: StatsEntry = {
         cpuAbsolute: typeof payload.cpu_absolute === 'number' ? payload.cpu_absolute : 0,
         memoryBytes: typeof payload.memory_bytes === 'number' ? payload.memory_bytes : 0,
         memoryLimitBytes: typeof payload.memory_limit_bytes === 'number' ? payload.memory_limit_bytes : 0,
         diskBytes: typeof payload.disk_bytes === 'number' ? payload.disk_bytes : 0,
+        timestamp: Date.now(),
+      };
+      const sbuf = statsBuffer.get(uuid) ?? [];
+      sbuf.push(statsEntry);
+      if (sbuf.length > MAX_STATS_BUFFER) sbuf.shift();
+      statsBuffer.set(uuid, sbuf);
+
+      relayData = {
+        uuid,
+        ...statsEntry,
         networkRxBytes: typeof payload.network_rx_bytes === 'number' ? payload.network_rx_bytes : 0,
         networkTxBytes: typeof payload.network_tx_bytes === 'number' ? payload.network_tx_bytes : 0,
         uptime: typeof payload.uptime === 'number' ? payload.uptime : 0,
-        timestamp: Date.now(),
       };
     }
     if (event === 'server:console') {

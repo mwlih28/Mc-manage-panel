@@ -733,4 +733,136 @@ router.post('/:id/version', authenticate, async (req: AuthRequest, res: Response
   }
 });
 
+// ─── Server Notes ─────────────────────────────────────────────────────────────
+
+router.get('/:id/notes', authenticate, async (req: AuthRequest, res: Response) => {
+  const isAdmin = req.user!.role === 'ADMIN';
+  const server = await prisma.server.findFirst({
+    where: { id: req.params.id, ...(isAdmin ? {} : { userId: req.user!.id }) },
+  });
+  if (!server) return res.status(404).json({ message: 'Server not found' });
+  const note = await prisma.serverNote.findUnique({ where: { serverId: server.id } });
+  return res.json({ content: note?.content || '' });
+});
+
+router.put('/:id/notes', authenticate, async (req: AuthRequest, res: Response) => {
+  const isAdmin = req.user!.role === 'ADMIN';
+  const server = await prisma.server.findFirst({
+    where: { id: req.params.id, ...(isAdmin ? {} : { userId: req.user!.id }) },
+  });
+  if (!server) return res.status(404).json({ message: 'Server not found' });
+  const note = await prisma.serverNote.upsert({
+    where: { serverId: server.id },
+    create: { serverId: server.id, content: req.body.content || '' },
+    update: { content: req.body.content || '' },
+  });
+  return res.json({ content: note.content });
+});
+
+// ─── Sub-Users ────────────────────────────────────────────────────────────────
+
+router.get('/:id/subusers', authenticate, async (req: AuthRequest, res: Response) => {
+  const isAdmin = req.user!.role === 'ADMIN';
+  const server = await prisma.server.findFirst({
+    where: { id: req.params.id, ...(isAdmin ? {} : { userId: req.user!.id }) },
+  });
+  if (!server) return res.status(404).json({ message: 'Server not found' });
+  const subUsers = await prisma.serverSubUser.findMany({
+    where: { serverId: server.id },
+    include: { user: { select: { id: true, email: true, firstName: true, lastName: true, username: true } } },
+  });
+  return res.json({ data: subUsers });
+});
+
+router.post('/:id/subusers', authenticate, async (req: AuthRequest, res: Response) => {
+  const isAdmin = req.user!.role === 'ADMIN';
+  const server = await prisma.server.findFirst({
+    where: { id: req.params.id, ...(isAdmin ? {} : { userId: req.user!.id }) },
+  });
+  if (!server) return res.status(404).json({ message: 'Server not found' });
+  const { email, permissions } = req.body;
+  const target = await prisma.user.findUnique({ where: { email } });
+  if (!target) return res.status(404).json({ message: 'User not found' });
+  if (target.id === server.userId) return res.status(400).json({ message: 'Cannot add server owner as sub-user' });
+  const su = await prisma.serverSubUser.upsert({
+    where: { serverId_userId: { serverId: server.id, userId: target.id } },
+    create: { serverId: server.id, userId: target.id, permissions: JSON.stringify(permissions || []) },
+    update: { permissions: JSON.stringify(permissions || []) },
+    include: { user: { select: { id: true, email: true, firstName: true, lastName: true, username: true } } },
+  });
+  return res.json(su);
+});
+
+router.delete('/:id/subusers/:userId', authenticate, async (req: AuthRequest, res: Response) => {
+  const isAdmin = req.user!.role === 'ADMIN';
+  const server = await prisma.server.findFirst({
+    where: { id: req.params.id, ...(isAdmin ? {} : { userId: req.user!.id }) },
+  });
+  if (!server) return res.status(404).json({ message: 'Server not found' });
+  await prisma.serverSubUser.deleteMany({ where: { serverId: server.id, userId: req.params.userId } });
+  return res.json({ ok: true });
+});
+
+// ─── Scheduled Tasks ─────────────────────────────────────────────────────────
+
+router.get('/:id/schedules', authenticate, async (req: AuthRequest, res: Response) => {
+  const isAdmin = req.user!.role === 'ADMIN';
+  const server = await prisma.server.findFirst({
+    where: { id: req.params.id, ...(isAdmin ? {} : { userId: req.user!.id }) },
+  });
+  if (!server) return res.status(404).json({ message: 'Server not found' });
+  const schedules = await prisma.scheduledTask.findMany({ where: { serverId: server.id }, orderBy: { createdAt: 'asc' } });
+  return res.json({ data: schedules });
+});
+
+router.post('/:id/schedules', authenticate, async (req: AuthRequest, res: Response) => {
+  const isAdmin = req.user!.role === 'ADMIN';
+  const server = await prisma.server.findFirst({
+    where: { id: req.params.id, ...(isAdmin ? {} : { userId: req.user!.id }) },
+  });
+  if (!server) return res.status(404).json({ message: 'Server not found' });
+  const { name, cronExpression, action, payload, enabled } = req.body;
+  const task = await prisma.scheduledTask.create({
+    data: { serverId: server.id, name, cronExpression, action, payload: JSON.stringify(payload || {}), enabled: enabled !== false },
+  });
+  return res.json(task);
+});
+
+router.put('/:id/schedules/:taskId', authenticate, async (req: AuthRequest, res: Response) => {
+  const isAdmin = req.user!.role === 'ADMIN';
+  const server = await prisma.server.findFirst({
+    where: { id: req.params.id, ...(isAdmin ? {} : { userId: req.user!.id }) },
+  });
+  if (!server) return res.status(404).json({ message: 'Server not found' });
+  const { name, cronExpression, action, payload, enabled } = req.body;
+  const task = await prisma.scheduledTask.update({
+    where: { id: req.params.taskId },
+    data: { name, cronExpression, action, ...(payload !== undefined ? { payload: JSON.stringify(payload) } : {}), ...(enabled !== undefined ? { enabled } : {}) },
+  });
+  return res.json(task);
+});
+
+router.delete('/:id/schedules/:taskId', authenticate, async (req: AuthRequest, res: Response) => {
+  const isAdmin = req.user!.role === 'ADMIN';
+  const server = await prisma.server.findFirst({
+    where: { id: req.params.id, ...(isAdmin ? {} : { userId: req.user!.id }) },
+  });
+  if (!server) return res.status(404).json({ message: 'Server not found' });
+  await prisma.scheduledTask.delete({ where: { id: req.params.taskId } });
+  return res.json({ ok: true });
+});
+
+// ─── Stats History (for graphs) ───────────────────────────────────────────────
+
+router.get('/:id/stats/history', authenticate, async (req: AuthRequest, res: Response) => {
+  const isAdmin = req.user!.role === 'ADMIN';
+  const server = await prisma.server.findFirst({
+    where: { id: req.params.id, ...(isAdmin ? {} : { userId: req.user!.id }) },
+  });
+  if (!server) return res.status(404).json({ message: 'Server not found' });
+  const { statsBuffer } = await import('../services/wingsRelay');
+  const history = statsBuffer.get(server.uuid) ?? [];
+  return res.json({ data: history });
+});
+
 export default router;

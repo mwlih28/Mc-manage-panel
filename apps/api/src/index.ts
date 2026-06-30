@@ -54,11 +54,15 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', version: process.env.PANEL_VERSION || '1.0.0', timestamp: new Date().toISOString() });
 });
 
+// Templates endpoint
+import serverTemplates from './data/serverTemplates.json';
+
 // API routes
 const api = express.Router();
 api.use('/auth', authRoutes);
 api.use('/users', userRoutes);
 api.use('/servers', serverRoutes);
+api.get('/templates', (_req, res) => res.json({ data: serverTemplates }));
 api.use('/servers/:serverId/backups', backupRoutes);
 api.use('/nodes', nodeRoutes);
 api.use('/eggs', eggRoutes);

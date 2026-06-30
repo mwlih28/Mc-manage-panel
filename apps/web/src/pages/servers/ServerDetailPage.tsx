@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -6,7 +6,8 @@ import {
   HardDrive, Archive, ChevronLeft, Cpu, MemoryStick,
   Folder, FolderOpen, File, ChevronRight, ArrowLeft, Pencil, Trash2, Plus, X, Check,
   Package, Users, Search, Download, RefreshCw, Tag, AlertTriangle, Shield, ShieldOff,
-  MapPin, Clock, Sword, Hammer, Footprints, Ban, LogOut, Wifi, Navigation
+  MapPin, Clock, Sword, Hammer, Footprints, Ban, LogOut, Wifi, Navigation,
+  StickyNote, CalendarClock, UserCog, ChevronDown, Save, ArrowRight
 } from 'lucide-react';
 import { io as ioClient, Socket } from 'socket.io-client';
 import api from '@/lib/axios';
@@ -19,7 +20,35 @@ import { Spinner } from '@/components/ui/Spinner';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
-type Tab = 'console' | 'files' | 'plugins' | 'versions' | 'stats' | 'backups' | 'players';
+type Tab = 'console' | 'files' | 'plugins' | 'versions' | 'stats' | 'backups' | 'players' | 'notes' | 'schedule' | 'access';
+
+// ── Schedule types ─────────────────────────────────────────────────────────────
+interface ScheduledTask {
+  id: string;
+  name: string;
+  action: 'command' | 'power' | 'backup';
+  payload?: string;
+  cronExpression: string;
+  enabled: boolean;
+  nextRunAt?: string;
+}
+
+// ── Access / Sub-user types ────────────────────────────────────────────────────
+interface SubUser {
+  id: string;
+  email: string;
+  username?: string;
+  permissions: string[];
+}
+
+// ── Stats history types ────────────────────────────────────────────────────────
+interface StatsHistoryPoint {
+  cpuAbsolute: number;
+  memoryBytes: number;
+  memoryLimitBytes: number;
+  diskBytes: number;
+  timestamp: string | number;
+}
 
 interface ModrinthProject {
   project_id: string;
@@ -134,6 +163,37 @@ export function ServerDetailPage() {
   const [playerActionLoading, setPlayerActionLoading] = useState<string | null>(null);
   const [tpAdminName, setTpAdminName] = useState(() => localStorage.getItem('mcAdminName') || '');
 
+  // ── Notes tab state ──────────────────────────────────────────────────────────
+  const [notesContent, setNotesContent] = useState('');
+  const [notesSavedAt, setNotesSavedAt] = useState<Date | null>(null);
+  const [notesSaving, setNotesSaving] = useState(false);
+  const notesDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Schedule tab state ───────────────────────────────────────────────────────
+  const [schedules, setSchedules] = useState<ScheduledTask[]>([]);
+  const [schedulesLoading, setSchedulesLoading] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [scheduleForm, setScheduleForm] = useState({
+    name: '',
+    action: 'command' as 'command' | 'power' | 'backup',
+    command: '',
+    powerAction: 'restart' as 'start' | 'stop' | 'restart' | 'kill',
+    cronExpression: '',
+    enabled: true,
+  });
+  const [savingSchedule, setSavingSchedule] = useState(false);
+  const [deletingSchedule, setDeletingSchedule] = useState<string | null>(null);
+
+  // ── Access tab state ─────────────────────────────────────────────────────────
+  const [subUsers, setSubUsers] = useState<SubUser[]>([]);
+  const [subUsersLoading, setSubUsersLoading] = useState(false);
+  const [accessEmail, setAccessEmail] = useState('');
+  const [accessPerms, setAccessPerms] = useState({
+    console: false, files: false, power: false, players: false, backups: false,
+  });
+  const [addingAccess, setAddingAccess] = useState(false);
+  const [removingAccess, setRemovingAccess] = useState<string | null>(null);
+
   const { data: filesData, isLoading: filesLoading, refetch: refetchFiles } = useQuery({
     queryKey: ['server-files', id, currentDir],
     queryFn: () => api.get(`/servers/${id}/files`, { params: { directory: currentDir } }).then((r) => r.data),
@@ -185,6 +245,27 @@ export function ServerDetailPage() {
     queryKey: ['server-backups', id],
     queryFn: () => api.get(`/servers/${id}/backups`).then((r) => r.data.data),
     enabled: activeTab === 'backups' && !!id,
+  });
+
+  // Notes: load when tab activates
+  const { data: notesData } = useQuery({
+    queryKey: ['server-notes', id],
+    queryFn: () => api.get(`/servers/${id}/notes`).then((r) => r.data),
+    enabled: activeTab === 'notes' && !!id,
+  });
+
+  useEffect(() => {
+    if (notesData) {
+      setNotesContent(notesData.content ?? notesData.notes ?? '');
+    }
+  }, [notesData]);
+
+  // Stats history
+  const { data: statsHistory } = useQuery({
+    queryKey: ['server-stats-history', id],
+    queryFn: () => api.get(`/servers/${id}/stats/history`).then((r) => r.data),
+    enabled: activeTab === 'stats' && !!id,
+    refetchInterval: activeTab === 'stats' ? 10000 : false,
   });
 
   useEffect(() => {
@@ -505,6 +586,129 @@ export function ServerDetailPage() {
     }
   };
 
+  // ── Notes handlers ────────────────────────────────────────────────────────────
+  const saveNotes = useCallback(async (content: string) => {
+    setNotesSaving(true);
+    try {
+      await api.put(`/servers/${id}/notes`, { content });
+      setNotesSavedAt(new Date());
+    } catch {
+      toast.error('Failed to save notes');
+    } finally {
+      setNotesSaving(false);
+    }
+  }, [id]);
+
+  const handleNotesChange = (val: string) => {
+    setNotesContent(val);
+    if (notesDebounceRef.current) clearTimeout(notesDebounceRef.current);
+    notesDebounceRef.current = setTimeout(() => saveNotes(val), 1500);
+  };
+
+  // ── Schedule handlers ─────────────────────────────────────────────────────────
+  const loadSchedules = async () => {
+    setSchedulesLoading(true);
+    try {
+      const { data: sd } = await api.get(`/servers/${id}/schedules`);
+      setSchedules(sd.data ?? sd ?? []);
+    } catch {
+      setSchedules([]);
+    } finally {
+      setSchedulesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'schedule' && id) loadSchedules();
+  }, [activeTab, id]);
+
+  const createSchedule = async () => {
+    setSavingSchedule(true);
+    try {
+      const payload: Record<string, unknown> = {
+        name: scheduleForm.name,
+        action: scheduleForm.action,
+        cronExpression: scheduleForm.cronExpression,
+        enabled: scheduleForm.enabled,
+      };
+      if (scheduleForm.action === 'command') payload.payload = scheduleForm.command;
+      if (scheduleForm.action === 'power') payload.payload = scheduleForm.powerAction;
+      await api.post(`/servers/${id}/schedules`, payload);
+      toast.success('Schedule created');
+      setShowScheduleModal(false);
+      setScheduleForm({ name: '', action: 'command', command: '', powerAction: 'restart', cronExpression: '', enabled: true });
+      loadSchedules();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Failed to create schedule';
+      toast.error(msg);
+    } finally {
+      setSavingSchedule(false);
+    }
+  };
+
+  const deleteSchedule = async (scheduleId: string) => {
+    setDeletingSchedule(scheduleId);
+    try {
+      await api.delete(`/servers/${id}/schedules/${scheduleId}`);
+      toast.success('Schedule deleted');
+      setSchedules(prev => prev.filter(s => s.id !== scheduleId));
+    } catch {
+      toast.error('Failed to delete schedule');
+    } finally {
+      setDeletingSchedule(null);
+    }
+  };
+
+  // ── Access handlers ───────────────────────────────────────────────────────────
+  const loadSubUsers = async () => {
+    setSubUsersLoading(true);
+    try {
+      const { data: su } = await api.get(`/servers/${id}/subusers`);
+      setSubUsers(su.data ?? su ?? []);
+    } catch {
+      setSubUsers([]);
+    } finally {
+      setSubUsersLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'access' && id) loadSubUsers();
+  }, [activeTab, id]);
+
+  const addSubUser = async () => {
+    if (!accessEmail.trim()) return;
+    setAddingAccess(true);
+    try {
+      const perms = Object.entries(accessPerms)
+        .filter(([, v]) => v)
+        .map(([k]) => k);
+      await api.post(`/servers/${id}/subusers`, { email: accessEmail.trim(), permissions: perms });
+      toast.success('Access granted');
+      setAccessEmail('');
+      setAccessPerms({ console: false, files: false, power: false, players: false, backups: false });
+      loadSubUsers();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Failed to add user';
+      toast.error(msg);
+    } finally {
+      setAddingAccess(false);
+    }
+  };
+
+  const removeSubUser = async (userId: string) => {
+    setRemovingAccess(userId);
+    try {
+      await api.delete(`/servers/${id}/subusers/${userId}`);
+      toast.success('Access removed');
+      setSubUsers(prev => prev.filter(u => u.id !== userId));
+    } catch {
+      toast.error('Failed to remove access');
+    } finally {
+      setRemovingAccess(null);
+    }
+  };
+
   const sendCommand = (e: React.FormEvent) => {
     e.preventDefault();
     if (!command.trim() || !socketRef.current) return;
@@ -668,7 +872,7 @@ export function ServerDetailPage() {
       {/* Tabs */}
       <div className="border-b border-dark-800 overflow-x-auto">
         <div className="flex gap-1 min-w-max">
-          {(['console', 'files', 'plugins', 'versions', 'stats', 'backups', 'players'] as Tab[]).map((tab) => (
+          {(['console', 'files', 'plugins', 'versions', 'stats', 'backups', 'players', 'notes', 'schedule', 'access'] as Tab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -686,6 +890,9 @@ export function ServerDetailPage() {
               {tab === 'stats' && <BarChart2 size={14} className="inline mr-1.5" />}
               {tab === 'backups' && <Archive size={14} className="inline mr-1.5" />}
               {tab === 'players' && <Users size={14} className="inline mr-1.5" />}
+              {tab === 'notes' && <StickyNote size={14} className="inline mr-1.5" />}
+              {tab === 'schedule' && <CalendarClock size={14} className="inline mr-1.5" />}
+              {tab === 'access' && <UserCog size={14} className="inline mr-1.5" />}
               {tab}
             </button>
           ))}
@@ -1081,6 +1288,16 @@ export function ServerDetailPage() {
 
       {/* Stats Tab */}
       {activeTab === 'stats' && (
+        <div className="space-y-4">
+          {/* Resource Sparklines */}
+          <div className="card card-body">
+            <h3 className="text-sm font-semibold text-slate-300 mb-3">Resource Usage (last 2 minutes)</h3>
+            <StatsSparklines history={(statsHistory?.data ?? []) as StatsHistoryPoint[]} />
+            <div className="flex gap-4 mt-3 text-xs text-slate-500">
+              <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-0.5 bg-green-400 rounded" /> CPU %</span>
+              <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-0.5 bg-blue-400 rounded" /> RAM %</span>
+            </div>
+          </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="card card-body">
             <h3 className="text-sm font-semibold text-slate-300 mb-4">Server Information</h3>
@@ -1110,6 +1327,7 @@ export function ServerDetailPage() {
               <InfoRow label="Backup Limit" value={String(data.backupLimit)} />
             </dl>
           </div>
+        </div>
         </div>
       )}
 
@@ -1234,6 +1452,305 @@ export function ServerDetailPage() {
           </div>
         );
       })()}
+
+      {/* Notes Tab */}
+      {activeTab === 'notes' && (
+        <div className="card">
+          <div className="card-header flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <StickyNote size={14} className="text-slate-400" />
+              <h3 className="text-sm font-semibold text-slate-100">Server Notes</h3>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              {notesSaving && <><Spinner size="sm" /><span>Saving...</span></>}
+              {!notesSaving && notesSavedAt && (
+                <span className="flex items-center gap-1"><Save size={11} /> Saved {notesSavedAt.toLocaleTimeString()}</span>
+              )}
+            </div>
+          </div>
+          <div className="p-4">
+            <p className="text-xs text-slate-500 mb-3">Notes are auto-saved after 1.5 seconds. Only visible to you.</p>
+            <textarea
+              className="w-full h-72 bg-dark-950 border border-slate-700/50 rounded-lg p-3 font-mono text-sm text-slate-300 resize-y focus:outline-none focus:border-panel-500/50 transition-colors"
+              placeholder="Write your notes here... (e.g. admin credentials, mod list, server notes)"
+              value={notesContent}
+              onChange={(e) => handleNotesChange(e.target.value)}
+              spellCheck={false}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Schedule Tab */}
+      {activeTab === 'schedule' && (
+        <div className="space-y-4">
+          <div className="card">
+            <div className="card-header flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CalendarClock size={14} className="text-slate-400" />
+                <h3 className="text-sm font-semibold text-slate-100">Scheduled Tasks</h3>
+              </div>
+              <button className="btn-primary btn-sm" onClick={() => setShowScheduleModal(true)}>
+                <Plus size={13} /> New Task
+              </button>
+            </div>
+            {schedulesLoading ? (
+              <div className="flex justify-center py-10"><Spinner /></div>
+            ) : schedules.length === 0 ? (
+              <div className="p-10 text-center text-slate-500">
+                <CalendarClock size={32} className="mx-auto mb-2 opacity-20" />
+                <p className="text-sm">No scheduled tasks</p>
+                <p className="text-xs mt-1">Create tasks to automate server actions</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-dark-800/50">
+                {schedules.map((task) => (
+                  <div key={task.id} className="flex items-center gap-3 px-5 py-3.5">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-medium text-slate-200">{task.name}</p>
+                        <span className={cn(
+                          'text-[10px] px-1.5 py-0.5 rounded-full font-medium uppercase tracking-wide',
+                          task.enabled ? 'bg-green-500/15 text-green-400' : 'bg-slate-700/50 text-slate-500'
+                        )}>
+                          {task.enabled ? 'Enabled' : 'Disabled'}
+                        </span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-dark-700 text-slate-400 uppercase tracking-wide">
+                          {task.action}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 mt-0.5 text-xs text-slate-500 flex-wrap">
+                        <span className="font-mono">{task.cronExpression}</span>
+                        {task.payload && <span>→ {task.payload}</span>}
+                        {task.nextRunAt && (
+                          <span className="flex items-center gap-1">
+                            <Clock size={10} />
+                            Next: {new Date(task.nextRunAt).toLocaleString()}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      className="p-1.5 text-slate-500 hover:text-red-400 transition-colors"
+                      onClick={() => deleteSchedule(task.id)}
+                      disabled={deletingSchedule === task.id}
+                      title="Delete task"
+                    >
+                      {deletingSchedule === task.id ? <Spinner size="sm" /> : <Trash2 size={13} />}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Schedule Create Modal */}
+      {showScheduleModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowScheduleModal(false)}>
+          <div className="bg-dark-800 border border-dark-600 rounded-xl w-full max-w-lg shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-dark-700">
+              <h3 className="text-slate-100 font-semibold">New Scheduled Task</h3>
+              <button className="text-slate-500 hover:text-slate-300" onClick={() => setShowScheduleModal(false)}><X size={18} /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="label">Task Name</label>
+                <input
+                  className="input w-full"
+                  placeholder="e.g. Daily restart"
+                  value={scheduleForm.name}
+                  onChange={(e) => setScheduleForm(f => ({ ...f, name: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="label">Action</label>
+                <select
+                  className="input w-full"
+                  value={scheduleForm.action}
+                  onChange={(e) => setScheduleForm(f => ({ ...f, action: e.target.value as typeof scheduleForm.action }))}
+                >
+                  <option value="command">Run Command</option>
+                  <option value="power">Power Action</option>
+                  <option value="backup">Create Backup</option>
+                </select>
+              </div>
+              {scheduleForm.action === 'command' && (
+                <div>
+                  <label className="label">Command</label>
+                  <input
+                    className="input w-full font-mono"
+                    placeholder="say Server restarting in 5 minutes"
+                    value={scheduleForm.command}
+                    onChange={(e) => setScheduleForm(f => ({ ...f, command: e.target.value }))}
+                  />
+                </div>
+              )}
+              {scheduleForm.action === 'power' && (
+                <div>
+                  <label className="label">Power Action</label>
+                  <select
+                    className="input w-full"
+                    value={scheduleForm.powerAction}
+                    onChange={(e) => setScheduleForm(f => ({ ...f, powerAction: e.target.value as typeof scheduleForm.powerAction }))}
+                  >
+                    <option value="start">Start</option>
+                    <option value="stop">Stop</option>
+                    <option value="restart">Restart</option>
+                    <option value="kill">Kill</option>
+                  </select>
+                </div>
+              )}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="label mb-0">Cron Expression</label>
+                  <div className="flex gap-1 flex-wrap">
+                    {[
+                      { label: 'Every hour', value: '0 * * * *' },
+                      { label: 'Daily 3am', value: '0 3 * * *' },
+                      { label: 'Sunday 4am', value: '0 4 * * 0' },
+                    ].map(preset => (
+                      <button
+                        key={preset.value}
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-dark-700 text-slate-400 hover:text-panel-400 hover:bg-dark-600 transition-colors"
+                        onClick={() => setScheduleForm(f => ({ ...f, cronExpression: preset.value }))}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <input
+                  className="input w-full font-mono"
+                  placeholder="0 3 * * * (every day at 3am)"
+                  value={scheduleForm.cronExpression}
+                  onChange={(e) => setScheduleForm(f => ({ ...f, cronExpression: e.target.value }))}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  role="switch"
+                  aria-checked={scheduleForm.enabled}
+                  onClick={() => setScheduleForm(f => ({ ...f, enabled: !f.enabled }))}
+                  className={cn(
+                    'relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none',
+                    scheduleForm.enabled ? 'bg-panel-500' : 'bg-dark-600'
+                  )}
+                >
+                  <span className={cn(
+                    'inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform',
+                    scheduleForm.enabled ? 'translate-x-4' : 'translate-x-0.5'
+                  )} />
+                </button>
+                <span className="text-sm text-slate-300">Enabled</span>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 px-6 py-4 border-t border-dark-700">
+              <button className="btn-secondary btn-sm" onClick={() => setShowScheduleModal(false)}>Cancel</button>
+              <button
+                className="btn-primary btn-sm"
+                disabled={savingSchedule || !scheduleForm.name.trim() || !scheduleForm.cronExpression.trim()}
+                onClick={createSchedule}
+              >
+                {savingSchedule ? <Spinner size="sm" /> : <><Check size={13} /> Create Task</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Access Tab */}
+      {activeTab === 'access' && (
+        <div className="space-y-4">
+          {/* Add sub-user */}
+          <div className="card">
+            <div className="card-header flex items-center gap-2">
+              <UserCog size={14} className="text-slate-400" />
+              <h3 className="text-sm font-semibold text-slate-100">Grant Server Access</h3>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="label">User Email</label>
+                <input
+                  className="input w-full"
+                  type="email"
+                  placeholder="user@example.com"
+                  value={accessEmail}
+                  onChange={(e) => setAccessEmail(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="label mb-2">Permissions</label>
+                <div className="flex flex-wrap gap-3">
+                  {(['console', 'files', 'power', 'players', 'backups'] as const).map(perm => (
+                    <label key={perm} className="flex items-center gap-1.5 cursor-pointer text-sm text-slate-300">
+                      <input
+                        type="checkbox"
+                        className="rounded border-dark-600 bg-dark-700 text-panel-500 focus:ring-panel-500 focus:ring-offset-dark-800"
+                        checked={accessPerms[perm]}
+                        onChange={(e) => setAccessPerms(p => ({ ...p, [perm]: e.target.checked }))}
+                      />
+                      <span className="capitalize">{perm}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <button
+                className="btn-primary btn-sm"
+                disabled={addingAccess || !accessEmail.trim()}
+                onClick={addSubUser}
+              >
+                {addingAccess ? <Spinner size="sm" /> : <><Plus size={13} /> Grant Access</>}
+              </button>
+            </div>
+          </div>
+
+          {/* Sub-users list */}
+          <div className="card">
+            <div className="card-header">
+              <h3 className="text-sm font-semibold text-slate-100">Users with Access</h3>
+            </div>
+            {subUsersLoading ? (
+              <div className="flex justify-center py-10"><Spinner /></div>
+            ) : subUsers.length === 0 ? (
+              <div className="p-10 text-center text-slate-500">
+                <Users size={32} className="mx-auto mb-2 opacity-20" />
+                <p className="text-sm">No sub-users</p>
+                <p className="text-xs mt-1">Add users above to grant access to this server</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-dark-800/50">
+                {subUsers.map((user) => (
+                  <div key={user.id} className="flex items-center gap-3 px-5 py-3.5">
+                    <div className="h-8 w-8 rounded-full bg-panel-500/20 flex items-center justify-center text-panel-400 text-xs font-bold uppercase shrink-0">
+                      {user.email[0]}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-200 truncate">{user.email}</p>
+                      <div className="flex flex-wrap gap-1 mt-0.5">
+                        {(user.permissions || []).map(perm => (
+                          <span key={perm} className="text-[10px] px-1.5 py-0.5 rounded-full bg-dark-700 text-slate-400 capitalize">{perm}</span>
+                        ))}
+                        {(!user.permissions || user.permissions.length === 0) && (
+                          <span className="text-[10px] text-slate-600">No permissions</span>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      className="btn-danger btn-sm shrink-0"
+                      disabled={removingAccess === user.id}
+                      onClick={() => removeSubUser(user.id)}
+                    >
+                      {removingAccess === user.id ? <Spinner size="sm" /> : <><Trash2 size={12} /> Remove</>}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Inventory Modal (console tab quick view — Java only) */}
       {!isBedrock && inventoryPlayer && !selectedPlayer && (
