@@ -1085,6 +1085,281 @@ footer {
   font-weight: 600;
 }
 
+/* ── WHAT IS KRETASE ──────────────────────────────────────── */
+.what-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 64px;
+  align-items: start;
+}
+
+.what-text h2 {
+  font-size: clamp(26px, 3.5vw, 40px);
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: -0.8px;
+  line-height: 1.15;
+  margin-bottom: 20px;
+}
+
+.what-text p {
+  font-size: 15px;
+  color: var(--muted);
+  line-height: 1.75;
+  margin-bottom: 14px;
+}
+
+.what-text strong { color: var(--text); font-weight: 600; }
+
+.what-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.what-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.what-list li svg { color: var(--green); flex-shrink: 0; }
+
+.what-visual {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: sticky;
+  top: 80px;
+}
+
+.what-card {
+  background: #0d1117;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.wc-header {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: #161b22;
+}
+
+.wc-server {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(26, 34, 48, 0.5);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+}
+
+.wc-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  flex-shrink: 0;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+}
+
+.wc-dot.off { background: #374151; box-shadow: none; }
+
+.wc-name { color: var(--text); flex: 1; }
+.wc-stat { color: var(--muted); font-size: 11px; }
+.wc-server.offline .wc-name { color: var(--muted); }
+
+.wc-footer {
+  padding: 10px 16px;
+  font-size: 11px;
+  color: var(--muted);
+  background: rgba(22, 27, 34, 0.5);
+}
+
+.what-card-sm {
+  background: #0d1117;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.wcs-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+
+.wcs-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(26, 34, 48, 0.5);
+  color: var(--muted);
+}
+
+.wcs-row:last-child { border-bottom: none; }
+.wcs-row .ok { color: var(--green); font-weight: 600; }
+
+/* ── NEWSLETTER ───────────────────────────────────────────── */
+.newsletter-box {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 64px;
+  align-items: start;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 56px;
+}
+
+.nl-left h2 {
+  font-size: clamp(24px, 3vw, 36px);
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: -0.8px;
+  margin-bottom: 14px;
+}
+
+.nl-left > p {
+  font-size: 15px;
+  color: var(--muted);
+  line-height: 1.7;
+  margin-bottom: 24px;
+}
+
+.nl-promises {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.nl-promises li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.nl-promises li svg { color: var(--accent); flex-shrink: 0; }
+
+.nl-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.nl-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nl-field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.nl-field .req { color: var(--rose); }
+
+.nl-field input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 11px 14px;
+  font-size: 14px;
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+  outline: none;
+  transition: border-color .2s, box-shadow .2s;
+}
+
+.nl-field input::placeholder { color: #374151; }
+.nl-field input:focus { border-color: rgba(34, 211, 238, 0.4); box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.08); }
+
+.nl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--accent);
+  color: #000;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 13px 24px;
+  border-radius: 9px;
+  border: none;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  transition: opacity .2s, transform .2s;
+}
+
+.nl-btn:hover { opacity: 0.88; transform: translateY(-1px); }
+.nl-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+.nl-note {
+  font-size: 12px;
+  color: #374151;
+  line-height: 1.5;
+}
+
+.nl-note a { color: var(--muted); text-decoration: none; }
+.nl-note a:hover { color: var(--text); }
+
+.nl-success {
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+  padding: 32px 16px;
+  color: var(--green);
+}
+
+.nl-success h3 { font-size: 20px; font-weight: 700; color: #fff; }
+.nl-success p { font-size: 14px; color: var(--muted); }
+
+/* ── FOOTER LINK VISIBILITY ───────────────────────────────── */
+.footer-col a {
+  display: block;
+  font-size: 13px;
+  color: #8899b0;
+  text-decoration: none;
+  margin-bottom: 10px;
+  transition: color .2s;
+}
+
+.footer-col a:hover { color: #fff; }
+
+.footer-col h4 {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 16px;
+  letter-spacing: 0.02em;
+}
+
 /* ── RESPONSIVE ───────────────────────────────────────────── */
 @media (max-width: 1024px) {
   .features-grid { grid-template-columns: repeat(2, 1fr); }
@@ -1093,6 +1368,9 @@ footer {
   .steps-terminal { position: static; }
   .footer-top { grid-template-columns: 1fr; gap: 40px; }
   .footer-cols { grid-template-columns: repeat(2, 1fr); }
+  .what-grid { grid-template-columns: 1fr; gap: 40px; }
+  .what-visual { position: static; }
+  .newsletter-box { grid-template-columns: 1fr; gap: 40px; padding: 40px; }
 }
 
 @media (max-width: 768px) {

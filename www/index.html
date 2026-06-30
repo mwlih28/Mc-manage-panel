@@ -22,6 +22,7 @@
         <span class="logo-text">Kretase</span>
       </a>
       <div class="nav-links">
+        <a href="#about">About</a>
         <a href="#features">Features</a>
         <a href="#how-it-works">How it works</a>
         <a href="#community">Community</a>
@@ -39,6 +40,7 @@
       </button>
     </div>
     <div class="mobile-menu" id="mobileMenu">
+      <a href="#about">About</a>
       <a href="#features">Features</a>
       <a href="#how-it-works">How it works</a>
       <a href="#community">Community</a>
@@ -105,13 +107,53 @@
     </div>
   </div>
 
+  <!-- WHAT IS KRETASE -->
+  <section class="section section-alt" id="about">
+    <div class="container">
+      <div class="what-grid">
+        <div class="what-text">
+          <div class="section-tag">What is Kretase?</div>
+          <h2>Your own Pterodactyl,<br/>built with modern tools</h2>
+          <p>Kretase is a <strong>self-hosted game server management panel</strong> — think Pterodactyl, but built on a modern TypeScript stack you can actually read and modify.</p>
+          <p>You install it on your own Linux server in one command. It sets up Nginx, PostgreSQL, SSL certificates, and a web panel automatically. From there, you can deploy Minecraft servers (and more game types soon) from a clean browser interface — without touching the command line again.</p>
+          <p>The <strong>Wings daemon</strong> runs on each game node, giving you Docker-isolated, resource-limited containers per server. Every server gets its own CPU/RAM limit, its own file system, and its own console — visible live in the browser.</p>
+          <ul class="what-list">
+            <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> 100% open source — fork it, modify it, own it</li>
+            <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> One command installs everything end-to-end</li>
+            <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> Docker isolation — no server can crash another</li>
+            <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> Real-time console, live stats, file manager in browser</li>
+            <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> JWT auth + 2FA + role-based access control</li>
+            <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> Runs on Ubuntu 20/22/24 and Debian 11/12</li>
+          </ul>
+        </div>
+        <div class="what-visual">
+          <div class="what-card">
+            <div class="wc-header">Panel Dashboard</div>
+            <div class="wc-server online"><span class="wc-dot"></span><span class="wc-name">Survival SMP</span><span class="wc-stat">CPU 12% · 1.2 GB</span></div>
+            <div class="wc-server online"><span class="wc-dot"></span><span class="wc-name">Creative World</span><span class="wc-stat">CPU 4% · 512 MB</span></div>
+            <div class="wc-server offline"><span class="wc-dot off"></span><span class="wc-name">Minigames Hub</span><span class="wc-stat">Offline</span></div>
+            <div class="wc-server online"><span class="wc-dot"></span><span class="wc-name">Skyblock</span><span class="wc-stat">CPU 8% · 800 MB</span></div>
+            <div class="wc-footer">4 servers · 3 online · Node: VPS-1</div>
+          </div>
+          <div class="what-card-sm">
+            <div class="wcs-label">Wings Daemon</div>
+            <div class="wcs-row"><span>Docker</span><span class="ok">Running</span></div>
+            <div class="wcs-row"><span>Panel connection</span><span class="ok">Connected</span></div>
+            <div class="wcs-row"><span>Available RAM</span><span>14.2 GB</span></div>
+            <div class="wcs-row"><span>Disk free</span><span>180 GB</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- FEATURES -->
   <section class="section" id="features">
     <div class="container">
       <div class="section-header">
         <div class="section-tag">Features</div>
         <h2>Everything you need to run<br/>game servers at scale</h2>
-        <p class="section-sub">Built for server owners who want power without complexity. No PHP, no bloat — just a clean modern stack.</p>
+        <p class="section-sub">Built for server owners who want power without complexity. No PHP, no bloat — just a clean modern stack that does exactly what you need.</p>
       </div>
       <div class="features-grid">
         <div class="feat-card feat-large">
@@ -420,6 +462,46 @@
     </div>
   </section>
 
+  <!-- NEWSLETTER -->
+  <section class="section" id="newsletter">
+    <div class="container">
+      <div class="newsletter-box">
+        <div class="nl-left">
+          <div class="section-tag">Stay Updated</div>
+          <h2>Get notified about new releases</h2>
+          <p>We send occasional emails when a new version drops — update commands, changelogs, and what changed. No spam, ever. Unsubscribe anytime.</p>
+          <ul class="nl-promises">
+            <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> New version announcements</li>
+            <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> One-click update commands</li>
+            <li><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> Security notices when relevant</li>
+          </ul>
+        </div>
+        <div class="nl-right">
+          <form class="nl-form" id="nlForm" onsubmit="submitNewsletter(event)">
+            <div class="nl-field">
+              <label>Your name</label>
+              <input type="text" id="nlName" placeholder="Server Admin" autocomplete="name" />
+            </div>
+            <div class="nl-field">
+              <label>Email address <span class="req">*</span></label>
+              <input type="email" id="nlEmail" placeholder="admin@yourserver.com" required autocomplete="email" />
+            </div>
+            <button type="submit" class="nl-btn" id="nlBtn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+              Subscribe
+            </button>
+            <p class="nl-note">We use <a href="https://resend.com" target="_blank">Resend</a> to send emails. No third-party tracking.</p>
+          </form>
+          <div class="nl-success" id="nlSuccess" style="display:none">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M20 6L9 17l-5-5"/></svg>
+            <h3>You're in!</h3>
+            <p>We'll email you when the next version of Kretase is released.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- CTA -->
   <section class="section section-cta" id="install">
     <div class="container">
@@ -495,7 +577,9 @@
           <div class="footer-col">
             <h4>Legal</h4>
             <a href="https://github.com/mwlih28/mc-manage-panel/blob/main/LICENSE" target="_blank">MIT License</a>
-            <a href="mailto:contact@kretase.com">Contact</a>
+            <a href="https://github.com/mwlih28/mc-manage-panel/blob/main/README.md" target="_blank">Privacy</a>
+            <a href="mailto:contact@kretase.com">Contact Us</a>
+            <a href="#newsletter">Newsletter</a>
           </div>
         </div>
       </div>
@@ -529,6 +613,24 @@
         item.classList.add('active');
       });
     });
+    async function submitNewsletter(e) {
+      e.preventDefault();
+      const btn = document.getElementById('nlBtn');
+      const email = document.getElementById('nlEmail').value.trim();
+      const name = document.getElementById('nlName').value.trim();
+      if (!email) return;
+      btn.disabled = true;
+      btn.textContent = 'Subscribing...';
+      try {
+        await fetch('https://mcpanel.app.n8n.cloud/webhook/mc-panel-register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, name, source: 'newsletter', notifyUpdates: true })
+        });
+      } catch (_) {}
+      document.getElementById('nlForm').style.display = 'none';
+      document.getElementById('nlSuccess').style.display = 'flex';
+    }
   </script>
 </body>
 </html>
