@@ -38,10 +38,10 @@ router.get('/contents', async (req: Request, res: Response) => {
 // POST /api/servers/:uuid/files/write
 router.post('/write', async (req: Request, res: Response) => {
   const { uuid } = req.params;
-  const { file, content } = req.body;
+  const { file, content, encoding } = req.body;
   if (!file) return res.status(422).json({ message: 'File path required' });
   try {
-    await writeFile(uuid, file, content || '');
+    await writeFile(uuid, file, content || '', encoding === 'base64' ? 'base64' : 'utf8');
     return res.json({ message: 'File saved' });
   } catch (err) {
     return res.status(500).json({ message: (err as Error).message });

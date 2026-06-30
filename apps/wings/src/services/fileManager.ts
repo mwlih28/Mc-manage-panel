@@ -65,7 +65,7 @@ export async function readFile(uuid: string, filePath: string): Promise<string> 
   return fs.readFileSync(target, 'utf8');
 }
 
-export async function writeFile(uuid: string, filePath: string, content: string): Promise<void> {
+export async function writeFile(uuid: string, filePath: string, content: string, encoding: 'utf8' | 'base64' = 'utf8'): Promise<void> {
   const root = getServerRoot(uuid);
   const target = safePath(root, filePath);
   const dir = path.dirname(target);
@@ -76,7 +76,8 @@ export async function writeFile(uuid: string, filePath: string, content: string)
   if (fs.existsSync(target)) {
     try { fs.unlinkSync(target); } catch { /* fall through */ }
   }
-  fs.writeFileSync(target, content, { encoding: 'utf8', mode: 0o666 });
+  const data = encoding === 'base64' ? Buffer.from(content, 'base64') : content;
+  fs.writeFileSync(target, data, { mode: 0o666 });
   logger.debug(`File written: ${filePath} for server ${uuid}`);
 }
 

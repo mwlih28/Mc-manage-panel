@@ -89,3 +89,25 @@ export function logoSpecToSvgString(spec: LogoSpec, gradId: string): string {
   <text x="100" y="106" text-anchor="middle" dominant-baseline="middle" font-family="'Segoe UI', system-ui, sans-serif" font-weight="800" font-size="92" fill="#ffffff">${letter}</text>
 </svg>`;
 }
+
+// Rasterizes the SVG to a square PNG via <canvas> — used to apply a logo as the
+// server's server-icon.png (Minecraft requires a real PNG, not SVG).
+export function svgToPngDataUrl(svg: string, size = 64): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new window.Image();
+    const svgBlob = new Blob([svg], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(svgBlob);
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { URL.revokeObjectURL(url); reject(new Error('Canvas not supported')); return; }
+      ctx.drawImage(img, 0, 0, size, size);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Failed to render logo')); };
+    img.src = url;
+  });
+}

@@ -52,6 +52,7 @@ export function MotdGeneratorPage() {
     queryFn: () => api.get('/servers', { params: { perPage: 100 } }).then((r) => r.data.data as Server[]),
   });
 
+  const [serverId, setServerId] = useState('');
   const [serverName, setServerName] = useState('');
   const [theme, setTheme] = useState<MotdTheme>('random');
   const [results, setResults] = useState<string[]>([]);
@@ -61,7 +62,30 @@ export function MotdGeneratorPage() {
 
   const enabled = settings?.['features.aiTools'] !== 'false';
 
-  const generate = () => setResults(generateMotd(serverName, theme));
+  const { data: currentPropertiesData } = useQuery({
+    queryKey: ['server-properties-motd', serverId],
+    queryFn: () => api.get(`/servers/${serverId}/files/contents`, { params: { file: 'server.properties' } }).then((r) => r.data),
+    enabled: !!serverId,
+  });
+  const currentMotd: string | null = (() => {
+    const content: string = currentPropertiesData?.content || '';
+    const line = content.split('\n').find((l: string) => l.startsWith('motd='));
+    return line ? line.slice(5).replace(/\\n/g, '\n') : null;
+  })();
+
+  const pickServer = (id: string) => {
+    setServerId(id);
+    const s = (serversData || []).find((sv) => sv.id === id);
+    if (s) setServerName(s.name);
+  };
+
+  const generate = () => {
+    const motds = generateMotd(serverName, theme);
+    setResults(motds);
+    if (serverId) {
+      setApplyTarget(Object.fromEntries(motds.map((_, i) => [i, serverId])));
+    }
+  };
 
   const copyMotd = (motd: string, idx: number) => {
     navigator.clipboard.writeText(motd);
@@ -117,7 +141,16 @@ export function MotdGeneratorPage() {
       </div>
 
       <div className="card p-5 space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <label className="label">Server (optional)</label>
+            <select className="input" value={serverId} onChange={(e) => pickServer(e.target.value)}>
+              <option value="">None — just generate</option>
+              {(serversData || []).map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </div>
           <div>
             <label className="label">Server Name</label>
             <input
@@ -136,6 +169,12 @@ export function MotdGeneratorPage() {
             </select>
           </div>
         </div>
+        {serverId && currentMotd && (
+          <div>
+            <p className="text-xs text-slate-500 mb-1.5">Current MOTD</p>
+            <MotdPreview motd={currentMotd} />
+          </div>
+        )}
         <button className="btn-primary" onClick={generate}>
           <RefreshCw size={14} /> Generate MOTDs
         </button>

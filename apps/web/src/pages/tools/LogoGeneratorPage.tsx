@@ -1,13 +1,17 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Sparkles, RefreshCw, Download, Lock } from 'lucide-react';
+import { Sparkles, RefreshCw, Download, Lock, ImagePlus } from 'lucide-react';
 import api from '@/lib/axios';
-import { generateLogos, logoSpecToSvgString, LogoSpec } from '@/lib/logoGenerator';
+import { Server } from '@/types';
+import { generateLogos, logoSpecToSvgString, svgToPngDataUrl, LogoSpec } from '@/lib/logoGenerator';
 import { Spinner } from '@/components/ui/Spinner';
+import { cn } from '@/lib/utils';
+import toast from 'react-hot-toast';
 
-function LogoCard({ spec, index }: { spec: LogoSpec; index: number }) {
+function LogoCard({ spec, index, targetServerId }: { spec: LogoSpec; index: number; targetServerId: string }) {
   const gradId = `kretase-logo-grad-${index}`;
   const svg = logoSpecToSvgString(spec, gradId);
+  const [applying, setApplying] = useState(false);
 
   const download = () => {
     const blob = new Blob([svg], { type: 'image/svg+xml' });
@@ -19,11 +23,37 @@ function LogoCard({ spec, index }: { spec: LogoSpec; index: number }) {
     URL.revokeObjectURL(url);
   };
 
+  const applyAsIcon = async () => {
+    if (!targetServerId) { toast.error('Select a server first'); return; }
+    setApplying(true);
+    try {
+      const dataUrl = await svgToPngDataUrl(svg, 64);
+      const base64 = dataUrl.split(',')[1];
+      await api.post(`/servers/${targetServerId}/files/write`, {
+        file: 'server-icon.png',
+        content: base64,
+        encoding: 'base64',
+      });
+      toast.success('Applied as server icon — restart the server for it to take effect');
+    } catch {
+      toast.error('Failed to apply icon');
+    } finally {
+      setApplying(false);
+    }
+  };
+
   return (
     <div className="card p-4 flex flex-col items-center gap-3">
       <div className="w-32 h-32" dangerouslySetInnerHTML={{ __html: svg }} />
       <button className="btn-secondary btn-sm w-full" onClick={download}>
         <Download size={13} /> Download SVG
+      </button>
+      <button
+        className={cn('btn-secondary btn-sm w-full', !targetServerId && 'opacity-50 cursor-not-allowed')}
+        disabled={!targetServerId || applying}
+        onClick={applyAsIcon}
+      >
+        {applying ? <Spinner size="sm" /> : <><ImagePlus size={13} /> Apply as Server Icon</>}
       </button>
     </div>
   );
@@ -36,10 +66,22 @@ export function LogoGeneratorPage() {
     staleTime: 60000,
   });
 
+  const { data: serversData } = useQuery({
+    queryKey: ['my-servers-for-tools'],
+    queryFn: () => api.get('/servers', { params: { perPage: 100 } }).then((r) => r.data.data as Server[]),
+  });
+
+  const [serverId, setServerId] = useState('');
   const [serverName, setServerName] = useState('');
   const [logos, setLogos] = useState<LogoSpec[]>([]);
 
   const enabled = settings?.['features.aiTools'] !== 'false';
+
+  const pickServer = (id: string) => {
+    setServerId(id);
+    const s = (serversData || []).find((sv) => sv.id === id);
+    if (s) setServerName(s.name);
+  };
 
   const generate = () => setLogos(generateLogos(serverName, 6));
 
@@ -63,19 +105,31 @@ export function LogoGeneratorPage() {
         <h1 className="text-xl font-bold text-slate-100 flex items-center gap-2">
           <Sparkles size={18} className="text-panel-400" /> Logo Generator
         </h1>
-        <p className="text-slate-400 text-sm mt-1">Generate a logo for your server — pick a name and we'll create a few options.</p>
+        <p className="text-slate-400 text-sm mt-1">Generate a logo for your server and apply it directly as the in-game server icon.</p>
       </div>
 
       <div className="card p-5 space-y-4">
-        <div>
-          <label className="label">Server Name</label>
-          <input
-            className="input"
-            value={serverName}
-            onChange={(e) => setServerName(e.target.value)}
-            placeholder="My Server"
-          />
-          <p className="text-xs text-slate-600 mt-1">The first letter is used as the logo's initial.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="label">Server (optional)</label>
+            <select className="input" value={serverId} onChange={(e) => pickServer(e.target.value)}>
+              <option value="">None — just generate</option>
+              {(serversData || []).map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+            <p className="text-xs text-slate-600 mt-1">Pick a server to apply a logo directly as its server-icon.png.</p>
+          </div>
+          <div>
+            <label className="label">Server Name</label>
+            <input
+              className="input"
+              value={serverName}
+              onChange={(e) => setServerName(e.target.value)}
+              placeholder="My Server"
+            />
+            <p className="text-xs text-slate-600 mt-1">The first letter is used as the logo's initial.</p>
+          </div>
         </div>
         <button className="btn-primary" onClick={generate}>
           <RefreshCw size={14} /> Generate Logos
@@ -85,7 +139,7 @@ export function LogoGeneratorPage() {
       {logos.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           {logos.map((spec, i) => (
-            <LogoCard key={i} spec={spec} index={i} />
+            <LogoCard key={i} spec={spec} index={i} targetServerId={serverId} />
           ))}
         </div>
       )}

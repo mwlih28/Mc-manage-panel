@@ -62,7 +62,7 @@ async function readFile(uuid, filePath) {
         throw new Error('File too large to edit (>5MB)');
     return fs_1.default.readFileSync(target, 'utf8');
 }
-async function writeFile(uuid, filePath, content) {
+async function writeFile(uuid, filePath, content, encoding = 'utf8') {
     const root = getServerRoot(uuid);
     const target = safePath(root, filePath);
     const dir = path_1.default.dirname(target);
@@ -75,7 +75,8 @@ async function writeFile(uuid, filePath, content) {
         }
         catch { /* fall through */ }
     }
-    fs_1.default.writeFileSync(target, content, { encoding: 'utf8', mode: 0o666 });
+    const data = encoding === 'base64' ? Buffer.from(content, 'base64') : content;
+    fs_1.default.writeFileSync(target, data, { mode: 0o666 });
     logger_1.logger.debug(`File written: ${filePath} for server ${uuid}`);
 }
 async function deleteFiles(uuid, filePaths) {

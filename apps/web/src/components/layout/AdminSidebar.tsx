@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Server, Users, Cpu, Package,
-  Activity, Wrench, LogOut, ChevronLeft, Download
+  Activity, Wrench, LogOut, ChevronLeft
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { cn } from '@/lib/utils';
@@ -16,7 +16,6 @@ const adminNavItems = [
   { to: '/admin/nodes',    icon: Cpu,             label: 'Nodes' },
   { to: '/admin/eggs',     icon: Package,         label: 'Eggs' },
   { to: '/admin/activity',   icon: Activity,  label: 'Activity' },
-  { to: '/admin/installers', icon: Download,  label: 'Installers' },
   { to: '/admin/settings',   icon: Wrench,    label: 'Settings' },
 ];
 
