@@ -75,8 +75,9 @@ export function WorldManager({ serverId }: { serverId: string }) {
     try {
       const { data } = await api.get(`/servers/${serverId}/worlds`);
       setWorlds(data.worlds || []);
-    } catch {
-      toast.error('Failed to load worlds');
+    } catch (err) {
+      const message = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
+      toast.error(message || 'Failed to load worlds');
     } finally {
       setLoading(false);
     }
@@ -95,8 +96,9 @@ export function WorldManager({ serverId }: { serverId: string }) {
       const { data } = await api.get('/curseforge/worlds/search', { params: { query: debouncedQuery, index, pageSize: 20 } });
       setResults((prev) => (append ? [...prev, ...(data.results ?? [])] : (data.results ?? [])));
       setTotalHits(data.totalCount ?? 0);
-    } catch {
-      toast.error('Failed to search premade worlds');
+    } catch (err) {
+      const message = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
+      toast.error(message || 'Failed to search premade worlds');
     } finally {
       setSearching(false);
       setLoadingMore(false);

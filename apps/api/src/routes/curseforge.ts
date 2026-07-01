@@ -2,8 +2,15 @@ import { Router, Response } from 'express';
 import { authenticate } from '../middleware/auth';
 import { AuthRequest } from '../types';
 import { searchWorlds, getWorldFiles, isCurseForgeConfigured } from '../services/curseforgeApi';
+import { logger } from '../utils/logger';
 
 const router = Router();
+
+function describeError(err: unknown): string {
+  const e = err as { message?: string; response?: { status?: number; data?: unknown } };
+  if (e.response) return `HTTP ${e.response.status}: ${JSON.stringify(e.response.data)}`;
+  return e.message || 'Unknown error';
+}
 
 router.get('/status', authenticate, async (_req: AuthRequest, res: Response) => {
   return res.json({ configured: await isCurseForgeConfigured() });
@@ -18,6 +25,7 @@ router.get('/worlds/search', authenticate, async (req: AuthRequest, res: Respons
     const result = await searchWorlds(query, index, pageSize);
     return res.json(result);
   } catch (err) {
+    logger.error(`CurseForge world search failed: ${describeError(err)}`);
     return res.status(502).json({ message: (err as Error).message || 'CurseForge search failed' });
   }
 });
@@ -29,6 +37,7 @@ router.get('/worlds/:modId/files', authenticate, async (req: AuthRequest, res: R
     const files = await getWorldFiles(modId);
     return res.json({ files });
   } catch (err) {
+    logger.error(`CurseForge world files fetch failed: ${describeError(err)}`);
     return res.status(502).json({ message: (err as Error).message || 'Failed to fetch world files' });
   }
 });
