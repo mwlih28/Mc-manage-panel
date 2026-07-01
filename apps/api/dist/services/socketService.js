@@ -103,10 +103,15 @@ function initSocketServer(httpServer, corsOrigin) {
             const isAdmin = socket.data.user?.role === 'ADMIN';
             const server = await prisma_1.prisma.server.findFirst({
                 where: { id: serverId, ...(isAdmin ? {} : { userId: socket.data.user?.id }) },
-                include: { node: true },
+                include: { node: true, egg: true },
             });
             if (!server)
                 return;
+            const isBedrockEgg = server.egg.name.toLowerCase().includes('bedrock') || server.egg.startup.includes('bedrock_server');
+            if (action === 'start' && !isBedrockEgg && !server.eulaAccepted) {
+                socket.emit('error', 'EULA_NOT_ACCEPTED');
+                return;
+            }
             const transitStatus = {
                 start: 'STARTING', stop: 'STOPPING', restart: 'STOPPING', kill: 'OFFLINE',
             };

@@ -122,6 +122,7 @@ export interface Server {
   startup: string;
   image: string;
   env: string;
+  eulaAccepted: boolean;
   databaseLimit: number;
   allocationLimit: number;
   backupLimit: number;

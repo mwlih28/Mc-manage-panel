@@ -197,7 +197,16 @@ interface ServerTemplate {
   memory?: number;
   disk?: number;
   cpu?: number;
+  env?: Record<string, string>;
 }
+
+// Maps a template's SERVER_TYPE env value to the matching egg's name, so
+// picking a template also selects the right egg instead of leaving whatever
+// (or nothing) was previously selected.
+const TEMPLATE_SERVER_TYPE_TO_EGG_NAME: Record<string, string> = {
+  PAPER: 'paper',
+  BEDROCK: 'minecraft bedrock',
+};
 
 function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const [form, setForm] = useState({
@@ -208,7 +217,7 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
   const [paperVersions, setPaperVersions] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
-  const [eulaAccepted, setEulaAccepted] = useState(false);
+  const [templateEnv, setTemplateEnv] = useState<Record<string, string>>({});
 
   // Fetch templates
   const { data: templatesData } = useQuery({
@@ -247,16 +256,9 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isBedrockEgg && !eulaAccepted) {
-      toast.error('You must accept the Minecraft EULA to create this server');
-      return;
-    }
     setIsLoading(true);
     try {
-      const res = await api.post('/servers', {
-        ...form,
-        env: { EULA_ACCEPTED: eulaAccepted ? 'true' : 'false' },
-      });
+      const res = await api.post('/servers', { ...form, env: templateEnv });
       const serverId: string = res.data?.data?.id;
       // Install selected Paper version right after creation (only for Paper egg)
       if (isPaperEgg && serverId && paperVersion && paperVersion !== 'latest') {
@@ -284,12 +286,27 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
 
   const applyTemplate = (template: ServerTemplate) => {
     setSelectedTemplate(template.id);
+    setTemplateEnv(template.env || {});
+
+    // Match the template's SERVER_TYPE to an actual egg so creating from a
+    // template doesn't leave the egg (and therefore the install script)
+    // unset — that was leaving MC_VERSION unpassed and install scripts
+    // failing on templated servers.
+    const serverType = template.env?.SERVER_TYPE;
+    const eggNameMatch = serverType ? TEMPLATE_SERVER_TYPE_TO_EGG_NAME[serverType] : undefined;
+    const matchedEgg = eggNameMatch ? eggs.find((e) => e.name.toLowerCase() === eggNameMatch) : undefined;
+
     setForm(prev => ({
       ...prev,
       memory: template.memory ? String(template.memory) : prev.memory,
       disk: template.disk ? String(template.disk) : prev.disk,
       cpu: template.cpu !== undefined ? String(template.cpu) : prev.cpu,
+      eggId: matchedEgg ? matchedEgg.id : prev.eggId,
     }));
+
+    if (serverType && !matchedEgg) {
+      toast.error(`No egg found for ${serverType} — pick one manually`);
+    }
   };
 
   return (
@@ -413,32 +430,14 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
         </div>
 
         {!isBedrockEgg && (
-          <label className="flex items-start gap-2.5 p-3 rounded-lg bg-zinc-900/60 border border-zinc-800 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={eulaAccepted}
-              onChange={(e) => setEulaAccepted(e.target.checked)}
-              className="mt-0.5 accent-panel-500"
-            />
-            <span className="text-xs text-zinc-400">
-              I have read and accept the{' '}
-              <a
-                href="https://www.minecraft.net/en-us/eula"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-panel-400 hover:underline"
-                onClick={(e) => e.stopPropagation()}
-              >
-                Minecraft EULA
-              </a>
-              . The server will not start until this is accepted.
-            </span>
-          </label>
+          <p className="text-xs text-zinc-500 p-3 rounded-lg bg-zinc-900/60 border border-zinc-800">
+            The server owner will be asked to accept the Minecraft EULA the first time they start this server.
+          </p>
         )}
 
         <div className="flex gap-3 pt-2">
           <button type="button" className="btn-secondary flex-1" onClick={onClose}>Cancel</button>
-          <button type="submit" className="btn-primary flex-1" disabled={isLoading || (!isBedrockEgg && !eulaAccepted)}>
+          <button type="submit" className="btn-primary flex-1" disabled={isLoading}>
             {isLoading ? <Spinner size="sm" /> : 'Create Server'}
           </button>
         </div>

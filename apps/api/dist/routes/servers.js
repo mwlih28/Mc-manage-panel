@@ -141,12 +141,10 @@ router.post('/', auth_1.authenticate, auth_1.requireAdmin, [
         return res.status(422).json({ message: 'Node not found' });
     if (!egg)
         return res.status(422).json({ message: 'Egg not found' });
-    // Minecraft's EULA must be explicitly accepted by whoever is creating the
-    // server — Bedrock servers have no EULA, everything else requires consent.
+    // EULA is accepted by the server's owner on first start, not by whoever
+    // (often an admin) provisions the server on their behalf — see
+    // POST /servers/:id/accept-eula.
     const isBedrockEgg = egg.name.toLowerCase().includes('bedrock') || egg.startup.includes('bedrock_server');
-    if (!isBedrockEgg && env?.EULA_ACCEPTED !== 'true') {
-        return res.status(422).json({ message: 'You must accept the Minecraft EULA to create this server.' });
-    }
     // Handle allocation + server creation atomically — claiming a "free" port
     // and creating the server must happen in the same transaction, otherwise
     // two concurrent requests can both read the same allocation as free
@@ -415,13 +413,17 @@ router.post('/:id/power', auth_1.authenticate, async (req, res) => {
             id: req.params.id,
             ...(isAdmin ? {} : { userId: req.user.id }),
         },
-        include: { node: true },
+        include: { node: true, egg: true },
     });
     if (!server)
         return res.status(404).json({ message: 'Server not found' });
     const { action } = req.body;
     if (!['start', 'stop', 'restart', 'kill'].includes(action)) {
         return res.status(422).json({ message: 'Invalid power action' });
+    }
+    const isBedrockEgg = server.egg.name.toLowerCase().includes('bedrock') || server.egg.startup.includes('bedrock_server');
+    if (action === 'start' && !isBedrockEgg && !server.eulaAccepted) {
+        return res.status(409).json({ message: 'EULA_NOT_ACCEPTED', code: 'EULA_NOT_ACCEPTED' });
     }
     const statusMap = {
         start: 'STARTING',
@@ -451,6 +453,22 @@ router.post('/:id/power', auth_1.authenticate, async (req, res) => {
         },
     });
     return res.json({ message: `Server ${action} command sent` });
+});
+// POST /servers/:id/accept-eula — the server's owner (or an admin) accepts the
+// Minecraft EULA on first start. Writes eula.txt directly via Wings so it's
+// in place before the start command is ever sent.
+router.post('/:id/accept-eula', auth_1.authenticate, async (req, res) => {
+    const ctx = await getWingsClient(req.params.id, req.user.id, req.user.role === 'ADMIN');
+    if (!ctx)
+        return res.status(404).json({ message: 'Server not found' });
+    try {
+        await ctx.client.post(`/servers/${ctx.server.uuid}/files/write`, { file: 'eula.txt', content: 'eula=true\n' });
+        await prisma_1.prisma.server.update({ where: { id: ctx.server.id }, data: { eulaAccepted: true } });
+        return res.json({ message: 'EULA accepted' });
+    }
+    catch (err) {
+        return res.status(502).json({ message: `Could not write eula.txt: ${err.message}` });
+    }
 });
 // POST /servers/:id/command - Send console command
 router.post('/:id/command', auth_1.authenticate, async (req, res) => {

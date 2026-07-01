@@ -159,6 +159,7 @@ model Server {
   startup         String
   image           String
   env             String   @default("{}")
+  eulaAccepted    Boolean  @default(false)
   databaseLimit   Int      @default(0)
   allocationLimit Int      @default(0)
   backupLimit     Int      @default(0)

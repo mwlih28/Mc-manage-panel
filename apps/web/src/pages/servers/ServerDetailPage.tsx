@@ -142,6 +142,8 @@ export function ServerDetailPage() {
   const [stats, setStats] = useState<ServerStats | null>(null);
   const [currentStatus, setCurrentStatus] = useState<ServerStatus>('OFFLINE');
   const [ipCopied, setIpCopied] = useState(false);
+  const [showEulaModal, setShowEulaModal] = useState(false);
+  const [acceptingEula, setAcceptingEula] = useState(false);
   const socketRef = useRef<Socket | null>(null);
   const consoleEndRef = useRef<HTMLDivElement>(null);
 
@@ -503,6 +505,10 @@ export function ServerDetailPage() {
       socket.emit('server:subscribe', id);
     });
 
+    socket.on('error', (message: string) => {
+      if (message === 'EULA_NOT_ACCEPTED') setShowEulaModal(true);
+    });
+
     socket.on('server:status', (msg: { status?: ServerStatus; state?: string; serverId?: string }) => {
       const newStatus = (msg.status || (msg.state ? msg.state.toUpperCase() : undefined)) as ServerStatus | undefined;
       if (newStatus) {
@@ -750,8 +756,27 @@ export function ServerDetailPage() {
 
   const sendPower = (action: string) => {
     if (!socketRef.current) return;
+    if (action === 'start' && !isBedrock && !data?.eulaAccepted) {
+      setShowEulaModal(true);
+      return;
+    }
     socketRef.current.emit('server:power', { serverId: id, action });
     toast.success(`Server ${action} command sent`);
+  };
+
+  const acceptEulaAndStart = async () => {
+    setAcceptingEula(true);
+    try {
+      await api.post(`/servers/${id}/accept-eula`);
+      queryClient.setQueryData(['server', id], (old: Server | undefined) => old ? { ...old, eulaAccepted: true } : old);
+      setShowEulaModal(false);
+      socketRef.current?.emit('server:power', { serverId: id, action: 'start' });
+      toast.success('EULA accepted — starting server');
+    } catch {
+      toast.error('Failed to accept EULA');
+    } finally {
+      setAcceptingEula(false);
+    }
   };
 
   const copyAddress = (address: string) => {
@@ -2011,6 +2036,27 @@ export function ServerDetailPage() {
                   </section>
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EULA acceptance modal — asked of the server owner on first start */}
+      {showEulaModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowEulaModal(false)}>
+          <div className="bg-dark-800 border border-dark-600 rounded-xl w-full max-w-md mx-4 p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-base font-semibold text-slate-100 mb-2">Accept the Minecraft EULA</h3>
+            <p className="text-sm text-slate-400 mb-4">
+              Before this server can start for the first time, you (the server owner) need to accept the{' '}
+              <a href="https://www.minecraft.net/en-us/eula" target="_blank" rel="noopener noreferrer" className="text-panel-400 hover:underline">
+                Minecraft End User License Agreement
+              </a>.
+            </p>
+            <div className="flex gap-3">
+              <button className="btn-secondary flex-1" onClick={() => setShowEulaModal(false)}>Cancel</button>
+              <button className="btn-primary flex-1" onClick={acceptEulaAndStart} disabled={acceptingEula}>
+                {acceptingEula ? <Spinner size="sm" /> : 'Accept & Start'}
+              </button>
             </div>
           </div>
         </div>
