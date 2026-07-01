@@ -81,13 +81,22 @@ The script will ask for:
 ## Features
 
 - **Server Management** — Create, start, stop, restart, kill game servers
-- **Real-time Console** — Live server output + command input via WebSocket
+- **Real-time Console** — Live server output + command input via WebSocket, with history replay on reconnect
 - **Resource Monitoring** — CPU, RAM, disk stats streamed from Wings nodes
+- **Plugin Manager** — Search, install, update, enable/disable Paper/Spigot/Bukkit plugins directly from Modrinth — no manual `.jar` uploads needed
+- **Mod Manager** — Same experience for Fabric mods, with automatic loader/Minecraft-version matching
+- **Version Manager** — Browse and switch Paper versions/builds with changelog view, downgrade protection, and an optional pre-install backup
+- **World Manager** — Manage local worlds (switch active world, export/download, delete) and browse/install premade worlds (castles, mansions, and more) from CurseForge
 - **Backup System** — Create and restore server backups
+- **Player Management** — Online/offline player list, ban/kick/IP-ban, inventory & ender chest viewer
+- **EULA Consent Flow** — Server owner explicitly accepts/declines Mojang's EULA on first start
+- **Scheduled Tasks** — Cron-based power actions and console commands per server
+- **Subuser Access Control** — Grant other users scoped access to a server
+- **AI Tools** — MOTD and server logo generators; free built-in algorithm by default, optional real AI generation (OpenAI/Gemini/Anthropic) using the admin's own API key
+- **Password Reset** — Self-service reset via the panel owner's own configured SMTP
 - **User Management** — Admin and user roles, create/edit/delete users
 - **Node Management** — Add Wings nodes, manage port allocations
-- **Egg System** — Server configuration templates (Minecraft Paper, Bedrock, Vanilla, BungeeCord, Velocity, and more)
-- **Plugin Support** — Paper/Spigot/Bukkit plugins work out of the box; drop `.jar` files into the server's `plugins/` folder via the file manager or SFTP
+- **Egg System** — Server configuration templates (Minecraft Paper, Bedrock, Vanilla, Fabric, BungeeCord, Velocity, and more)
 - **Activity Log** — Full audit trail of panel actions
 - **JWT Authentication** — Access + refresh token pair, secure bcrypt hashing
 - **Dark UI** — Modern responsive dark-themed interface
@@ -135,6 +144,20 @@ The **Panel** is the web UI + API, installed once.
 1. **Admin → Servers → New Server**
 2. Pick a node, allocation, egg (e.g. Minecraft Paper), resource limits
 3. Click Create — Wings downloads the egg and starts the container
+
+---
+
+## Updating
+
+```bash
+# On the panel server:
+bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/update-panel.sh)
+
+# On each Wings node:
+bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/update-wings.sh)
+```
+
+Both scripts back up what needs backing up, pull the latest code, rebuild, and restart — your `.env`, `config.yml`, and database are left untouched. Run the Wings updater on every node after updating the panel, since panel releases sometimes ship new Wings-side functionality.
 
 ---
 
@@ -250,8 +273,8 @@ Planned features — contributions welcome:
 
 - [ ] **2FA / TOTP support** — Two-factor authentication for panel accounts
 - [ ] **Discord webhook notifications** — Server state changes, alerts, and activity events pushed to a Discord channel
-- [ ] **Scheduled tasks** — Cron-based power actions and commands (e.g. nightly restarts, scheduled backups)
-- [ ] **Plugin marketplace browser** — Browse and install popular Bukkit/Spigot/Paper plugins directly from the panel UI
+- [ ] **Multi-language UI** — Language switcher (English, Chinese, and more)
+- [ ] **Billing/subscriptions** — Plan-based server provisioning with automated payments
 - [ ] **More egg presets** — Counter-Strike 2, ARK, Rust, Terraria, and community-contributed eggs via a marketplace
 
 ---
