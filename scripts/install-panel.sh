@@ -575,7 +575,8 @@ NGINX
 ln -sf /etc/nginx/sites-available/kretase /etc/nginx/sites-enabled/kretase
 rm -f /etc/nginx/sites-enabled/default
 nginx -t
-systemctl reload nginx
+systemctl enable nginx --quiet
+systemctl reload-or-restart nginx
 success "Nginx configured for ${PANEL_DOMAIN}"
 
 # ── SSL ───────────────────────────────────────────────────────────────
@@ -623,7 +624,7 @@ HOOK
       warn "Certbot failed — restoring original nginx config."
       cp /etc/nginx/sites-available/kretase.bak /etc/nginx/sites-available/kretase
       rm -f /etc/nginx/sites-available/kretase.bak
-      nginx -t && systemctl reload nginx
+      nginx -t && systemctl reload-or-restart nginx
     fi
   fi
 fi
@@ -638,7 +639,7 @@ if [[ "$SSL_ATTEMPTED" = "true" && "$SSL_OK" != "true" ]]; then
   SAFE_DOMAIN="${PANEL_DOMAIN//./\\.}"
   sed -i "s|CORS_ORIGIN=http://${SAFE_DOMAIN}|CORS_ORIGIN=http://${SERVER_IP}|" "${PANEL_DIR}/apps/api/.env"
   sed -i "s|APP_URL=http://${SAFE_DOMAIN}|APP_URL=http://${SERVER_IP}|" "${PANEL_DIR}/apps/api/.env"
-  nginx -t && systemctl reload nginx
+  nginx -t && systemctl reload-or-restart nginx
   systemctl restart kretase
   PANEL_DOMAIN="${SERVER_IP}"
 fi
