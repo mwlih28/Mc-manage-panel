@@ -23,7 +23,7 @@ const PROVIDER_KEY_SETTING: Record<string, string> = {
 // Keys safe to expose without authentication (sidebar/login branding, public
 // feature flags). Everything else (SMTP creds, AI provider keys) is stripped
 // out below unless the request comes from a logged-in admin.
-const PUBLIC_KEYS = new Set(['app.name', 'app.title', 'app.logo', 'app.description', 'features.aiTools', 'ai.provider', 'ai.configured']);
+const PUBLIC_KEYS = new Set(['app.name', 'app.title', 'app.logo', 'app.description', 'features.aiTools', 'ai.provider', 'ai.configured', 'curseforge.configured']);
 
 router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
@@ -32,6 +32,7 @@ router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
     for (const r of rows) settings[r.key] = r.value;
     const providerKey = PROVIDER_KEY_SETTING[settings['ai.provider']] || 'ai.openaiKey';
     settings['ai.configured'] = settings[providerKey] ? 'true' : 'false';
+    settings['curseforge.configured'] = settings['curseforge.apiKey'] ? 'true' : 'false';
 
     if (req.user?.role !== 'ADMIN') {
       for (const key of Object.keys(settings)) {
@@ -52,6 +53,7 @@ router.put('/', authenticate, requireAdmin, async (req: AuthRequest, res: Respon
     'app.name', 'app.title', 'app.logo', 'app.description',
     'smtp.host', 'smtp.port', 'smtp.user', 'smtp.pass', 'smtp.from', 'smtp.owner_email',
     'features.aiTools', 'ai.provider', 'ai.openaiKey', 'ai.geminiKey', 'ai.anthropicKey',
+    'curseforge.apiKey',
   ];
   const updates: Array<{ key: string; value: string }> = [];
   for (const key of allowed) {

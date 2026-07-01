@@ -10,9 +10,16 @@ exports.deleteFiles = deleteFiles;
 exports.createDirectory = createDirectory;
 exports.renameFile = renameFile;
 exports.createBackup = createBackup;
+exports.listWorlds = listWorlds;
+exports.getActiveWorldName = getActiveWorldName;
+exports.setActiveWorldName = setActiveWorldName;
+exports.installWorldFromZipFile = installWorldFromZipFile;
+exports.createWorldZipStream = createWorldZipStream;
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
+const os_1 = __importDefault(require("os"));
 const archiver_1 = __importDefault(require("archiver"));
+const extract_zip_1 = __importDefault(require("extract-zip"));
 const config_1 = require("../config");
 const logger_1 = require("../utils/logger");
 function getServerRoot(uuid) {
@@ -122,5 +129,123 @@ async function createBackup(uuid, name, ignored) {
         });
         archive.finalize();
     });
+}
+// ── World management ──────────────────────────────────────────────────────────
+function dirSizeSync(dir) {
+    let total = 0;
+    let entries;
+    try {
+        entries = fs_1.default.readdirSync(dir, { withFileTypes: true });
+    }
+    catch {
+        return 0;
+    }
+    for (const entry of entries) {
+        const full = path_1.default.join(dir, entry.name);
+        if (entry.isDirectory())
+            total += dirSizeSync(full);
+        else if (entry.isFile()) {
+            try {
+                total += fs_1.default.statSync(full).size;
+            }
+            catch { /* ignore races with concurrent writes */ }
+        }
+    }
+    return total;
+}
+// A world folder is one containing level.dat at its root. Downloaded world
+// zips commonly wrap the actual world in a single named subfolder, so this
+// checks the given dir and, failing that, one level of subdirectories.
+function findLevelDatRoot(dir) {
+    if (fs_1.default.existsSync(path_1.default.join(dir, 'level.dat')))
+        return dir;
+    let entries;
+    try {
+        entries = fs_1.default.readdirSync(dir, { withFileTypes: true });
+    }
+    catch {
+        return null;
+    }
+    for (const entry of entries) {
+        if (entry.isDirectory()) {
+            const sub = path_1.default.join(dir, entry.name);
+            if (fs_1.default.existsSync(path_1.default.join(sub, 'level.dat')))
+                return sub;
+        }
+    }
+    return null;
+}
+async function listWorlds(uuid) {
+    const root = getServerRoot(uuid);
+    const active = getActiveWorldName(uuid);
+    if (!fs_1.default.existsSync(root))
+        return [];
+    const entries = fs_1.default.readdirSync(root, { withFileTypes: true });
+    const worlds = [];
+    for (const entry of entries) {
+        if (!entry.isDirectory())
+            continue;
+        const full = path_1.default.join(root, entry.name);
+        if (fs_1.default.existsSync(path_1.default.join(full, 'level.dat'))) {
+            worlds.push({ name: entry.name, size: dirSizeSync(full), active: entry.name === active });
+        }
+    }
+    return worlds;
+}
+function getActiveWorldName(uuid) {
+    const root = getServerRoot(uuid);
+    const propsPath = path_1.default.join(root, 'server.properties');
+    if (!fs_1.default.existsSync(propsPath))
+        return 'world';
+    const content = fs_1.default.readFileSync(propsPath, 'utf8');
+    const match = content.match(/^level-name=(.*)$/m);
+    return match ? match[1].trim() || 'world' : 'world';
+}
+async function setActiveWorldName(uuid, worldName) {
+    const root = getServerRoot(uuid);
+    const propsPath = path_1.default.join(root, 'server.properties');
+    let content = fs_1.default.existsSync(propsPath) ? fs_1.default.readFileSync(propsPath, 'utf8') : '';
+    if (/^level-name=.*$/m.test(content)) {
+        content = content.replace(/^level-name=.*$/m, `level-name=${worldName}`);
+    }
+    else {
+        content += `${content.endsWith('\n') || content === '' ? '' : '\n'}level-name=${worldName}\n`;
+    }
+    fs_1.default.writeFileSync(propsPath, content, { mode: 0o666 });
+}
+// Downloads happen via a URL fetched by the route handler into a temp zip
+// file — this just handles extraction, world-root detection, and placing it
+// under the server as a new world folder.
+async function installWorldFromZipFile(uuid, zipPath, worldName) {
+    const root = getServerRoot(uuid);
+    const safeName = worldName.replace(/[^a-zA-Z0-9._-]/g, '_') || 'world';
+    const target = safePath(root, safeName);
+    if (fs_1.default.existsSync(target))
+        throw new Error(`A world named "${safeName}" already exists`);
+    const tmpDir = path_1.default.join(os_1.default.tmpdir(), `mc_world_${Date.now()}_${uuid}`);
+    fs_1.default.mkdirSync(tmpDir, { recursive: true });
+    try {
+        await (0, extract_zip_1.default)(zipPath, { dir: tmpDir });
+        const worldRoot = findLevelDatRoot(tmpDir);
+        if (!worldRoot)
+            throw new Error('No level.dat found in the downloaded world archive');
+        fs_1.default.mkdirSync(target, { recursive: true });
+        fs_1.default.cpSync(worldRoot, target, { recursive: true });
+        logger_1.logger.info(`World "${safeName}" installed for ${uuid}`);
+    }
+    finally {
+        fs_1.default.rmSync(tmpDir, { recursive: true, force: true });
+    }
+}
+function createWorldZipStream(uuid, worldName) {
+    const root = getServerRoot(uuid);
+    const worldPath = safePath(root, worldName);
+    if (!fs_1.default.existsSync(path_1.default.join(worldPath, 'level.dat'))) {
+        throw new Error('Not a valid world folder');
+    }
+    const archive = (0, archiver_1.default)('zip', { zlib: { level: 6 } });
+    archive.directory(worldPath, worldName);
+    archive.finalize();
+    return archive;
 }
 //# sourceMappingURL=fileManager.js.map

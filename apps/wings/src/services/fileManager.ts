@@ -1,6 +1,8 @@
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import archiver from 'archiver';
+import extractZip from 'extract-zip';
 import { getConfig } from '../config';
 import { logger } from '../utils/logger';
 
@@ -136,4 +138,122 @@ export async function createBackup(uuid: string, name: string, ignored: string[]
 
     archive.finalize();
   });
+}
+
+// ── World management ──────────────────────────────────────────────────────────
+
+function dirSizeSync(dir: string): number {
+  let total = 0;
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return 0;
+  }
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) total += dirSizeSync(full);
+    else if (entry.isFile()) {
+      try { total += fs.statSync(full).size; } catch { /* ignore races with concurrent writes */ }
+    }
+  }
+  return total;
+}
+
+// A world folder is one containing level.dat at its root. Downloaded world
+// zips commonly wrap the actual world in a single named subfolder, so this
+// checks the given dir and, failing that, one level of subdirectories.
+function findLevelDatRoot(dir: string): string | null {
+  if (fs.existsSync(path.join(dir, 'level.dat'))) return dir;
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      const sub = path.join(dir, entry.name);
+      if (fs.existsSync(path.join(sub, 'level.dat'))) return sub;
+    }
+  }
+  return null;
+}
+
+export interface WorldEntry {
+  name: string;
+  size: number;
+  active: boolean;
+}
+
+export async function listWorlds(uuid: string): Promise<WorldEntry[]> {
+  const root = getServerRoot(uuid);
+  const active = getActiveWorldName(uuid);
+  if (!fs.existsSync(root)) return [];
+  const entries = fs.readdirSync(root, { withFileTypes: true });
+  const worlds: WorldEntry[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const full = path.join(root, entry.name);
+    if (fs.existsSync(path.join(full, 'level.dat'))) {
+      worlds.push({ name: entry.name, size: dirSizeSync(full), active: entry.name === active });
+    }
+  }
+  return worlds;
+}
+
+export function getActiveWorldName(uuid: string): string {
+  const root = getServerRoot(uuid);
+  const propsPath = path.join(root, 'server.properties');
+  if (!fs.existsSync(propsPath)) return 'world';
+  const content = fs.readFileSync(propsPath, 'utf8');
+  const match = content.match(/^level-name=(.*)$/m);
+  return match ? match[1].trim() || 'world' : 'world';
+}
+
+export async function setActiveWorldName(uuid: string, worldName: string): Promise<void> {
+  const root = getServerRoot(uuid);
+  const propsPath = path.join(root, 'server.properties');
+  let content = fs.existsSync(propsPath) ? fs.readFileSync(propsPath, 'utf8') : '';
+  if (/^level-name=.*$/m.test(content)) {
+    content = content.replace(/^level-name=.*$/m, `level-name=${worldName}`);
+  } else {
+    content += `${content.endsWith('\n') || content === '' ? '' : '\n'}level-name=${worldName}\n`;
+  }
+  fs.writeFileSync(propsPath, content, { mode: 0o666 });
+}
+
+// Downloads happen via a URL fetched by the route handler into a temp zip
+// file — this just handles extraction, world-root detection, and placing it
+// under the server as a new world folder.
+export async function installWorldFromZipFile(uuid: string, zipPath: string, worldName: string): Promise<void> {
+  const root = getServerRoot(uuid);
+  const safeName = worldName.replace(/[^a-zA-Z0-9._-]/g, '_') || 'world';
+  const target = safePath(root, safeName);
+  if (fs.existsSync(target)) throw new Error(`A world named "${safeName}" already exists`);
+
+  const tmpDir = path.join(os.tmpdir(), `mc_world_${Date.now()}_${uuid}`);
+  fs.mkdirSync(tmpDir, { recursive: true });
+  try {
+    await extractZip(zipPath, { dir: tmpDir });
+    const worldRoot = findLevelDatRoot(tmpDir);
+    if (!worldRoot) throw new Error('No level.dat found in the downloaded world archive');
+    fs.mkdirSync(target, { recursive: true });
+    fs.cpSync(worldRoot, target, { recursive: true });
+    logger.info(`World "${safeName}" installed for ${uuid}`);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+}
+
+export function createWorldZipStream(uuid: string, worldName: string): archiver.Archiver {
+  const root = getServerRoot(uuid);
+  const worldPath = safePath(root, worldName);
+  if (!fs.existsSync(path.join(worldPath, 'level.dat'))) {
+    throw new Error('Not a valid world folder');
+  }
+  const archive = archiver('zip', { zlib: { level: 6 } });
+  archive.directory(worldPath, worldName);
+  archive.finalize();
+  return archive;
 }

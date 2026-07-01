@@ -806,6 +806,81 @@ router.post('/:id/version', auth_1.authenticate, async (req, res) => {
         return res.status(e.response?.status || 500).json(e.response?.data || { message: 'Version change failed' });
     }
 });
+// ─── World Manager ────────────────────────────────────────────────────────────
+// GET /servers/:id/worlds
+router.get('/:id/worlds', auth_1.authenticate, async (req, res) => {
+    const ctx = await getWingsClient(req.params.id, req.user.id, req.user.role === 'ADMIN');
+    if (!ctx)
+        return res.status(404).json({ message: 'Server not found' });
+    try {
+        const { data } = await ctx.client.get(`/servers/${ctx.server.uuid}/worlds`, { timeout: 15000 });
+        return res.json(data);
+    }
+    catch (err) {
+        const e = err;
+        return res.status(e.response?.status || 500).json(e.response?.data || { message: 'Wings error' });
+    }
+});
+// PUT /servers/:id/worlds/active
+router.put('/:id/worlds/active', auth_1.authenticate, async (req, res) => {
+    const ctx = await getWingsClient(req.params.id, req.user.id, req.user.role === 'ADMIN');
+    if (!ctx)
+        return res.status(404).json({ message: 'Server not found' });
+    try {
+        const { data } = await ctx.client.put(`/servers/${ctx.server.uuid}/worlds/active`, req.body, { timeout: 10000 });
+        return res.json(data);
+    }
+    catch (err) {
+        const e = err;
+        return res.status(e.response?.status || 500).json(e.response?.data || { message: 'Wings error' });
+    }
+});
+// POST /servers/:id/worlds/install — download a world zip from a URL (e.g. a CurseForge file) and install it
+router.post('/:id/worlds/install', auth_1.authenticate, async (req, res) => {
+    const ctx = await getWingsClient(req.params.id, req.user.id, req.user.role === 'ADMIN');
+    if (!ctx)
+        return res.status(404).json({ message: 'Server not found' });
+    try {
+        const { data } = await ctx.client.post(`/servers/${ctx.server.uuid}/worlds/install`, req.body, { timeout: 180000 });
+        return res.json(data);
+    }
+    catch (err) {
+        const e = err;
+        return res.status(e.response?.status || 500).json(e.response?.data || { message: 'World install failed' });
+    }
+});
+// GET /servers/:id/worlds/:name/download — stream a world's zip through to the client
+router.get('/:id/worlds/:name/download', auth_1.authenticate, async (req, res) => {
+    const ctx = await getWingsClient(req.params.id, req.user.id, req.user.role === 'ADMIN');
+    if (!ctx)
+        return res.status(404).json({ message: 'Server not found' });
+    try {
+        const wingsRes = await ctx.client.get(`/servers/${ctx.server.uuid}/worlds/${encodeURIComponent(req.params.name)}/download`, {
+            responseType: 'stream', timeout: 300000,
+        });
+        res.setHeader('Content-Type', 'application/zip');
+        res.setHeader('Content-Disposition', `attachment; filename="${req.params.name}.zip"`);
+        wingsRes.data.pipe(res);
+    }
+    catch (err) {
+        const e = err;
+        return res.status(e.response?.status || 500).json(e.response?.data || { message: 'Failed to download world' });
+    }
+});
+// DELETE /servers/:id/worlds/:name
+router.delete('/:id/worlds/:name', auth_1.authenticate, async (req, res) => {
+    const ctx = await getWingsClient(req.params.id, req.user.id, req.user.role === 'ADMIN');
+    if (!ctx)
+        return res.status(404).json({ message: 'Server not found' });
+    try {
+        const { data } = await ctx.client.delete(`/servers/${ctx.server.uuid}/worlds/${encodeURIComponent(req.params.name)}`, { timeout: 15000 });
+        return res.json(data);
+    }
+    catch (err) {
+        const e = err;
+        return res.status(e.response?.status || 500).json(e.response?.data || { message: 'Failed to delete world' });
+    }
+});
 // ─── Server Notes ─────────────────────────────────────────────────────────────
 router.get('/:id/notes', auth_1.authenticate, async (req, res) => {
     const isAdmin = req.user.role === 'ADMIN';

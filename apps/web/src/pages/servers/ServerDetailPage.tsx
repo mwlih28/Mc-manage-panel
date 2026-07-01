@@ -7,7 +7,7 @@ import {
   Folder, FolderOpen, File, ChevronRight, ArrowLeft, Pencil, Trash2, Plus, X, Check,
   Package, Users, Search, Download, RefreshCw, Tag, AlertTriangle, Shield, ShieldOff,
   MapPin, Clock, Sword, Hammer, Footprints, Ban, LogOut, Wifi, Navigation,
-  StickyNote, CalendarClock, UserCog, Save, Copy, CheckCircle2
+  StickyNote, CalendarClock, UserCog, Save, Copy, CheckCircle2, Globe2
 } from 'lucide-react';
 import { io as ioClient, Socket } from 'socket.io-client';
 import api from '@/lib/axios';
@@ -21,8 +21,9 @@ import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { PluginManager } from './PluginManager';
 import { ModManager } from './ModManager';
+import { WorldManager } from './WorldManager';
 
-type Tab = 'console' | 'files' | 'plugins' | 'mods' | 'versions' | 'stats' | 'backups' | 'players' | 'notes' | 'schedule' | 'access';
+type Tab = 'console' | 'files' | 'plugins' | 'mods' | 'versions' | 'worlds' | 'stats' | 'backups' | 'players' | 'notes' | 'schedule' | 'access';
 
 const TAB_GROUPS: { label: string; tabs: { id: Tab; label: string; icon: typeof Terminal }[] }[] = [
   {
@@ -33,6 +34,7 @@ const TAB_GROUPS: { label: string; tabs: { id: Tab; label: string; icon: typeof 
       { id: 'plugins', label: 'Plugins', icon: Package },
       { id: 'mods', label: 'Mods', icon: Hammer },
       { id: 'versions', label: 'Versions', icon: Tag },
+      { id: 'worlds', label: 'Worlds', icon: Globe2 },
     ],
   },
   {
@@ -1236,6 +1238,11 @@ export function ServerDetailPage() {
             After installing, start the server — Paper will automatically remap and launch with the new version.
           </div>
         </div>
+      )}
+
+      {/* Worlds Tab */}
+      {activeTab === 'worlds' && (
+        <WorldManager serverId={id!} />
       )}
 
       {/* Stats Tab */}

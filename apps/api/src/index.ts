@@ -31,6 +31,7 @@ import wingsRoutes from './routes/wings';
 import settingsRoutes from './routes/settings';
 import installerRoutes from './routes/installer';
 import aiRoutes from './routes/ai';
+import curseforgeRoutes from './routes/curseforge';
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -84,6 +85,7 @@ api.use('/wings', wingsRoutes);
 api.use('/settings', settingsRoutes);
 api.use('/installer', installerRoutes);
 api.use('/ai', aiRoutes);
+api.use('/curseforge', curseforgeRoutes);
 
 app.use('/api/v1', api);
 

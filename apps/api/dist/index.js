@@ -33,6 +33,7 @@ const wings_1 = __importDefault(require("./routes/wings"));
 const settings_1 = __importDefault(require("./routes/settings"));
 const installer_1 = __importDefault(require("./routes/installer"));
 const ai_1 = __importDefault(require("./routes/ai"));
+const curseforge_1 = __importDefault(require("./routes/curseforge"));
 const app = (0, express_1.default)();
 exports.app = app;
 const httpServer = http_1.default.createServer(app);
@@ -82,6 +83,7 @@ api.use('/wings', wings_1.default);
 api.use('/settings', settings_1.default);
 api.use('/installer', installer_1.default);
 api.use('/ai', ai_1.default);
+api.use('/curseforge', curseforge_1.default);
 app.use('/api/v1', api);
 // Socket.io
 const io = (0, socketService_1.initSocketServer)(httpServer, CORS_ORIGIN);

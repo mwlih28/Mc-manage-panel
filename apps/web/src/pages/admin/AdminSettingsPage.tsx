@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, Globe, Image, Type, FileText, Mail, Send, Eye, EyeOff, Zap, Sparkles } from 'lucide-react';
+import { Save, Globe, Image, Type, FileText, Mail, Send, Eye, EyeOff, Zap, Sparkles, Mountain } from 'lucide-react';
 import api from '@/lib/axios';
 import toast from 'react-hot-toast';
 import { Spinner } from '@/components/ui/Spinner';
@@ -42,6 +42,7 @@ export function AdminSettingsPage() {
     'ai.openaiKey': '',
     'ai.geminiKey': '',
     'ai.anthropicKey': '',
+    'curseforge.apiKey': '',
   });
   const [showKey, setShowKey] = useState<Record<string, boolean>>({});
   const queryClient = useQueryClient();
@@ -64,6 +65,7 @@ export function AdminSettingsPage() {
         'ai.openaiKey':     data['ai.openaiKey']       || '',
         'ai.geminiKey':     data['ai.geminiKey']       || '',
         'ai.anthropicKey':  data['ai.anthropicKey']    || '',
+        'curseforge.apiKey': data['curseforge.apiKey'] || '',
       });
     }).finally(() => setLoading(false));
   }, []);
@@ -247,6 +249,40 @@ export function AdminSettingsPage() {
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* World Manager / CurseForge */}
+      <div className="card">
+        <div className="card-header">
+          <h2 className="text-sm font-semibold text-zinc-100 flex items-center gap-2"><Mountain size={14} />World Manager</h2>
+          <p className="text-xs text-zinc-500 mt-0.5">Lets users browse and install premade worlds (castles, mansions, and more) from CurseForge.</p>
+        </div>
+        <div className="p-6 space-y-3">
+          <label className="label">CurseForge API Key</label>
+          <div className="relative">
+            <input
+              type={showKey['curseforge'] ? 'text' : 'password'}
+              className="input pr-10"
+              value={form['curseforge.apiKey']}
+              onChange={e => setForm(f => ({ ...f, 'curseforge.apiKey': e.target.value }))}
+              placeholder="$2a$10$..."
+            />
+            <button
+              type="button"
+              onClick={() => setShowKey(s => ({ ...s, curseforge: !s.curseforge }))}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-300 transition-colors"
+            >
+              {showKey['curseforge'] ? <EyeOff size={14} /> : <Eye size={14} />}
+            </button>
+          </div>
+          <p className="text-xs text-zinc-600">
+            Get a free key at{' '}
+            <a href="https://console.curseforge.com/?#/api-keys" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">
+              console.curseforge.com
+            </a>
+            . Without a key, users can still switch, back up, and delete their existing worlds, but the premade world browser stays hidden.
+          </p>
         </div>
       </div>
 

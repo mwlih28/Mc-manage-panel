@@ -51,6 +51,7 @@ const serverManager_1 = require("./services/serverManager");
 const panelClient_1 = require("./services/panelClient");
 const servers_1 = __importDefault(require("./routes/servers"));
 const files_1 = __importDefault(require("./routes/files"));
+const worlds_1 = __importDefault(require("./routes/worlds"));
 const system_1 = __importDefault(require("./routes/system"));
 async function main() {
     // Load config
@@ -82,6 +83,7 @@ async function main() {
     // --- Routes ---
     app.use('/api/servers', servers_1.default);
     app.use('/api/servers/:uuid/files', files_1.default);
+    app.use('/api/servers/:uuid/worlds', worlds_1.default);
     app.use('/api', system_1.default);
     // --- Socket.io for console/stats streaming ---
     const io = new socket_io_1.Server(httpServer, {
