@@ -457,6 +457,85 @@ echo "Bedrock Server \${BDS_VER} installed successfully."`;
   }
   console.log('Bedrock allocations created');
 
+  // Fabric server installer is much more reliable to automate headlessly than
+  // Forge (whose run-script generation has changed shape across MC version
+  // eras) — the installer itself resolves "latest" when flags are omitted,
+  // so no manual version-detection logic is needed here.
+  const FABRIC_INSTALL_SCRIPT = `#!/bin/bash
+set -e
+cd /mnt/server
+UA="Kretase-Installer/1.0 (+https://kretase.com)"
+MC_VER="\${MC_VERSION:-latest}"
+LOADER_VER="\${FABRIC_LOADER_VERSION:-latest}"
+
+INSTALLER_URL=$(curl -sSL -H "User-Agent: $UA" "https://meta.fabricmc.net/v2/versions/installer" | tr -d '\\n' | grep -oE '\\{[^{}]*\\}' | grep -F '"stable": true' | head -1 | grep -oE '"url"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4)
+[ -z "$INSTALLER_URL" ] && { echo "Could not resolve Fabric installer URL"; exit 1; }
+
+echo "Downloading Fabric installer..."
+curl -sSL -H "User-Agent: $UA" -o fabric-installer.jar "$INSTALLER_URL"
+
+ARGS="server -downloadMinecraft"
+[ "$MC_VER" != "latest" ] && ARGS="$ARGS -mcversion $MC_VER"
+[ "$LOADER_VER" != "latest" ] && ARGS="$ARGS -loader $LOADER_VER"
+
+echo "Installing Fabric (mc=$MC_VER loader=$LOADER_VER)..."
+java -jar fabric-installer.jar $ARGS
+
+rm -f fabric-installer.jar
+echo "Fabric installed."`;
+
+  const fabricEgg = await prisma.egg.upsert({
+    where: { uuid: '00000000-0000-0000-0000-000000000009' },
+    update: {
+      dockerImage: 'ghcr.io/pterodactyl/yolks:java_21',
+      scriptInstall: FABRIC_INSTALL_SCRIPT,
+      scriptContainer: 'ghcr.io/pterodactyl/installers:alpine',
+    },
+    create: {
+      uuid: '00000000-0000-0000-0000-000000000009',
+      nestId: minecraftNest.id,
+      author: 'support@pterodactyl.io',
+      name: 'Fabric',
+      description: 'Modded Minecraft server using the Fabric mod loader',
+      dockerImage: 'ghcr.io/pterodactyl/yolks:java_21',
+      startup: 'java -Xms{{SERVER_MEMORY}}M -Xmx{{SERVER_MEMORY}}M -jar fabric-server-launch.jar nogui',
+      configStop: 'stop',
+      scriptInstall: FABRIC_INSTALL_SCRIPT,
+      scriptContainer: 'ghcr.io/pterodactyl/installers:alpine',
+    },
+  });
+
+  await prisma.eggVariable.upsert({
+    where: { id: 'fabric-mc-version-var' },
+    update: {},
+    create: {
+      id: 'fabric-mc-version-var',
+      eggId: fabricEgg.id,
+      name: 'Minecraft Version',
+      description: 'Minecraft version to install, or "latest"',
+      envVariable: 'MC_VERSION',
+      defaultValue: 'latest',
+      userViewable: true,
+      userEditable: true,
+    },
+  });
+
+  await prisma.eggVariable.upsert({
+    where: { id: 'fabric-loader-version-var' },
+    update: {},
+    create: {
+      id: 'fabric-loader-version-var',
+      eggId: fabricEgg.id,
+      name: 'Fabric Loader Version',
+      description: 'Fabric loader version to install, or "latest"',
+      envVariable: 'FABRIC_LOADER_VERSION',
+      defaultValue: 'latest',
+      userViewable: true,
+      userEditable: true,
+    },
+  });
+  console.log('Fabric egg created');
+
   // Create Games nest
   const gamesNest = await prisma.nest.upsert({
     where: { uuid: '00000000-0000-0000-0001-000000000001' },

@@ -20,8 +20,9 @@ import { Spinner } from '@/components/ui/Spinner';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { PluginManager } from './PluginManager';
+import { ModManager } from './ModManager';
 
-type Tab = 'console' | 'files' | 'plugins' | 'versions' | 'stats' | 'backups' | 'players' | 'notes' | 'schedule' | 'access';
+type Tab = 'console' | 'files' | 'plugins' | 'mods' | 'versions' | 'stats' | 'backups' | 'players' | 'notes' | 'schedule' | 'access';
 
 const TAB_GROUPS: { label: string; tabs: { id: Tab; label: string; icon: typeof Terminal }[] }[] = [
   {
@@ -30,6 +31,7 @@ const TAB_GROUPS: { label: string; tabs: { id: Tab; label: string; icon: typeof 
       { id: 'console', label: 'Console', icon: Terminal },
       { id: 'files', label: 'Files', icon: Folder },
       { id: 'plugins', label: 'Plugins', icon: Package },
+      { id: 'mods', label: 'Mods', icon: Hammer },
       { id: 'versions', label: 'Versions', icon: Tag },
     ],
   },
@@ -1082,6 +1084,11 @@ export function ServerDetailPage() {
       {/* Plugins Tab */}
       {activeTab === 'plugins' && (
         <PluginManager serverId={id!} mcVersion={serverMcVersion} />
+      )}
+
+      {/* Mods Tab */}
+      {activeTab === 'mods' && (
+        <ModManager serverId={id!} mcVersion={serverMcVersion} eggName={data.egg?.name} />
       )}
 
       {/* Versions Tab */}

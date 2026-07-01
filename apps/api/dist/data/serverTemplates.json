@@ -39,6 +39,19 @@
         "tags": ["creative", "build", "paper"]
     },
     {
+        "id": "modded",
+        "name": "Modded (Fabric)",
+        "description": "Fabric mod loader server with extra RAM allocated for mods",
+        "icon": "🔧",
+        "color": "#f59e0b",
+        "memory": 6144,
+        "disk": 30720,
+        "cpu": 0,
+        "startup": "java -Xms{{SERVER_MEMORY}}M -Xmx{{SERVER_MEMORY}}M -jar fabric-server-launch.jar nogui",
+        "env": { "SERVER_TYPE": "FABRIC", "MC_VERSION": "latest" },
+        "tags": ["modded", "fabric", "advanced"]
+    },
+    {
         "id": "bedrock",
         "name": "Bedrock Edition",
         "description": "Bedrock Dedicated Server for mobile and console players",

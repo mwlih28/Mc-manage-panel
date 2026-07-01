@@ -206,6 +206,7 @@ interface ServerTemplate {
 const TEMPLATE_SERVER_TYPE_TO_EGG_NAME: Record<string, string> = {
   PAPER: 'paper',
   BEDROCK: 'minecraft bedrock',
+  FABRIC: 'fabric',
 };
 
 function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
