@@ -47,13 +47,7 @@ export function Sidebar() {
     >
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 py-4" style={{ borderBottom: '1px solid #1e1e22' }}>
-        {logoUrl ? (
-          <img src={logoUrl} alt="logo" className="h-8 w-8 rounded-lg object-contain bg-zinc-900 p-0.5" />
-        ) : (
-          <div className="h-8 w-8 rounded-lg bg-white/[0.06] border border-white/[0.08] flex items-center justify-center shrink-0">
-            <Server size={14} className="text-zinc-300" />
-          </div>
-        )}
+        <img src={logoUrl || '/brand/kretase-logo-128.png'} alt="logo" className="h-8 w-8 rounded-lg object-contain shrink-0" />
         <div className="min-w-0">
           <p className="text-sm font-semibold text-white truncate leading-tight">{siteName}</p>
           <p className="text-[9px] text-zinc-600 font-mono">v1.0.0</p>

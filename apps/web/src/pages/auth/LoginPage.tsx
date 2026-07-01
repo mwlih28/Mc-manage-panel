@@ -106,13 +106,7 @@ export function LoginPage() {
       <div className="w-full max-w-sm relative z-10">
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
-          {logoUrl ? (
-            <img src={logoUrl} alt="logo" className="h-12 w-12 rounded-xl object-contain mb-4" />
-          ) : (
-            <div className="h-11 w-11 rounded-xl bg-white/[0.06] border border-white/[0.08] flex items-center justify-center mb-4">
-              <ShieldCheck size={20} className="text-zinc-300" />
-            </div>
-          )}
+          <img src={logoUrl || '/brand/kretase-logo-128.png'} alt="logo" className="h-12 w-12 rounded-xl object-contain mb-4" />
           <h1 className="text-xl font-bold text-white tracking-tight">{siteName}</h1>
           <p className="text-zinc-500 text-xs mt-1">{siteDesc}</p>
         </div>
