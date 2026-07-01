@@ -19,6 +19,7 @@ import {
 import { Spinner } from '@/components/ui/Spinner';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { PluginManager } from './PluginManager';
 
 type Tab = 'console' | 'files' | 'plugins' | 'versions' | 'stats' | 'backups' | 'players' | 'notes' | 'schedule' | 'access';
 
@@ -76,22 +77,6 @@ interface StatsHistoryPoint {
   memoryLimitBytes: number;
   diskBytes: number;
   timestamp: string | number;
-}
-
-interface ModrinthProject {
-  project_id: string;
-  slug: string;
-  title: string;
-  description: string;
-  downloads: number;
-  icon_url?: string;
-}
-
-interface ModrinthVersion {
-  id: string;
-  loaders: string[];
-  game_versions: string[];
-  files: { url: string; filename: string; primary: boolean }[];
 }
 
 interface FileEntry {
@@ -160,17 +145,6 @@ export function ServerDetailPage() {
   const [editingFile, setEditingFile] = useState<{ path: string; content: string } | null>(null);
   const [editContent, setEditContent] = useState('');
   const [savingFile, setSavingFile] = useState(false);
-
-  // Plugins / Modrinth
-  const [pluginQuery, setPluginQuery] = useState('');
-  const [pluginResults, setPluginResults] = useState<ModrinthProject[]>([]);
-  const [pluginLoading, setPluginLoading] = useState(false);
-  const [installing, setInstalling] = useState<string | null>(null);
-
-  // Installed plugins
-  const [installedPlugins, setInstalledPlugins] = useState<FileEntry[]>([]);
-  const [pluginsLoading, setPluginsLoading] = useState(false);
-  const [deletingPlugin, setDeletingPlugin] = useState<string | null>(null);
 
   // Version management
   const [versions, setVersions] = useState<string[]>([]);
@@ -323,58 +297,12 @@ export function ServerDetailPage() {
   }, [activeTab, id]);
 
   useEffect(() => {
-    if (activeTab === 'plugins' && id) loadInstalledPlugins();
-  }, [activeTab, id]);
-
-  useEffect(() => {
     if (activeTab === 'versions' && id && versions.length === 0) loadVersions();
   }, [activeTab, id]);
 
   useEffect(() => {
     if (selectedVersion) loadBuilds(selectedVersion);
   }, [selectedVersion]);
-
-  const searchPlugins = async () => {
-    if (!pluginQuery.trim()) return;
-    setPluginLoading(true);
-    setPluginResults([]);
-    try {
-      const facets = encodeURIComponent(JSON.stringify([['project_type:plugin']]));
-      const res = await fetch(`https://api.modrinth.com/v2/search?query=${encodeURIComponent(pluginQuery)}&facets=${facets}&limit=20`);
-      const json = await res.json();
-      setPluginResults(json.hits ?? []);
-    } catch {
-      toast.error('Failed to search plugins');
-    } finally {
-      setPluginLoading(false);
-    }
-  };
-
-  const loadInstalledPlugins = async () => {
-    setPluginsLoading(true);
-    try {
-      const { data } = await api.get(`/servers/${id}/files`, { params: { directory: '/plugins' } });
-      const jars = ((data.files as FileEntry[]) || []).filter((f) => f.isFile && f.name.endsWith('.jar'));
-      setInstalledPlugins(jars);
-    } catch {
-      setInstalledPlugins([]);
-    } finally {
-      setPluginsLoading(false);
-    }
-  };
-
-  const deletePlugin = async (filename: string) => {
-    setDeletingPlugin(filename);
-    try {
-      await api.post(`/servers/${id}/files/delete`, { files: [`/plugins/${filename}`] });
-      toast.success(`${filename} deleted`);
-      setInstalledPlugins((prev) => prev.filter((p) => p.name !== filename));
-    } catch {
-      toast.error('Failed to delete plugin');
-    } finally {
-      setDeletingPlugin(null);
-    }
-  };
 
   const loadVersions = async () => {
     setVersionLoading(true);
@@ -415,76 +343,6 @@ export function ServerDetailPage() {
       toast.error(msg);
     } finally {
       setInstallingVersion(false);
-    }
-  };
-
-  const installPlugin = async (project: ModrinthProject) => {
-    setInstalling(project.project_id);
-    try {
-      // Determine the server's MC version from its stored env (set when version is installed)
-      let mcVersion: string | undefined;
-      try {
-        const env = JSON.parse((data as unknown as { env?: string })?.env || '{}') as Record<string, string>;
-        mcVersion = env['MC_VERSION'];
-      } catch { /* no env, proceed without version filter */ }
-
-      const versRes = await fetch(`https://api.modrinth.com/v2/project/${project.project_id}/version`);
-      if (!versRes.ok) { toast.error('Could not fetch version list'); return; }
-      const allVersions: ModrinthVersion[] = await versRes.json();
-      if (!allVersions || allVersions.length === 0) { toast.error('No versions found'); return; }
-
-      const preferredLoaders = ['paper', 'purpur', 'folia', 'spigot', 'bukkit'];
-
-      // Progressively relax version matching until we find something
-      // 1. Exact match (e.g. "1.21.1")
-      // 2. Minor-only match (e.g. "1.21.x")
-      // 3. Any version (last resort)
-      let candidates = allVersions;
-      if (mcVersion) {
-        const exactMatch = allVersions.filter((v) =>
-          v.game_versions?.includes(mcVersion!)
-        );
-        if (exactMatch.length > 0) {
-          candidates = exactMatch;
-        } else {
-          // Try matching major.minor (e.g. "1.21" matches "1.21", "1.21.1", "1.21.4")
-          const majorMinor = mcVersion.split('.').slice(0, 2).join('.');
-          const minorMatch = allVersions.filter((v) =>
-            v.game_versions?.some((gv) => gv === majorMinor || gv.startsWith(majorMinor + '.'))
-          );
-          if (minorMatch.length > 0) {
-            candidates = minorMatch;
-          }
-          // else fall back to all versions (plugin might not tag versions properly)
-        }
-      }
-
-      // Among candidates, prefer Bukkit-compatible loaders
-      const bestVersion =
-        candidates.find((v) => v.loaders?.some((l) => preferredLoaders.includes(l.toLowerCase()))) ??
-        candidates[0];
-
-      if (!mcVersion) {
-        // Warn if we couldn't determine server version
-        toast('Tip: Install a Paper version first so plugins are downloaded for the correct MC version.', { icon: 'ℹ️' });
-      } else if (!bestVersion.game_versions?.includes(mcVersion)) {
-        toast(`No exact ${mcVersion} build found — installed closest compatible version.`, { icon: '⚠️' });
-      }
-
-      const primaryFile = bestVersion.files.find((f) => f.primary) ?? bestVersion.files[0];
-      if (!primaryFile) { toast.error('No downloadable file found'); return; }
-
-      await api.post(`/servers/${id}/plugins/install`, {
-        url: primaryFile.url,
-        filename: primaryFile.filename,
-        type: 'plugins',
-      });
-      toast.success(`${project.title} installed!`);
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Installation failed';
-      toast.error(msg);
-    } finally {
-      setInstalling(null);
     }
   };
 
@@ -820,6 +678,13 @@ export function ServerDetailPage() {
       if (env.SERVER_TYPE === 'BEDROCK') return true;
     } catch { /* ignore */ }
     return data?.egg?.name?.toLowerCase().includes('bedrock') ?? false;
+  })();
+
+  const serverMcVersion: string | undefined = (() => {
+    try {
+      const env = JSON.parse((data as unknown as { env?: string })?.env || '{}') as Record<string, string>;
+      return env['MC_VERSION'] || undefined;
+    } catch { return undefined; }
   })();
 
   // Recent players widget: online players first (live from socket), then most
@@ -1216,102 +1081,7 @@ export function ServerDetailPage() {
 
       {/* Plugins Tab */}
       {activeTab === 'plugins' && (
-        <div className="space-y-4">
-          {/* Installed plugins */}
-          <div className="card">
-            <div className="card-header flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-semibold text-slate-100">Installed Plugins</h3>
-                <p className="text-xs text-slate-500 mt-0.5">{installedPlugins.length} plugin(s) in /plugins</p>
-              </div>
-              <button className="btn-secondary btn-sm" onClick={loadInstalledPlugins}>
-                <RefreshCw size={13} /> Refresh
-              </button>
-            </div>
-            <div className="divide-y divide-dark-800/50">
-              {pluginsLoading ? (
-                <div className="flex justify-center py-6"><Spinner /></div>
-              ) : installedPlugins.length === 0 ? (
-                <div className="p-8 text-center text-slate-500">
-                  <Package size={28} className="mx-auto mb-2 opacity-20" />
-                  <p className="text-sm">No plugins installed</p>
-                </div>
-              ) : (
-                installedPlugins.map((plugin) => (
-                  <div key={plugin.name} className="flex items-center gap-3 px-4 py-3">
-                    <Package size={15} className="text-slate-500 shrink-0" />
-                    <span className="flex-1 text-sm text-slate-300 font-mono truncate">{plugin.name}</span>
-                    <span className="text-xs text-slate-600">{formatBytes(plugin.size)}</span>
-                    <button
-                      className="p-1.5 text-slate-500 hover:text-red-400 transition-colors"
-                      onClick={() => deletePlugin(plugin.name)}
-                      disabled={deletingPlugin === plugin.name}
-                      title="Delete"
-                    >
-                      {deletingPlugin === plugin.name ? <Spinner size="sm" /> : <Trash2 size={13} />}
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* Plugin search */}
-          <div className="card">
-            <div className="card-header">
-              <h3 className="text-sm font-semibold text-slate-100">Plugin Marketplace</h3>
-              <p className="text-xs text-slate-500 mt-0.5">Search and install plugins directly to your server</p>
-            </div>
-            <div className="p-4 border-b border-dark-800">
-              <form
-                onSubmit={(e) => { e.preventDefault(); searchPlugins(); }}
-                className="flex gap-2"
-              >
-                <input
-                  type="text"
-                  className="input flex-1"
-                  placeholder="Search plugins (e.g. WorldEdit, EssentialsX)..."
-                  value={pluginQuery}
-                  onChange={(e) => setPluginQuery(e.target.value)}
-                />
-                <button type="submit" className="btn-primary btn-sm" disabled={pluginLoading || !pluginQuery.trim()}>
-                  {pluginLoading ? <Spinner size="sm" /> : <><Search size={14} /> Search</>}
-                </button>
-              </form>
-            </div>
-            <div className="divide-y divide-dark-800/50">
-              {pluginResults.length === 0 && !pluginLoading && (
-                <div className="p-8 text-center text-slate-500">
-                  <Package size={32} className="mx-auto mb-3 opacity-20" />
-                  <p className="text-sm">Search for plugins to install</p>
-                </div>
-              )}
-              {pluginResults.map((project) => (
-                <div key={project.project_id} className="flex items-start gap-4 px-5 py-4">
-                  {project.icon_url ? (
-                    <img src={project.icon_url} alt="" className="w-10 h-10 rounded-lg shrink-0 object-cover" />
-                  ) : (
-                    <div className="w-10 h-10 rounded-lg bg-dark-800 flex items-center justify-center shrink-0">
-                      <Package size={18} className="text-slate-500" />
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-slate-200">{project.title}</p>
-                    <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{project.description}</p>
-                    <p className="text-xs text-slate-600 mt-1">{project.downloads.toLocaleString()} downloads</p>
-                  </div>
-                  <button
-                    className="btn-primary btn-sm shrink-0"
-                    disabled={installing === project.project_id}
-                    onClick={() => installPlugin(project)}
-                  >
-                    {installing === project.project_id ? <Spinner size="sm" /> : <><Download size={13} /> Install</>}
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        <PluginManager serverId={id!} mcVersion={serverMcVersion} />
       )}
 
       {/* Versions Tab */}
