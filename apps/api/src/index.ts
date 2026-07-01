@@ -57,6 +57,8 @@ app.get('/health', (_req, res) => {
 
 // Templates endpoint
 import serverTemplates from './data/serverTemplates.json';
+import { fetchPaperVersions } from './services/paperApi';
+import { authenticate as requireAuth } from './middleware/auth';
 
 // API routes
 const api = express.Router();
@@ -64,6 +66,16 @@ api.use('/auth', authRoutes);
 api.use('/users', userRoutes);
 api.use('/servers', serverRoutes);
 api.get('/templates', (_req, res) => res.json({ data: serverTemplates }));
+// Server-independent Paper version lookup, used by the Create Server modal
+// before a server (and therefore a Wings proxy target) exists yet.
+api.get('/paper/versions', requireAuth, async (_req, res) => {
+  try {
+    const versions = await fetchPaperVersions();
+    return res.json({ versions });
+  } catch {
+    return res.status(502).json({ message: 'Failed to fetch Paper versions' });
+  }
+});
 api.use('/servers/:serverId/backups', backupRoutes);
 api.use('/nodes', nodeRoutes);
 api.use('/eggs', eggRoutes);

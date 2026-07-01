@@ -19,18 +19,20 @@ const MINECRAFT_PAPER_TEMPLATE = {
 set -e
 cd /mnt/server
 
+UA="Kretase-Installer/1.0 (+https://kretase.com)"
 PAPER_VERSION=\${MC_VERSION:-latest}
 if [ "\$PAPER_VERSION" = "latest" ]; then
-  PAPER_VERSION=$(curl -s "https://api.papermc.io/v2/projects/paper" | grep -oE '"[0-9]+\\.[0-9]+(\\.[0-9]+)?"' | tr -d '"' | tail -1)
+  VJSON=$(curl -sSL -H "User-Agent: \$UA" "https://fill.papermc.io/v3/projects/paper")
+  PAPER_VERSION=$(echo "\$VJSON" | grep -o '"[0-9][0-9A-Za-z.-]*"' | head -1 | tr -d '"')
 fi
 echo "Paper version: \${PAPER_VERSION}"
 
-BUILD=$(curl -s "https://api.papermc.io/v2/projects/paper/versions/\${PAPER_VERSION}/builds" | grep -oE '"build":[0-9]+' | tail -1 | grep -oE '[0-9]+$')
-echo "Build: \${BUILD}"
+BJSON=$(curl -sSL -H "User-Agent: \$UA" "https://fill.papermc.io/v3/projects/paper/versions/\${PAPER_VERSION}/builds/latest")
+DOWNLOAD_URL=$(echo "\$BJSON" | grep -o '"url":"[^"]*"' | head -1 | sed 's/"url":"//;s/"$//')
+[ -z "\$DOWNLOAD_URL" ] && { echo "Could not resolve a download URL for \${PAPER_VERSION}"; exit 1; }
 
-JAR="paper-\${PAPER_VERSION}-\${BUILD}.jar"
 TARGET=\${SERVER_JARFILE:-server.jar}
-curl -fsSL -o "\${TARGET}" "https://api.papermc.io/v2/projects/paper/versions/\${PAPER_VERSION}/builds/\${BUILD}/downloads/\${JAR}"
+curl -fsSL -H "User-Agent: \$UA" -o "\${TARGET}" "\$DOWNLOAD_URL"
 echo "Downloaded: \${TARGET}"`,
   variables: [
     { name: 'Server Jar File', envVariable: 'SERVER_JARFILE', defaultValue: 'server.jar', description: 'The jar file to run', userViewable: true, userEditable: false },

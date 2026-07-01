@@ -116,20 +116,31 @@ async function main() {
     ' -Dusing.aikars.flags=https://mcflags.emc.gs -Daikars.new.flags=true' +
     ' -jar {{SERVER_JARFILE}} nogui';
 
+  // PaperMC's old api.papermc.io/v2 was sunset (HTTP 410) — the new API lives
+  // at fill.papermc.io/v3 and requires a real User-Agent. No python3/jq
+  // dependency (the alpine installer image doesn't reliably have either),
+  // so version/build/URL are pulled out of the single-line JSON with grep.
   const PAPER_INSTALL_SCRIPT = `#!/bin/bash
 set -e
 cd /mnt/server
+UA="Kretase-Installer/1.0 (+https://kretase.com)"
 MC_VER="\${MC_VERSION:-latest}"
-echo "Fetching latest Paper build..."
 if [ "$MC_VER" = "latest" ]; then
-  MC_VER=$(curl -sSL https://api.papermc.io/v2/projects/paper | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['versions'][-1])" 2>/dev/null || echo "1.21.4")
+  echo "Resolving latest Paper version..."
+  VJSON=$(curl -sSL -H "User-Agent: $UA" "https://fill.papermc.io/v3/projects/paper")
+  MC_VER=$(echo "$VJSON" | grep -o '"[0-9][0-9A-Za-z.\\-]*"' | head -1 | tr -d '"')
+  MC_VER="\${MC_VER:-1.21.4}"
 fi
-BUILD=$(curl -sSL "https://api.papermc.io/v2/projects/paper/versions/$MC_VER" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['builds'][-1])" 2>/dev/null || echo "1")
-JAR="paper-$MC_VER-$BUILD.jar"
-echo "Downloading Paper $MC_VER build $BUILD..."
-curl -sSL -o server.jar "https://api.papermc.io/v2/projects/paper/versions/$MC_VER/builds/$BUILD/downloads/$JAR"
-echo "eula=true" > eula.txt
-echo "Paper $MC_VER-$BUILD installed."`;
+echo "Fetching latest Paper build for $MC_VER..."
+BJSON=$(curl -sSL -H "User-Agent: $UA" "https://fill.papermc.io/v3/projects/paper/versions/$MC_VER/builds/latest")
+DOWNLOAD_URL=$(echo "$BJSON" | grep -o '"url":"[^"]*"' | head -1 | sed 's/"url":"//;s/"$//')
+if [ -z "$DOWNLOAD_URL" ]; then
+  echo "ERROR: Could not resolve a Paper download URL for $MC_VER — check MC_VERSION." >&2
+  exit 1
+fi
+echo "Downloading: $DOWNLOAD_URL"
+curl -sSL -H "User-Agent: $UA" -o server.jar "$DOWNLOAD_URL"
+echo "Paper $MC_VER installed."`;
 
   // Create Egg
   const paperEgg = await prisma.egg.upsert({
@@ -221,20 +232,24 @@ echo "Paper $MC_VER-$BUILD installed."`;
   });
   console.log('Demo server created');
 
+  // No python3/jq dependency — same reasoning as the Paper script above.
+  // Mojang's manifest JSON is NOT minified (spaces after colons), so every
+  // grep pattern below tolerates optional whitespace around ":".
   const VANILLA_INSTALL_SCRIPT = `#!/bin/bash
 set -e
 cd /mnt/server
 VERSION="\${MC_VERSION:-latest}"
 MANIFEST_BASE="https://launchermeta.mojang.com/mc/game/version_manifest.json"
+MANIFEST_JSON=$(curl -sSL "$MANIFEST_BASE")
 if [ "$VERSION" = "latest" ]; then
-  VERSION=$(curl -sSL "$MANIFEST_BASE" | python3 -c "import sys,json;print(json.load(sys.stdin)['latest']['release'])")
+  VERSION=$(echo "$MANIFEST_JSON" | grep -oE '"release"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
 fi
 echo "Downloading Vanilla $VERSION..."
-MANIFEST_URL=$(curl -sSL "$MANIFEST_BASE" | python3 -c "import sys,json;d=json.load(sys.stdin);v=[x for x in d['versions'] if x['id']==\"$VERSION\"];print(v[0]['url'] if v else '')")
+MANIFEST_URL=$(echo "$MANIFEST_JSON" | grep -oE "\\"id\\"[[:space:]]*:[[:space:]]*\\"$VERSION\\"[^}]*" | grep -oE '"url"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
 [ -z "$MANIFEST_URL" ] && { echo "Version $VERSION not found"; exit 1; }
-JAR_URL=$(curl -sSL "$MANIFEST_URL" | python3 -c "import sys,json;print(json.load(sys.stdin)['downloads']['server']['url'])")
+JAR_URL=$(curl -sSL "$MANIFEST_URL" | grep -oE '"server"[[:space:]]*:[[:space:]]*\\{[^}]*\\}' | grep -oE '"url"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
+[ -z "$JAR_URL" ] && { echo "Could not resolve server jar URL for $VERSION"; exit 1; }
 curl -sSL -o server.jar "$JAR_URL"
-echo "eula=true" > eula.txt
 echo "Vanilla $VERSION installed."`;
 
   const BUNGEECORD_INSTALL_SCRIPT = `#!/bin/bash

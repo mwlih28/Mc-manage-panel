@@ -341,11 +341,18 @@ router.post('/:uuid/plugins/install', async (req: Request, res: Response) => {
   }
 });
 
+// PaperMC's old api.papermc.io/v2 was sunset (HTTP 410 as of mid-2026). The
+// new API lives at fill.papermc.io/v3, returns different shapes, and
+// requires a real, identifying User-Agent header or requests get rejected.
+const PAPER_API_BASE = 'https://fill.papermc.io/v3/projects/paper';
+const PAPER_USER_AGENT = 'Kretase-Wings/1.0 (+https://kretase.com)';
+
 // GET /api/servers/:uuid/versions — list Paper MC versions
 router.get('/:uuid/versions', async (_req: Request, res: Response) => {
   try {
-    const { data } = await axios.get('https://api.papermc.io/v2/projects/paper', { timeout: 10000 });
-    return res.json({ versions: (data.versions as string[]).reverse() });
+    const { data } = await axios.get(PAPER_API_BASE, { timeout: 10000, headers: { 'User-Agent': PAPER_USER_AGENT } });
+    const versions: string[] = Object.values(data.versions as Record<string, string[]>).flat();
+    return res.json({ versions });
   } catch {
     return res.status(500).json({ message: 'Failed to fetch Paper versions' });
   }
@@ -355,9 +362,11 @@ router.get('/:uuid/versions', async (_req: Request, res: Response) => {
 router.get('/:uuid/versions/:version/builds', async (req: Request, res: Response) => {
   const { version } = req.params;
   try {
-    const { data } = await axios.get(`https://api.papermc.io/v2/projects/paper/versions/${version}`, { timeout: 10000 });
-    const builds: number[] = data.builds;
-    return res.json({ builds: builds.reverse(), latestBuild: builds[0] });
+    const { data } = await axios.get(`${PAPER_API_BASE}/versions/${version}/builds`, {
+      timeout: 10000, headers: { 'User-Agent': PAPER_USER_AGENT },
+    });
+    const builds: number[] = (data as { id: number }[]).map((b) => b.id);
+    return res.json({ builds, latestBuild: builds[0] });
   } catch {
     return res.status(500).json({ message: 'Failed to fetch builds' });
   }
@@ -375,15 +384,15 @@ router.post('/:uuid/version', async (req: Request, res: Response) => {
   const tmpFile = path.join(tmpDir, 'paper.jar');
 
   try {
-    let targetBuild = build;
-    if (!targetBuild) {
-      const { data: bd } = await axios.get(`https://api.papermc.io/v2/projects/paper/versions/${version}`, { timeout: 10000 });
-      const builds: number[] = bd.builds;
-      targetBuild = builds[builds.length - 1];
-    }
+    const buildPath = build ? String(build) : 'latest';
+    const { data: buildData } = await axios.get(
+      `${PAPER_API_BASE}/versions/${version}/builds/${buildPath}`,
+      { timeout: 15000, headers: { 'User-Agent': PAPER_USER_AGENT } }
+    );
+    const downloadUrl: string | undefined = buildData.downloads?.['server:default']?.url;
+    if (!downloadUrl) throw new Error(`No download URL for Paper ${version} build ${buildPath}`);
+    const targetBuild = buildData.id as number;
 
-    const jarName = `paper-${version}-${targetBuild}.jar`;
-    const downloadUrl = `https://api.papermc.io/v2/projects/paper/versions/${version}/builds/${targetBuild}/downloads/${jarName}`;
     logger.info(`Downloading Paper ${version}-${targetBuild} for ${uuid}`);
 
     fs.mkdirSync(tmpDir, { recursive: true });
@@ -391,6 +400,7 @@ router.post('/:uuid/version', async (req: Request, res: Response) => {
       responseType: 'stream',
       timeout: 120000,
       maxContentLength: 200 * 1024 * 1024,
+      headers: { 'User-Agent': PAPER_USER_AGENT },
     });
     await new Promise<void>((resolve, reject) => {
       const writer = fs.createWriteStream(tmpFile);

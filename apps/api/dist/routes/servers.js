@@ -43,6 +43,7 @@ const axios_1 = __importDefault(require("axios"));
 const prisma_1 = require("../utils/prisma");
 const auth_1 = require("../middleware/auth");
 const wingsClient_1 = require("../services/wingsClient");
+const paperApi_1 = require("../services/paperApi");
 const logger_1 = require("../utils/logger");
 async function getWingsClient(serverId, userId, isAdmin) {
     const server = await prisma_1.prisma.server.findFirst({
@@ -764,8 +765,8 @@ router.get('/:id/versions', auth_1.authenticate, async (req, res) => {
     }
     catch {
         try {
-            const { data } = await axios_1.default.get('https://api.papermc.io/v2/projects/paper', { timeout: 10000 });
-            return res.json({ versions: data.versions.reverse() });
+            const versions = await (0, paperApi_1.fetchPaperVersions)();
+            return res.json({ versions });
         }
         catch {
             return res.status(500).json({ message: 'Failed to fetch versions' });
@@ -783,9 +784,8 @@ router.get('/:id/versions/:version/builds', auth_1.authenticate, async (req, res
     }
     catch {
         try {
-            const { data } = await axios_1.default.get(`https://api.papermc.io/v2/projects/paper/versions/${req.params.version}`, { timeout: 10000 });
-            const builds = data.builds;
-            return res.json({ builds: builds.reverse(), latestBuild: builds[0] });
+            const builds = await (0, paperApi_1.fetchPaperBuilds)(req.params.version);
+            return res.json({ builds, latestBuild: builds[0] });
         }
         catch {
             return res.status(500).json({ message: 'Failed to fetch builds' });

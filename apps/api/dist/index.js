@@ -55,12 +55,25 @@ app.get('/health', (_req, res) => {
 });
 // Templates endpoint
 const serverTemplates_json_1 = __importDefault(require("./data/serverTemplates.json"));
+const paperApi_1 = require("./services/paperApi");
+const auth_2 = require("./middleware/auth");
 // API routes
 const api = express_1.default.Router();
 api.use('/auth', auth_1.default);
 api.use('/users', users_1.default);
 api.use('/servers', servers_1.default);
 api.get('/templates', (_req, res) => res.json({ data: serverTemplates_json_1.default }));
+// Server-independent Paper version lookup, used by the Create Server modal
+// before a server (and therefore a Wings proxy target) exists yet.
+api.get('/paper/versions', auth_2.authenticate, async (_req, res) => {
+    try {
+        const versions = await (0, paperApi_1.fetchPaperVersions)();
+        return res.json({ versions });
+    }
+    catch {
+        return res.status(502).json({ message: 'Failed to fetch Paper versions' });
+    }
+});
 api.use('/servers/:serverId/backups', backups_1.default);
 api.use('/nodes', nodes_1.default);
 api.use('/eggs', eggs_1.default);

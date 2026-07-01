@@ -779,6 +779,11 @@ export function ServerDetailPage() {
     }
   };
 
+  const declineEula = () => {
+    setShowEulaModal(false);
+    toast.error('EULA declined — the server cannot start until you accept the Minecraft EULA.');
+  };
+
   const copyAddress = (address: string) => {
     navigator.clipboard.writeText(address);
     setIpCopied(true);
@@ -2043,7 +2048,7 @@ export function ServerDetailPage() {
 
       {/* EULA acceptance modal — asked of the server owner on first start */}
       {showEulaModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowEulaModal(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={declineEula}>
           <div className="bg-dark-800 border border-dark-600 rounded-xl w-full max-w-md mx-4 p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-base font-semibold text-slate-100 mb-2">Accept the Minecraft EULA</h3>
             <p className="text-sm text-slate-400 mb-4">
@@ -2053,9 +2058,9 @@ export function ServerDetailPage() {
               </a>.
             </p>
             <div className="flex gap-3">
-              <button className="btn-secondary flex-1" onClick={() => setShowEulaModal(false)}>Cancel</button>
+              <button className="btn-secondary flex-1" onClick={declineEula}>Decline</button>
               <button className="btn-primary flex-1" onClick={acceptEulaAndStart} disabled={acceptingEula}>
-                {acceptingEula ? <Spinner size="sm" /> : 'Accept & Start'}
+                {acceptingEula ? <Spinner size="sm" /> : 'Accept'}
               </button>
             </div>
           </div>

@@ -7,6 +7,9 @@ const prisma_1 = require("../utils/prisma");
 const logger_1 = require("../utils/logger");
 const wingsClient_1 = require("./wingsClient");
 const wingsRelay_1 = require("./wingsRelay");
+const WINGS_TO_PANEL_STATUS = {
+    running: 'RUNNING', offline: 'OFFLINE', starting: 'STARTING', stopping: 'STOPPING', installing: 'INSTALLING',
+};
 function initSocketServer(httpServer, corsOrigin) {
     const io = new socket_io_1.Server(httpServer, {
         cors: { origin: corsOrigin, credentials: true },
@@ -45,8 +48,25 @@ function initSocketServer(httpServer, corsOrigin) {
             socket.join(`server:${serverId}`);
             // Room keyed by wings uuid for relay
             socket.join(`server:uuid:${server.uuid}`);
-            // Send initial status
-            socket.emit('server:status', { serverId, status: server.status, timestamp: Date.now() });
+            // Send initial status — if the DB has it in a transient state
+            // (STARTING/STOPPING), that value only gets refreshed when Wings emits
+            // a change event. If the server actually finished transitioning while
+            // no one had a live connection to relay that event, the DB is left
+            // stuck showing the old transient state forever. Reconcile against
+            // Wings' live state on subscribe instead of trusting the DB blindly.
+            let liveStatus = server.status;
+            if ((liveStatus === 'STARTING' || liveStatus === 'STOPPING') && server.node?.status === 'ONLINE') {
+                try {
+                    const resources = await (0, wingsClient_1.getServerResources)(server);
+                    const mapped = WINGS_TO_PANEL_STATUS[resources.state];
+                    if (mapped && mapped !== liveStatus) {
+                        liveStatus = mapped;
+                        await prisma_1.prisma.server.update({ where: { id: serverId }, data: { status: mapped } });
+                    }
+                }
+                catch { /* Wings unreachable — fall back to the DB value */ }
+            }
+            socket.emit('server:status', { serverId, status: liveStatus, timestamp: Date.now() });
             // Replay console history so the client gets recent output after refresh
             const history = wingsRelay_1.consoleBuffer.get(server.uuid) ?? [];
             if (history.length > 0) {

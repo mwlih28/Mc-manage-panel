@@ -245,12 +245,12 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
   const isPaperEgg = selectedEgg?.name?.toLowerCase() === 'paper';
   const isBedrockEgg = selectedEgg?.name?.toLowerCase().includes('bedrock') ?? false;
 
-  // Fetch Paper versions from PaperMC API (only when a Paper egg is selected)
+  // Fetch Paper versions via our own backend (PaperMC's API requires a real
+  // User-Agent header, which browsers won't let client-side fetch set).
   useEffect(() => {
     if (!isPaperEgg) return;
-    fetch('https://api.papermc.io/v2/projects/paper', { signal: AbortSignal.timeout(10000) })
-      .then((r) => r.json())
-      .then((d) => { if (d.versions) setPaperVersions([...d.versions].reverse()); })
+    api.get('/paper/versions', { timeout: 10000 })
+      .then(({ data }) => { if (data.versions) setPaperVersions(data.versions); })
       .catch(() => {/* ignore */});
   }, [isPaperEgg]);
 

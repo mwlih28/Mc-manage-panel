@@ -3,12 +3,16 @@ import { Server as HttpServer } from 'http';
 import { verifyAccessToken } from '../utils/jwt';
 import { prisma } from '../utils/prisma';
 import { logger } from '../utils/logger';
-import { sendPowerAction, sendCommand as wingsSendCommand } from './wingsClient';
+import { sendPowerAction, sendCommand as wingsSendCommand, getServerResources } from './wingsClient';
 import {
   getOrConnectWings, subscribeServerOnWings,
   sendCommandToWings, sendPowerToWings,
   consoleBuffer, pushConsoleBuffer,
 } from './wingsRelay';
+
+const WINGS_TO_PANEL_STATUS: Record<string, string> = {
+  running: 'RUNNING', offline: 'OFFLINE', starting: 'STARTING', stopping: 'STOPPING', installing: 'INSTALLING',
+};
 
 interface ConsoleMessage {
   type: 'output' | 'input' | 'status';
@@ -53,8 +57,24 @@ export function initSocketServer(httpServer: HttpServer, corsOrigin: string): So
       // Room keyed by wings uuid for relay
       socket.join(`server:uuid:${server.uuid}`);
 
-      // Send initial status
-      socket.emit('server:status', { serverId, status: server.status, timestamp: Date.now() });
+      // Send initial status — if the DB has it in a transient state
+      // (STARTING/STOPPING), that value only gets refreshed when Wings emits
+      // a change event. If the server actually finished transitioning while
+      // no one had a live connection to relay that event, the DB is left
+      // stuck showing the old transient state forever. Reconcile against
+      // Wings' live state on subscribe instead of trusting the DB blindly.
+      let liveStatus = server.status;
+      if ((liveStatus === 'STARTING' || liveStatus === 'STOPPING') && server.node?.status === 'ONLINE') {
+        try {
+          const resources = await getServerResources(server as Parameters<typeof getServerResources>[0]);
+          const mapped = WINGS_TO_PANEL_STATUS[resources.state];
+          if (mapped && mapped !== liveStatus) {
+            liveStatus = mapped;
+            await prisma.server.update({ where: { id: serverId }, data: { status: mapped as 'RUNNING' | 'OFFLINE' | 'STARTING' | 'STOPPING' } });
+          }
+        } catch { /* Wings unreachable — fall back to the DB value */ }
+      }
+      socket.emit('server:status', { serverId, status: liveStatus, timestamp: Date.now() });
 
       // Replay console history so the client gets recent output after refresh
       const history = consoleBuffer.get(server.uuid) ?? [];
