@@ -298,6 +298,12 @@ Got an idea, found a bug, or just want to reach out? Email: **mwlih28@gmail.com*
 
 ---
 
+## Acknowledgments
+
+Email delivery uses [Resend](https://resend.com) — thanks for letting us use their name and mark. This is not an official or approved Resend integration.
+
+---
+
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=mwlih28/mc-manage-panel&type=Date)](https://star-history.com/#mwlih28/mc-manage-panel&Date)
