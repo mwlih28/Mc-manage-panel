@@ -1,0 +1,60 @@
+name: Test Install Scripts
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-install:
+    name: Fresh install (panel + wings, same host)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run install-panel.sh (piped answers, SSL skipped)
+        run: |
+          sudo bash scripts/install-panel.sh <<'ANSWERS'
+          test.kretase-ci.local
+          ci-test@example.com
+          ciadmin
+          CI
+          Tester
+          TestPassword123
+          n
+
+          Y
+          n
+          ANSWERS
+
+      - name: Verify panel is actually up
+        run: |
+          curl -sf http://127.0.0.1:3001/health && echo "API health OK"
+          curl -sf http://127.0.0.1:80 >/dev/null && echo "Nginx OK"
+          sudo systemctl is-active kretase
+
+      - name: Run install-wings.sh (piped answers, same host, fake token)
+        run: |
+          sudo bash scripts/install-wings.sh <<'ANSWERS'
+          http://127.0.0.1
+          ci-test-node-token-1234567890
+          127.0.0.1
+          8080
+          n
+          Y
+          ANSWERS
+
+      - name: Verify wings is actually up
+        run: |
+          sudo systemctl is-active mc-wings
+          sudo journalctl -u mc-wings -n 50 --no-pager
+
+      - name: Dump install logs on failure
+        if: failure()
+        run: |
+          echo "── kretase-install.log ──"
+          sudo cat /var/log/kretase-install.log 2>/dev/null || true
+          echo "── mc-wings-install.log ──"
+          sudo cat /var/log/mc-wings-install.log 2>/dev/null || true
+          echo "── kretase.service journal ──"
+          sudo journalctl -u kretase -n 100 --no-pager || true
+          echo "── mc-wings.service journal ──"
+          sudo journalctl -u mc-wings -n 100 --no-pager || true
