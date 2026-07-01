@@ -365,8 +365,11 @@ router.get('/:uuid/versions/:version/builds', async (req: Request, res: Response
     const { data } = await axios.get(`${PAPER_API_BASE}/versions/${version}/builds`, {
       timeout: 10000, headers: { 'User-Agent': PAPER_USER_AGENT },
     });
-    const builds: number[] = (data as { id: number }[]).map((b) => b.id);
-    return res.json({ builds, latestBuild: builds[0] });
+    interface RawBuild { id: number; time: string; channel: string; commits?: { sha: string; message: string; time: string }[] }
+    const builds = (data as RawBuild[]).map((b) => ({
+      id: b.id, time: b.time, channel: b.channel, commits: b.commits || [],
+    }));
+    return res.json({ builds, latestBuild: builds[0]?.id });
   } catch {
     return res.status(500).json({ message: 'Failed to fetch builds' });
   }

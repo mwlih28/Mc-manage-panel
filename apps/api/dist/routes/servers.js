@@ -784,8 +784,8 @@ router.get('/:id/versions/:version/builds', auth_1.authenticate, async (req, res
     }
     catch {
         try {
-            const builds = await (0, paperApi_1.fetchPaperBuilds)(req.params.version);
-            return res.json({ builds, latestBuild: builds[0] });
+            const builds = await (0, paperApi_1.fetchPaperBuildDetails)(req.params.version);
+            return res.json({ builds, latestBuild: builds[0]?.id });
         }
         catch {
             return res.status(500).json({ message: 'Failed to fetch builds' });

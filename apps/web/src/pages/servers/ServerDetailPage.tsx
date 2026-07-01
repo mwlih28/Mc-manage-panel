@@ -81,6 +81,13 @@ interface StatsHistoryPoint {
   timestamp: string | number;
 }
 
+interface PaperBuild {
+  id: number;
+  time: string;
+  channel: string;
+  commits: { sha: string; message: string; time: string }[];
+}
+
 interface FileEntry {
   name: string;
   mode: string;
@@ -151,10 +158,12 @@ export function ServerDetailPage() {
   // Version management
   const [versions, setVersions] = useState<string[]>([]);
   const [selectedVersion, setSelectedVersion] = useState('');
-  const [builds, setBuilds] = useState<number[]>([]);
+  const [builds, setBuilds] = useState<PaperBuild[]>([]);
   const [selectedBuild, setSelectedBuild] = useState<number | 'latest'>('latest');
   const [versionLoading, setVersionLoading] = useState(false);
   const [installing_version, setInstallingVersion] = useState(false);
+  const [downgradeConfirmed, setDowngradeConfirmed] = useState(false);
+  const [backupBeforeInstall, setBackupBeforeInstall] = useState(true);
 
   // Players (console widget)
   const [players, setPlayers] = useState<{ online: number; max: number; names: string[] }>({ online: 0, max: 0, names: [] });
@@ -304,6 +313,7 @@ export function ServerDetailPage() {
 
   useEffect(() => {
     if (selectedVersion) loadBuilds(selectedVersion);
+    setDowngradeConfirmed(false);
   }, [selectedVersion]);
 
   const loadVersions = async () => {
@@ -332,13 +342,26 @@ export function ServerDetailPage() {
 
   const installVersion = async () => {
     if (!selectedVersion) return;
+    if (isDowngrade && !downgradeConfirmed) {
+      toast.error('Confirm you understand the downgrade risk first');
+      return;
+    }
     setInstallingVersion(true);
     try {
+      if (backupBeforeInstall) {
+        try {
+          await api.post(`/servers/${id}/backups`, { name: `Before version change to ${selectedVersion}` });
+          toast.success('Backup queued');
+        } catch {
+          toast.error('Backup failed to start — continuing with version install anyway');
+        }
+      }
       const payload = { version: selectedVersion, build: selectedBuild === 'latest' ? undefined : selectedBuild };
       const { data: versionData } = await api.post(`/servers/${id}/version`, payload, { timeout: 180000 });
       // Persist the installed MC version so plugin installer can pick the right build
       await api.patch(`/servers/${id}`, { mcVersion: selectedVersion }).catch(() => {});
       queryClient.invalidateQueries({ queryKey: ['server', id] });
+      setDowngradeConfirmed(false);
       toast.success(versionData.message || 'Version installed! Restart the server to apply.');
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Version change failed';
@@ -688,6 +711,20 @@ export function ServerDetailPage() {
       return env['MC_VERSION'] || undefined;
     } catch { return undefined; }
   })();
+
+  // Compares dot-separated version strings numerically (e.g. "1.21.4" vs
+  // "1.20.1") — good enough for Minecraft's versioning, avoids pulling in
+  // a semver dependency for one comparison.
+  const compareMcVersions = (a: string, b: string): number => {
+    const pa = a.split('.').map((n) => parseInt(n, 10) || 0);
+    const pb = b.split('.').map((n) => parseInt(n, 10) || 0);
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+      const diff = (pa[i] || 0) - (pb[i] || 0);
+      if (diff !== 0) return diff;
+    }
+    return 0;
+  };
+  const isDowngrade = !!(serverMcVersion && selectedVersion && compareMcVersions(selectedVersion, serverMcVersion) < 0);
 
   // Recent players widget: online players first (live from socket), then most
   // recently seen offline players — so the list doesn't go blank when everyone leaves.
@@ -1096,7 +1133,10 @@ export function ServerDetailPage() {
         <div className="card card-body space-y-5">
           <div>
             <h3 className="text-sm font-semibold text-slate-100 mb-1">Paper Version Manager</h3>
-            <p className="text-xs text-slate-500">Download and install a specific Paper version. Stop the server before changing versions.</p>
+            <p className="text-xs text-slate-500">
+              Download and install a specific Paper version. Stop the server before changing versions.
+              {serverMcVersion && <span className="ml-1">Currently installed: <span className="font-mono text-slate-400">{serverMcVersion}</span>.</span>}
+            </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -1124,14 +1164,14 @@ export function ServerDetailPage() {
                 onChange={(e) => setSelectedBuild(e.target.value === 'latest' ? 'latest' : parseInt(e.target.value))}
               >
                 <option value="latest">Latest</option>
-                {builds.map((b) => <option key={b} value={b}>{b}</option>)}
+                {builds.map((b) => <option key={b.id} value={b.id}>#{b.id} — {new Date(b.time).toLocaleDateString()}</option>)}
               </select>
             </div>
 
             <div className="flex items-end">
               <button
                 className="btn-primary w-full"
-                disabled={!selectedVersion || installing_version || currentStatus !== 'OFFLINE'}
+                disabled={!selectedVersion || installing_version || currentStatus !== 'OFFLINE' || (isDowngrade && !downgradeConfirmed)}
                 onClick={installVersion}
               >
                 {installing_version ? (
@@ -1143,6 +1183,25 @@ export function ServerDetailPage() {
             </div>
           </div>
 
+          {/* Changelog for the selected build */}
+          {(() => {
+            const build = selectedBuild === 'latest' ? builds[0] : builds.find((b) => b.id === selectedBuild);
+            if (!build || build.commits.length === 0) return null;
+            return (
+              <div>
+                <p className="text-xs font-medium text-slate-400 mb-1.5">Changes in build #{build.id}</p>
+                <div className="rounded-lg bg-dark-800/60 border border-dark-800 divide-y divide-dark-800 max-h-40 overflow-y-auto">
+                  {build.commits.map((c) => (
+                    <div key={c.sha} className="px-3 py-2">
+                      <p className="text-xs text-slate-300">{c.message.split('\n')[0]}</p>
+                      <p className="text-[10px] text-slate-600 font-mono mt-0.5">{c.sha.slice(0, 7)} · {new Date(c.time).toLocaleDateString()}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
           {currentStatus !== 'OFFLINE' && (
             <div className="flex items-center gap-2 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-xs">
               <Square size={13} />
@@ -1150,10 +1209,27 @@ export function ServerDetailPage() {
             </div>
           )}
 
-          <div className="flex items-start gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
-            <AlertTriangle size={13} className="shrink-0 mt-0.5" />
-            <span><strong>Downgrade uyarısı:</strong> Dünyayı daha yeni bir sürümde açtıysanız eski sürüme geçmek chunk verilerini bozar ve sunucu çöker. Sürüm değiştirmeden önce mutlaka yedek alın. Yukarı sürüm geçişi (upgrade) güvenlidir.</span>
-          </div>
+          {isDowngrade && (
+            <div className="space-y-2">
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
+                <AlertTriangle size={13} className="shrink-0 mt-0.5" />
+                <span>
+                  <strong>This is a downgrade</strong> (installed: {serverMcVersion} → target: {selectedVersion}). If the
+                  world has already been opened on a newer version, downgrading corrupts chunk data and can crash the
+                  server. Back up first.
+                </span>
+              </div>
+              <label className="flex items-center gap-2 px-1 cursor-pointer">
+                <input type="checkbox" checked={downgradeConfirmed} onChange={(e) => setDowngradeConfirmed(e.target.checked)} className="accent-red-500" />
+                <span className="text-xs text-slate-400">I understand the risk and want to downgrade anyway</span>
+              </label>
+            </div>
+          )}
+
+          <label className="flex items-center gap-2 px-1 cursor-pointer">
+            <input type="checkbox" checked={backupBeforeInstall} onChange={(e) => setBackupBeforeInstall(e.target.checked)} className="accent-panel-500" />
+            <span className="text-xs text-slate-400">Create a backup before installing</span>
+          </label>
 
           <div className="flex items-center gap-2 p-3 rounded-lg bg-dark-800/60 text-slate-500 text-xs">
             <Tag size={13} />

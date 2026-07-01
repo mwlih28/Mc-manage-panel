@@ -11,9 +11,26 @@ export async function fetchPaperVersions(): Promise<string[]> {
   return Object.values(data.versions as Record<string, string[]>).flat();
 }
 
-export async function fetchPaperBuilds(version: string): Promise<number[]> {
+export interface PaperBuild {
+  id: number;
+  time: string;
+  channel: string;
+  commits: { sha: string; message: string; time: string }[];
+}
+
+export async function fetchPaperBuildDetails(version: string): Promise<PaperBuild[]> {
   const { data } = await axios.get(`${PAPER_API_BASE}/versions/${version}/builds`, {
     timeout: 10000, headers: { 'User-Agent': PAPER_USER_AGENT },
   });
-  return (data as { id: number }[]).map((b) => b.id);
+  return (data as PaperBuild[]).map((b) => ({
+    id: b.id,
+    time: b.time,
+    channel: b.channel,
+    commits: (b.commits || []).map((c) => ({ sha: c.sha, message: c.message, time: c.time })),
+  }));
+}
+
+export async function fetchPaperBuilds(version: string): Promise<number[]> {
+  const builds = await fetchPaperBuildDetails(version);
+  return builds.map((b) => b.id);
 }

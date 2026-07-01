@@ -357,8 +357,10 @@ router.get('/:uuid/versions/:version/builds', async (req, res) => {
         const { data } = await axios_1.default.get(`${PAPER_API_BASE}/versions/${version}/builds`, {
             timeout: 10000, headers: { 'User-Agent': PAPER_USER_AGENT },
         });
-        const builds = data.map((b) => b.id);
-        return res.json({ builds, latestBuild: builds[0] });
+        const builds = data.map((b) => ({
+            id: b.id, time: b.time, channel: b.channel, commits: b.commits || [],
+        }));
+        return res.json({ builds, latestBuild: builds[0]?.id });
     }
     catch {
         return res.status(500).json({ message: 'Failed to fetch builds' });
