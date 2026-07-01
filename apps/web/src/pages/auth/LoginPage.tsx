@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Navigate, useNavigate, useLocation, Link } from 'react-router-dom';
 import { Eye, EyeOff, ShieldCheck } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/store/authStore';
 import api from '@/lib/axios';
 import toast from 'react-hot-toast';
@@ -8,6 +9,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { useQuery } from '@tanstack/react-query';
 
 export function LoginPage() {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -61,11 +63,11 @@ export function LoginPage() {
         return;
       }
       setAuth(data.user, data.accessToken, data.refreshToken);
-      toast.success(`Welcome back, ${data.user.firstName}!`);
+      toast.success(t('login.welcomeBack', { name: data.user.firstName }));
       navigate(from, { replace: true });
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } } };
-      toast.error(error.response?.data?.message || 'Login failed');
+      toast.error(error.response?.data?.message || t('login.loginFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -77,11 +79,11 @@ export function LoginPage() {
     try {
       const { data } = await api.post('/auth/2fa/verify', { pendingToken, code: twoFactorCode });
       setAuth(data.user, data.accessToken, data.refreshToken);
-      toast.success(`Welcome back, ${data.user.firstName}!`);
+      toast.success(t('login.welcomeBack', { name: data.user.firstName }));
       navigate(from, { replace: true });
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } } };
-      toast.error(error.response?.data?.message || 'Invalid code');
+      toast.error(error.response?.data?.message || t('login.invalidCode'));
     } finally {
       setIsLoading(false);
     }
@@ -119,10 +121,10 @@ export function LoginPage() {
         <div className="rounded-2xl p-8" style={{ background: '#111113', border: '1px solid #1e1e22' }}>
           {!requiresTwoFactor ? (
             <>
-              <h2 className="text-sm font-semibold text-zinc-200 mb-6">Sign in to your account</h2>
+              <h2 className="text-sm font-semibold text-zinc-200 mb-6">{t('login.signInTitle')}</h2>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="label">Email</label>
+                  <label className="label">{t('login.email')}</label>
                   <input
                     type="email"
                     className="input"
@@ -135,8 +137,8 @@ export function LoginPage() {
                 </div>
                 <div>
                   <div className="flex items-center justify-between">
-                    <label className="label mb-0">Password</label>
-                    <Link to="/forgot-password" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">Forgot password?</Link>
+                    <label className="label mb-0">{t('login.password')}</label>
+                    <Link to="/forgot-password" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">{t('login.forgotPassword')}</Link>
                   </div>
                   <div className="relative mt-1.5">
                     <input
@@ -161,21 +163,21 @@ export function LoginPage() {
                   className="w-full btn-primary py-2.5 justify-center mt-2"
                   disabled={isLoading}
                 >
-                  {isLoading ? <><Spinner size="sm" /> Signing in...</> : 'Sign in'}
+                  {isLoading ? <><Spinner size="sm" /> {t('login.signingIn')}</> : t('login.signIn')}
                 </button>
               </form>
               <p className="text-center text-xs text-zinc-600 mt-5">
-                No account?{' '}
-                <Link to="/register" className="text-zinc-400 hover:text-white transition-colors">Create one</Link>
+                {t('login.noAccount')}{' '}
+                <Link to="/register" className="text-zinc-400 hover:text-white transition-colors">{t('login.createOne')}</Link>
               </p>
             </>
           ) : (
             <>
               <div className="flex items-center gap-2 mb-6">
                 <ShieldCheck size={16} className="text-zinc-300" />
-                <h2 className="text-sm font-semibold text-zinc-200">Two-factor authentication</h2>
+                <h2 className="text-sm font-semibold text-zinc-200">{t('login.twoFactorTitle')}</h2>
               </div>
-              <p className="text-xs text-zinc-500 mb-5">Enter the 6-digit code from your authenticator app.</p>
+              <p className="text-xs text-zinc-500 mb-5">{t('login.twoFactorSub')}</p>
               <form onSubmit={handleTwoFactor} className="space-y-4">
                 <input
                   type="text"
@@ -190,14 +192,14 @@ export function LoginPage() {
                   required
                 />
                 <button type="submit" className="w-full btn-primary py-2.5 justify-center" disabled={isLoading}>
-                  {isLoading ? <><Spinner size="sm" /> Verifying...</> : 'Verify'}
+                  {isLoading ? <><Spinner size="sm" /> {t('login.verifying')}</> : t('login.verify')}
                 </button>
                 <button
                   type="button"
                   className="w-full text-xs text-zinc-600 hover:text-zinc-400 transition-colors py-1"
                   onClick={() => { setRequiresTwoFactor(false); setPendingToken(''); setTwoFactorCode(''); }}
                 >
-                  Back to login
+                  {t('login.backToLogin')}
                 </button>
               </form>
             </>

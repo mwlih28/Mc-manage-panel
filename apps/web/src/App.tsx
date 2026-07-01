@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { useAuthStore } from '@/store/authStore';
 import { LoginPage } from '@/pages/auth/LoginPage';
 import { RegisterPage } from '@/pages/auth/RegisterPage';
 import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage';
@@ -24,11 +26,22 @@ import { RequireAuth } from '@/components/layout/RequireAuth';
 import api from '@/lib/axios';
 
 export default function App() {
+  const { i18n } = useTranslation();
+  const user = useAuthStore((s) => s.user);
+
   useEffect(() => {
     api.get('/settings').then(({ data }) => {
       if (data['app.title']) document.title = data['app.title'];
     }).catch(() => {});
   }, []);
+
+  // A logged-in user's saved language preference takes priority over the
+  // browser-detected/localStorage language once we know who they are.
+  useEffect(() => {
+    if (user?.language && user.language !== i18n.language) {
+      i18n.changeLanguage(user.language);
+    }
+  }, [user?.language, i18n]);
 
   return (
     <Routes>
