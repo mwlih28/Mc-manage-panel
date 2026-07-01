@@ -292,7 +292,7 @@ For bug reports, include your OS, Node version, and relevant logs. For feature r
 
 ---
 
-##VIRUSTOTAL
+## VIRUSTOTAL
 
 Install-panel.sh : https://www.virustotal.com/gui/file/46c5af7da89b7968dcf68e2bf6d81303ba4ceeff5b83492ceec287218aed573a
 
