@@ -292,6 +292,14 @@ For bug reports, include your OS, Node version, and relevant logs. For feature r
 
 ---
 
+##VIRUSTOTAL
+
+Install-panel.sh : https://www.virustotal.com/gui/file/46c5af7da89b7968dcf68e2bf6d81303ba4ceeff5b83492ceec287218aed573a
+
+Install-wings.sh : https://www.virustotal.com/gui/file/a06dc0493715a3677a373157b8c27a9569a116aefeb1fa30132ec3ad4183512c
+
+---
+
 ## Contact
 
 Got an idea, found a bug, or just want to reach out? Email: **mwlih28@gmail.com**
