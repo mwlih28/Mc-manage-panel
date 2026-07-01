@@ -22,6 +22,9 @@ Manage Minecraft and other game servers from a web UI — with a Wings daemon on
 ![Server Console](./docs/screenshots/console.jpg)
 *Real-time console with live output and command input*
 
+![TPS Command](./docs/screenshots/tps.jpg)
+*Live TPS output straight from the console — stable 20.0 across 1m/5m/15m*
+
 ![Admin Panel](./docs/screenshots/admin.jpg)
 *Separate admin panel — user/node/egg management*
 
