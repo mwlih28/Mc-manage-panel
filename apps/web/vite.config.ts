@@ -9,6 +9,20 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  build: {
+    target: 'es2020',
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        // Split vendor libs into their own long-lived chunk so browsers can
+        // cache them across app deploys instead of re-downloading on every update.
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-query': ['@tanstack/react-query', 'axios'],
+        },
+      },
+    },
+  },
   server: {
     port: 5173,
     proxy: {

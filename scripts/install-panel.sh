@@ -532,6 +532,12 @@ server {
 
     client_max_body_size 100m;
 
+    gzip on;
+    gzip_vary on;
+    gzip_comp_level 6;
+    gzip_min_length 256;
+    gzip_types text/plain text/css application/json application/javascript text/javascript application/xml+rss image/svg+xml font/woff2;
+
     location / {
         try_files \$uri \$uri/ /index.html;
         add_header Cache-Control "no-cache, no-store, must-revalidate";

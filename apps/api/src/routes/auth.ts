@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
+import rateLimit from 'express-rate-limit';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
@@ -14,6 +15,15 @@ const router = Router();
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 
+// Brute-force protection: 10 attempts / 15 min per IP on credential-guessing endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many attempts. Please try again later.' },
+});
+
 function safeUser(user: Record<string, unknown>) {
   const { password, twoFactorSecret, smtpPass, ...rest } = user;
   void password; void twoFactorSecret; void smtpPass;
@@ -22,6 +32,7 @@ function safeUser(user: Record<string, unknown>) {
 
 router.post(
   '/login',
+  authLimiter,
   [
     body('email').isEmail().normalizeEmail(),
     body('password').notEmpty(),
@@ -73,7 +84,7 @@ router.post(
   }
 );
 
-router.post('/2fa/verify', async (req: Request, res: Response) => {
+router.post('/2fa/verify', authLimiter, async (req: Request, res: Response) => {
   const { pendingToken, code } = req.body;
   if (!pendingToken || !code) return res.status(422).json({ message: 'pendingToken and code required' });
   try {
@@ -188,7 +199,7 @@ router.post('/logout', authenticate, async (req: AuthRequest, res: Response) => 
 });
 
 // POST /auth/forgot-password — emails a reset link via the panel owner's own SMTP
-router.post('/forgot-password', [body('email').isEmail().normalizeEmail()], async (req: Request, res: Response) => {
+router.post('/forgot-password', authLimiter, [body('email').isEmail().normalizeEmail()], async (req: Request, res: Response) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(422).json({ errors: errors.array() });
 

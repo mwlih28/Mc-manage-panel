@@ -15,6 +15,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
+import compression from 'compression';
 
 import { logger } from './utils/logger';
 import { errorHandler, notFound } from './middleware/errorHandler';
@@ -41,6 +42,7 @@ const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
 
 // Security & middleware
 app.use(helmet({ contentSecurityPolicy: false }));
+app.use(compression());
 app.use(cors({
   origin: CORS_ORIGIN,
   credentials: true,
