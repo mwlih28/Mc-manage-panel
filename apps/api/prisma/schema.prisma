@@ -176,6 +176,9 @@ model Server {
   note       ServerNote?
   subUsers   ServerSubUser[]
   schedules  ScheduledTask[]
+
+  @@index([userId])
+  @@index([nodeId])
 }
 
 model Backup {
@@ -195,6 +198,8 @@ model Backup {
   updatedAt    DateTime  @updatedAt
 
   server       Server    @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@index([serverId])
 }
 
 model Database {
@@ -252,6 +257,10 @@ model Activity {
 
   user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   server     Server?  @relation(fields: [serverId], references: [id], onDelete: SetNull)
+
+  @@index([serverId, timestamp])
+  @@index([userId, timestamp])
+  @@index([timestamp])
 }
 
 model Setting {

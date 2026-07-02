@@ -24,6 +24,10 @@ export function initSocketServer(httpServer: HttpServer, corsOrigin: string): So
   const io = new SocketServer(httpServer, {
     cors: { origin: corsOrigin, credentials: true },
     transports: ['websocket', 'polling'],
+    // Console output is chatty, plain-text, and highly repetitive (timestamps,
+    // log prefixes) — compressing frames cuts bandwidth substantially on
+    // busy servers with minimal CPU cost.
+    perMessageDeflate: { threshold: 1024 },
   });
 
   // Auth middleware
