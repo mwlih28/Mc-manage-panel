@@ -122,19 +122,6 @@ for i in {1..20}; do
 done
 $API_READY && success "API is up" || warn "API health check failed — check: journalctl -u kretase -n 50"
 
-# ── Send update notification (if opt-in stored) ───────────────────────
-INSTALLER_CONF="/etc/kretase/installer.conf"
-if [[ -f "$INSTALLER_CONF" ]]; then
-  . "$INSTALLER_CONF"
-  REGISTRY_URL="${MC_PANEL_REGISTRY_URL:-https://mcpanel.app.n8n.cloud/webhook/mc-panel-register}"
-  if [[ -n "${INSTALLER_EMAIL:-}" ]]; then
-    UPDATE_PAYLOAD="{\"email\":\"${INSTALLER_EMAIL}\",\"name\":\"${INSTALLER_NAME:-}\",\"serverIp\":\"$(hostname -I | awk '{print $1}')\",\"panelDomain\":\"${PANEL_DOMAIN_ORIGINAL:-}\",\"panelVersion\":\"${NEW_COMMIT}\",\"notifyUpdates\":${NOTIFY_UPDATES:-false}}"
-    curl -sf --max-time 10 -X POST "${REGISTRY_URL}" \
-      -H "Content-Type: application/json" \
-      -d "${UPDATE_PAYLOAD}" >/dev/null 2>&1 && info "Registration updated" || true
-  fi
-fi
-
 echo ""
 echo -e "${GREEN}${BOLD}"
 echo "  ╔═══════════════════════════════════════════════════╗"

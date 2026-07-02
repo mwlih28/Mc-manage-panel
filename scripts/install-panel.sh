@@ -120,13 +120,6 @@ read -rp "  Setup SSL with Let's Encrypt? [Y/n]: " SETUP_SSL
 SETUP_SSL="${SETUP_SSL:-y}"
 
 echo ""
-echo -e "  ${CYAN}${BOLD}Optional:${NC} Get notified about updates"
-read -rp "  Email for update notifications (or Enter to skip): " INSTALLER_EMAIL
-INSTALLER_NAME=""
-NOTIFY_UPDATES="false"
-[[ -n "$INSTALLER_EMAIL" ]] && NOTIFY_UPDATES="true"
-
-echo ""
 echo -e "  ${BOLD}Summary:${NC}"
 echo "    Domain    : $PANEL_DOMAIN"
 echo "    Email     : $ADMIN_EMAIL"
@@ -656,11 +649,7 @@ else
   info "UFW not found — skipping firewall"
 fi
 
-# ── Save installer config & send notifications ────────────────────────
-# n8n webhook URL — buraya kendi n8n webhook adresinizi yazın
-# n8n Cloud → Workflow 1 → Webhook node → Production URL
-MC_PANEL_REGISTRY_URL="https://mcpanel.app.n8n.cloud/webhook/mc-panel-register"
-
+# ── Save installer config ──────────────────────────────────────────────
 INSTALLER_CONF_DIR="/etc/kretase"
 mkdir -p "$INSTALLER_CONF_DIR"
 cat > "${INSTALLER_CONF_DIR}/installer.conf" <<CONF
@@ -671,25 +660,9 @@ INSTALLED_VERSION="main"
 PANEL_DIR="${PANEL_DIR}"
 PANEL_USER="${PANEL_USER}"
 PANEL_DOMAIN_ORIGINAL="${PANEL_DOMAIN}"
-INSTALLER_NAME="${INSTALLER_NAME:-}"
-INSTALLER_EMAIL="${INSTALLER_EMAIL:-}"
-NOTIFY_UPDATES="${NOTIFY_UPDATES}"
-MC_PANEL_REGISTRY_URL="${MC_PANEL_REGISTRY_URL}"
 CONF
 chmod 600 "${INSTALLER_CONF_DIR}/installer.conf"
 success "Installer config saved: ${INSTALLER_CONF_DIR}/installer.conf"
-
-# Register installation — thank-you email + update opt-in
-if [[ -n "${INSTALLER_EMAIL:-}" ]]; then
-  REGISTER_PAYLOAD="{\"email\":\"${INSTALLER_EMAIL}\",\"name\":\"${INSTALLER_NAME:-}\",\"serverIp\":\"${SERVER_IP}\",\"panelDomain\":\"${PANEL_DOMAIN}\",\"panelVersion\":\"1.0.0\",\"notifyUpdates\":${NOTIFY_UPDATES}}"
-  if curl -sf --max-time 10 -X POST "${MC_PANEL_REGISTRY_URL}" \
-      -H "Content-Type: application/json" \
-      -d "${REGISTER_PAYLOAD}" >/dev/null 2>&1; then
-    info "Registration sent — thank-you email queued"
-  else
-    info "Could not reach registry (non-fatal) — install continues"
-  fi
-fi
 
 # ── Final health check ────────────────────────────────────────────────
 step "Final health check"

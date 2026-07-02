@@ -290,7 +290,7 @@ export function AdminSettingsPage() {
       <div className="card">
         <div className="card-header">
           <h2 className="text-sm font-semibold text-zinc-100 flex items-center gap-2"><Mail size={14} />Email / SMTP</h2>
-          <p className="text-xs text-zinc-500 mt-0.5">Used to send thank-you and update notification emails to panel installers.</p>
+          <p className="text-xs text-zinc-500 mt-0.5">Used for password reset emails and other panel notifications.</p>
         </div>
         <div className="p-6 space-y-5">
           {/* Resend quick-setup */}
