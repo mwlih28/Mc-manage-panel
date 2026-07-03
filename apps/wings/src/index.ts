@@ -16,6 +16,7 @@ import { panelClient } from './services/panelClient';
 import serverRoutes from './routes/servers';
 import fileRoutes from './routes/files';
 import worldRoutes from './routes/worlds';
+import backupRoutes from './routes/backups';
 import systemRoutes from './routes/system';
 
 async function main() {
@@ -51,6 +52,7 @@ async function main() {
   app.use('/api/servers', serverRoutes);
   app.use('/api/servers/:uuid/files', fileRoutes);
   app.use('/api/servers/:uuid/worlds', worldRoutes);
+  app.use('/api/servers/:uuid/backups', backupRoutes);
   app.use('/api', systemRoutes);
 
   // --- Socket.io for console/stats streaming ---

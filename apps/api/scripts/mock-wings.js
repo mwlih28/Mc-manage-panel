@@ -3,16 +3,77 @@
 // without needing an actual game server node. Not part of the shipped app.
 const express = require('express');
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+const archiver = require('archiver');
+const tar = require('tar');
 const { Server: SocketServer } = require('socket.io');
 
 const PORT = 8080;
 const SERVER_UUID = process.env.DEMO_SERVER_UUID || '00000000-0000-0000-0000-000000000003';
 const MEMORY_LIMIT = 1024 * 1024 * 1024; // 1024MB
+const DATA_ROOT = path.join(__dirname, '.mock-wings-data');
+const BACKUPS_ROOT = path.join(__dirname, '.mock-wings-backups');
+
+// Seed a fake server directory so backup/restore has real files to work with.
+const seedDir = path.join(DATA_ROOT, SERVER_UUID);
+fs.mkdirSync(path.join(seedDir, 'world'), { recursive: true });
+if (!fs.existsSync(path.join(seedDir, 'server.properties'))) {
+  fs.writeFileSync(path.join(seedDir, 'server.properties'), 'motd=A Kretase-powered Paper server\n');
+  fs.writeFileSync(path.join(seedDir, 'world', 'level.dat'), 'fake-level-data\n');
+}
 
 const app = express();
 app.use(express.json());
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
+
+app.post('/api/servers/:uuid/backups', async (req, res) => {
+  const { uuid } = req.params;
+  const { backupUuid, ignoredFiles } = req.body;
+  const root = path.join(DATA_ROOT, uuid);
+  const backupDir = path.join(BACKUPS_ROOT, uuid);
+  fs.mkdirSync(backupDir, { recursive: true });
+  const backupFile = path.join(backupDir, `${backupUuid}.tar.gz`);
+  try {
+    await new Promise((resolve, reject) => {
+      const output = fs.createWriteStream(backupFile);
+      const archive = archiver('tar', { gzip: true, gzipOptions: { level: 6 } });
+      output.on('close', resolve);
+      archive.on('error', reject);
+      archive.pipe(output);
+      archive.glob('**/*', { cwd: root, ignore: [...(ignoredFiles || []), '*.log'] });
+      archive.finalize();
+    });
+    const stat = fs.statSync(backupFile);
+    const hash = crypto.createHash('sha256');
+    hash.update(fs.readFileSync(backupFile));
+    res.json({ size: stat.size, checksum: hash.digest('hex') });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.post('/api/servers/:uuid/backups/:backupUuid/restore', async (req, res) => {
+  const { uuid, backupUuid } = req.params;
+  const root = path.join(DATA_ROOT, uuid);
+  const backupFile = path.join(BACKUPS_ROOT, uuid, `${backupUuid}.tar.gz`);
+  if (!fs.existsSync(backupFile)) return res.status(404).json({ message: 'Backup file not found' });
+  try {
+    await tar.extract({ file: backupFile, cwd: root });
+    res.json({ message: 'Restored' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.delete('/api/servers/:uuid/backups/:backupUuid', (req, res) => {
+  const { uuid, backupUuid } = req.params;
+  const backupFile = path.join(BACKUPS_ROOT, uuid, `${backupUuid}.tar.gz`);
+  if (fs.existsSync(backupFile)) fs.unlinkSync(backupFile);
+  res.status(204).send();
+});
 
 app.post('/api/servers', (_req, res) => res.json({ ok: true }));
 app.delete('/api/servers/:uuid', (_req, res) => res.json({ ok: true }));

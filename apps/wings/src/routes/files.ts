@@ -5,7 +5,7 @@ import fs from 'fs';
 import { getConfig } from '../config';
 import {
   listDirectory, readFile, writeFile, deleteFiles,
-  createDirectory, renameFile, createBackup,
+  createDirectory, renameFile,
 } from '../services/fileManager';
 
 const router = Router({ mergeParams: true });

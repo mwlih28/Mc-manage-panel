@@ -17,6 +17,14 @@ import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import compression from 'compression';
 
+// Prisma returns BigInt for Backup.bytes (needed since real backup sizes can
+// exceed a 32-bit int), but JSON.stringify throws on BigInt by default —
+// res.json() would 500 on every response containing a backup. Real-world
+// backup sizes never come close to Number.MAX_SAFE_INTEGER (9 PB).
+(BigInt.prototype as unknown as { toJSON: () => number }).toJSON = function () {
+  return Number(this);
+};
+
 import { logger } from './utils/logger';
 import { errorHandler, notFound } from './middleware/errorHandler';
 import { initSocketServer } from './services/socketService';

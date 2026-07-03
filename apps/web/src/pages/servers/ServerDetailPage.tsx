@@ -266,6 +266,12 @@ export function ServerDetailPage() {
     queryKey: ['server-backups', id],
     queryFn: () => api.get(`/servers/${id}/backups`).then((r) => r.data.data),
     enabled: activeTab === 'backups' && !!id,
+    // Archiving a real backup can take a while — keep polling while any
+    // backup is still pending so the UI flips to "done" on its own.
+    refetchInterval: (query) => {
+      const backups = (query.state.data as { isSuccessful: boolean }[] | undefined) || [];
+      return backups.some((b) => !b.isSuccessful) ? 4000 : false;
+    },
   });
 
   // Notes: load when tab activates

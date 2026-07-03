@@ -197,7 +197,7 @@ model Backup {
   ignoredFiles String    @default("[]")
   disk         String    @default("local")
   checksum     String?
-  bytes        Int       @default(0)
+  bytes        BigInt    @default(0)
   completedAt  DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt

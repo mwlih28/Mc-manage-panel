@@ -9,7 +9,7 @@ import { sendPowerAction, sendCommand as wingsSendCommand, createServerOnNode, g
 import { fetchPaperVersions, fetchPaperBuildDetails } from '../services/paperApi';
 import { logger } from '../utils/logger';
 
-async function getWingsClient(serverId: string, userId: string, isAdmin: boolean) {
+export async function getWingsClient(serverId: string, userId: string, isAdmin: boolean) {
   const server = await prisma.server.findFirst({
     where: { id: serverId, ...(isAdmin ? {} : { userId }) },
     include: { node: true },

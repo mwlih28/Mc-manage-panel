@@ -1,8 +1,10 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import crypto from 'crypto';
 import archiver from 'archiver';
 import extractZip from 'extract-zip';
+import * as tar from 'tar';
 import { getConfig } from '../config';
 import { logger } from '../utils/logger';
 
@@ -106,27 +108,33 @@ export async function renameFile(uuid: string, from: string, to: string): Promis
   fs.renameSync(fromPath, toPath);
 }
 
-export async function createBackup(uuid: string, name: string, ignored: string[]): Promise<{
-  path: string;
+function getBackupDir(serverUuid: string): string {
+  const cfg = getConfig();
+  return path.join(cfg.system.data, '..', 'backups', serverUuid);
+}
+
+// Backups are keyed by the panel's Backup.uuid (not the user-facing display
+// name, which isn't guaranteed unique or filesystem-safe) so multiple
+// backups of the same server never collide.
+export function getBackupFilePath(serverUuid: string, backupUuid: string): string {
+  return path.join(getBackupDir(serverUuid), `${backupUuid}.tar.gz`);
+}
+
+export async function createBackup(serverUuid: string, backupUuid: string, ignored: string[]): Promise<{
   size: number;
   checksum: string;
 }> {
-  const root = getServerRoot(uuid);
-  const cfg = getConfig();
-  const backupDir = path.join(cfg.system.data, '..', 'backups', uuid);
+  const root = getServerRoot(serverUuid);
+  const backupDir = getBackupDir(serverUuid);
   fs.mkdirSync(backupDir, { recursive: true });
 
-  const backupFile = path.join(backupDir, `${name}.tar.gz`);
+  const backupFile = getBackupFilePath(serverUuid, backupUuid);
 
-  return new Promise((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     const output = fs.createWriteStream(backupFile);
     const archive = archiver('tar', { gzip: true, gzipOptions: { level: 6 } });
 
-    output.on('close', () => {
-      const stat = fs.statSync(backupFile);
-      resolve({ path: backupFile, size: stat.size, checksum: '' });
-    });
-
+    output.on('close', resolve);
     archive.on('error', reject);
     archive.pipe(output);
 
@@ -138,6 +146,35 @@ export async function createBackup(uuid: string, name: string, ignored: string[]
 
     archive.finalize();
   });
+
+  const stat = fs.statSync(backupFile);
+  const checksum = await new Promise<string>((resolve, reject) => {
+    const hash = crypto.createHash('sha256');
+    const stream = fs.createReadStream(backupFile);
+    stream.on('data', (chunk) => hash.update(chunk));
+    stream.on('end', () => resolve(hash.digest('hex')));
+    stream.on('error', reject);
+  });
+
+  return { size: stat.size, checksum };
+}
+
+// Extracts on top of the existing server directory rather than wiping it
+// first — matches how most backup tools restore (a damaged extraction still
+// leaves the original files intact instead of destroying them first).
+export async function restoreBackup(serverUuid: string, backupUuid: string): Promise<void> {
+  const root = getServerRoot(serverUuid);
+  const backupFile = getBackupFilePath(serverUuid, backupUuid);
+  if (!fs.existsSync(backupFile)) throw new Error('Backup file not found on this node');
+
+  fs.mkdirSync(root, { recursive: true });
+  await tar.extract({ file: backupFile, cwd: root });
+  logger.info(`Restored backup ${backupUuid} onto server ${serverUuid}`);
+}
+
+export function deleteBackupFile(serverUuid: string, backupUuid: string): void {
+  const backupFile = getBackupFilePath(serverUuid, backupUuid);
+  if (fs.existsSync(backupFile)) fs.unlinkSync(backupFile);
 }
 
 // ── World management ──────────────────────────────────────────────────────────
