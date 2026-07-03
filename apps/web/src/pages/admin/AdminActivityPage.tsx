@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Activity, CheckCircle, XCircle, Server, Shield, Gauge } from 'lucide-react';
+import { Activity, CheckCircle, XCircle, Server, Shield, Gauge, AlertTriangle, Flame } from 'lucide-react';
 import api from '@/lib/axios';
 import { ActivityLog } from '@/types';
 import { formatDateTime } from '@/lib/utils';
@@ -20,6 +20,8 @@ function PropertiesSummary({ properties }: { properties: string }) {
 
 function getEventIcon(event: string) {
   if (event.startsWith('auth:')) return <Shield size={14} className="text-blue-400" />;
+  if (event === 'server:security-alert') return <AlertTriangle size={14} className="text-orange-400" />;
+  if (event === 'server:crash') return <Flame size={14} className="text-red-400" />;
   if (event === 'server:auto-optimize') return <Gauge size={14} className="text-cyan-400" />;
   if (event.startsWith('server:power')) return <Activity size={14} className="text-yellow-400" />;
   if (event.includes('delete')) return <XCircle size={14} className="text-red-400" />;
@@ -29,6 +31,8 @@ function getEventIcon(event: string) {
 
 function getEventColor(event: string): string {
   if (event.startsWith('auth:')) return 'bg-blue-500/10 border-blue-500/20';
+  if (event === 'server:security-alert') return 'bg-orange-500/10 border-orange-500/20';
+  if (event === 'server:crash') return 'bg-red-500/10 border-red-500/20';
   if (event === 'server:auto-optimize') return 'bg-cyan-500/10 border-cyan-500/20';
   if (event.includes('delete')) return 'bg-red-500/10 border-red-500/20';
   if (event.includes('create')) return 'bg-green-500/10 border-green-500/20';

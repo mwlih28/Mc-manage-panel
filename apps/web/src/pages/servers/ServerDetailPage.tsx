@@ -522,6 +522,11 @@ export function ServerDetailPage() {
       }
     });
 
+    socket.on('server:alert', (msg: { severity: 'warning' | 'critical'; message: string }) => {
+      if (msg.severity === 'critical') toast.error(msg.message, { icon: '🚨', duration: 8000 });
+      else toast(msg.message, { icon: '⚠️', duration: 6000 });
+    });
+
     return () => {
       socket.emit('server:unsubscribe', id);
       socket.disconnect();

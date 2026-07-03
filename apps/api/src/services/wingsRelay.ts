@@ -189,18 +189,24 @@ export function getOrConnectWings(node: NodeInfo, io: SocketServer): Socket {
 
   // Relay all Wings events to panel clients in the correct room
   wingsSocket.onAny((event: string, data: unknown) => {
-    const handled = ['server:console', 'server:stats', 'server:status', 'server:console:history', 'server:crash'];
+    const handled = ['server:console', 'server:stats', 'server:status', 'server:console:history', 'server:crash', 'server:alert'];
     if (!handled.includes(event)) return;
 
-    if (event === 'server:crash') {
-      const { uuid } = data as { uuid?: string };
-      if (uuid) {
-        prisma.server.findFirst({ where: { uuid }, select: { id: true } })
+    if (event === 'server:crash' || event === 'server:alert') {
+      const alertData = data as { uuid?: string; severity?: string; message?: string };
+      if (alertData.uuid) {
+        prisma.server.findFirst({ where: { uuid: alertData.uuid }, select: { id: true } })
           .then((server) => {
             if (!server) return;
-            return prisma.activity.create({ data: { serverId: server.id, event: 'server:crash' } });
+            return prisma.activity.create({
+              data: {
+                serverId: server.id,
+                event: event === 'server:crash' ? 'server:crash' : 'server:security-alert',
+                properties: event === 'server:alert' ? JSON.stringify({ severity: alertData.severity, message: alertData.message }) : '{}',
+              },
+            });
           })
-          .catch((err: Error) => logger.warn(`Failed to log crash event for ${uuid}: ${err.message}`));
+          .catch((err: Error) => logger.warn(`Failed to log ${event} for ${alertData.uuid}: ${err.message}`));
       }
     }
 

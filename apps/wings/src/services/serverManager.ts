@@ -15,6 +15,19 @@ import type { ServerConfig, ServerStatus, ResourceUsage } from '../types';
 
 const MAX_LOG_BUFFER = 500;
 
+// Suspicious-activity detection: Minecraft (vanilla and every Bukkit-family
+// fork) logs every command a player runs — "<name> issued server command:
+// /<cmd>" — regardless of whether a plugin is installed, which makes it the
+// one reliable signal available without depending on a moderation plugin.
+// Block-break/place events are NOT logged by default, so griefing-by-
+// building can't be detected this way — this only covers command abuse
+// (privilege escalation, macro/script spam), which is still a real and
+// common attack surface (a compromised or shared account running /op on
+// itself, or a script hammering commands).
+const SENSITIVE_COMMANDS = ['op', 'deop', 'ban', 'ban-ip', 'pardon', 'pardon-ip', 'whitelist', 'stop', 'save-off', 'difficulty'];
+const COMMAND_SPAM_WINDOW_MS = 10 * 1000;
+const COMMAND_SPAM_THRESHOLD = 8;
+
 // Crash auto-restart: how many unexpected exits are tolerated in the
 // window before Wings gives up and leaves the server offline, so a
 // broken jar/config can't boot-loop forever.
@@ -55,6 +68,7 @@ class ServerManager extends EventEmitter {
   private playerSessions = new Map<string, Map<string, string>>(); // serverUuid -> Map<playerName, playerUuid>
   private allPlayerHistory = new Map<string, Map<string, PlayerHistoryEntry>>(); // serverUuid -> Map<playerName, entry>
   private crashTimestamps = new Map<string, number[]>(); // serverUuid -> recent unexpected-exit times
+  private commandTimestamps = new Map<string, Map<string, number[]>>(); // serverUuid -> playerName -> recent command times
   private io?: SocketServer;
 
   setSocketServer(io: SocketServer) {
@@ -748,6 +762,33 @@ class ServerManager extends EventEmitter {
     }
   }
 
+  private sendAlert(uuid: string, severity: 'warning' | 'critical', message: string) {
+    this.io?.to(`server:${uuid}`).emit('server:alert', { uuid, severity, message, timestamp: Date.now() });
+    this.sendConsole(uuid, `[Kretase] ⚠ ${message}`);
+  }
+
+  private trackSuspiciousActivity(uuid: string, line: string) {
+    const commandMatch = line.match(/\]: (\w[\w ]*?) issued server command: \/(\S+)/);
+    if (!commandMatch) return;
+    const [, player, command] = commandMatch;
+    const baseCommand = command.toLowerCase();
+
+    if (SENSITIVE_COMMANDS.includes(baseCommand)) {
+      this.sendAlert(uuid, 'warning', `${player} ran a sensitive command: /${command}`);
+    }
+
+    const now = Date.now();
+    if (!this.commandTimestamps.has(uuid)) this.commandTimestamps.set(uuid, new Map());
+    const perPlayer = this.commandTimestamps.get(uuid)!;
+    const recent = (perPlayer.get(player) ?? []).filter((t) => now - t < COMMAND_SPAM_WINDOW_MS);
+    recent.push(now);
+    perPlayer.set(player, recent);
+
+    if (recent.length === COMMAND_SPAM_THRESHOLD) {
+      this.sendAlert(uuid, 'critical', `${player} ran ${recent.length} commands in ${COMMAND_SPAM_WINDOW_MS / 1000}s — possible macro/script abuse`);
+    }
+  }
+
   private sendConsole(uuid: string, line: string) {
     const server = this.servers.get(uuid);
     if (server) {
@@ -757,6 +798,7 @@ class ServerManager extends EventEmitter {
     this.io?.to(`server:${uuid}`).emit('server:console', { uuid, data: line });
     this.emit('console', { uuid, line });
     this.trackPlayerEvents(uuid, line);
+    this.trackSuspiciousActivity(uuid, line);
   }
 
   private attachLogStream(uuid: string, containerId: string) {

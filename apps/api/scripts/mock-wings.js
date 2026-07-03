@@ -367,6 +367,15 @@ function currentResources() {
 const httpServer = http.createServer(app);
 const io = new SocketServer(httpServer, { cors: { origin: '*' }, transports: ['websocket', 'polling'] });
 
+// Test-only hook: simulates Wings emitting a suspicious-activity alert, so
+// the panel relay -> Activity log -> live toast pipeline can be verified
+// without needing a real Docker container to trigger it for real.
+app.post('/api/test/trigger-alert', (req, res) => {
+  const { uuid, severity, message } = req.body;
+  io.emit('server:alert', { uuid, severity: severity || 'warning', message: message || 'Test alert', timestamp: Date.now() });
+  res.json({ ok: true });
+});
+
 const CONSOLE_SCRIPT = [
   '[Server thread/INFO]: Starting minecraft server version 1.21.4',
   '[Server thread/INFO]: Loading properties',
