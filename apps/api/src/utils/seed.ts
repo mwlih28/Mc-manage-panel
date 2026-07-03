@@ -262,16 +262,31 @@ curl -sSL -o bungeecord.jar "https://ci.md-5.net/job/BungeeCord/lastSuccessfulBu
 }
 echo "BungeeCord installed."`;
 
+  // Same fill.papermc.io/v3 migration as the Paper egg above — the old
+  // api.papermc.io/v2 endpoint Velocity used is sunset (HTTP 410), and the
+  // python3-based JSON parsing silently fell back to a hardcoded stale
+  // version on the (python3-less) alpine installer image.
   const VELOCITY_INSTALL_SCRIPT = `#!/bin/bash
 set -e
 cd /mnt/server
-echo "Fetching latest Velocity build..."
-VELOCITY_VERSION=$(curl -sSL https://api.papermc.io/v2/projects/velocity | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['versions'][-1])" 2>/dev/null || echo "3.3.0-SNAPSHOT")
-VELOCITY_BUILD=$(curl -sSL "https://api.papermc.io/v2/projects/velocity/versions/$VELOCITY_VERSION" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['builds'][-1])" 2>/dev/null || echo "1")
-JAR="velocity-$VELOCITY_VERSION-$VELOCITY_BUILD.jar"
-echo "Downloading Velocity $VELOCITY_VERSION build $VELOCITY_BUILD..."
-curl -sSL -o velocity.jar "https://api.papermc.io/v2/projects/velocity/versions/$VELOCITY_VERSION/builds/$VELOCITY_BUILD/downloads/$JAR"
-echo "Velocity $VELOCITY_VERSION-$VELOCITY_BUILD installed."`;
+UA="Kretase-Installer/1.0 (+https://kretase.com)"
+VELOCITY_VER="\${VELOCITY_VERSION:-latest}"
+if [ "$VELOCITY_VER" = "latest" ]; then
+  echo "Resolving latest Velocity version..."
+  VJSON=$(curl -sSL -H "User-Agent: $UA" "https://fill.papermc.io/v3/projects/velocity")
+  VELOCITY_VER=$(echo "$VJSON" | grep -o '"[0-9][0-9A-Za-z.\\-]*"' | head -1 | tr -d '"')
+  VELOCITY_VER="\${VELOCITY_VER:-3.4.0}"
+fi
+echo "Fetching latest Velocity build for $VELOCITY_VER..."
+BJSON=$(curl -sSL -H "User-Agent: $UA" "https://fill.papermc.io/v3/projects/velocity/versions/$VELOCITY_VER/builds/latest")
+DOWNLOAD_URL=$(echo "$BJSON" | grep -o '"url":"[^"]*"' | head -1 | sed 's/"url":"//;s/"$//')
+if [ -z "$DOWNLOAD_URL" ]; then
+  echo "ERROR: Could not resolve a Velocity download URL for $VELOCITY_VER — check VELOCITY_VERSION." >&2
+  exit 1
+fi
+echo "Downloading: $DOWNLOAD_URL"
+curl -sSL -H "User-Agent: $UA" -o velocity.jar "$DOWNLOAD_URL"
+echo "Velocity $VELOCITY_VER installed."`;
 
   // Vanilla Minecraft
   await prisma.egg.upsert({
@@ -296,7 +311,7 @@ echo "Velocity $VELOCITY_VERSION-$VELOCITY_BUILD installed."`;
   });
 
   // BungeeCord
-  await prisma.egg.upsert({
+  const bungeeEgg = await prisma.egg.upsert({
     where: { uuid: '00000000-0000-0000-0000-000000000005' },
     update: {
       scriptInstall: BUNGEECORD_INSTALL_SCRIPT,
@@ -316,8 +331,26 @@ echo "Velocity $VELOCITY_VERSION-$VELOCITY_BUILD installed."`;
     },
   });
 
+  // The install script downloads bungeecord.jar, not the generic server.jar
+  // that the server-creation route defaults SERVER_JARFILE to — without this
+  // override the startup command points at a file that doesn't exist.
+  await prisma.eggVariable.upsert({
+    where: { id: 'bungeecord-jarfile-var' },
+    update: { defaultValue: 'bungeecord.jar' },
+    create: {
+      id: 'bungeecord-jarfile-var',
+      eggId: bungeeEgg.id,
+      name: 'Server Jar File',
+      description: 'The jar file to run',
+      envVariable: 'SERVER_JARFILE',
+      defaultValue: 'bungeecord.jar',
+      userViewable: true,
+      userEditable: false,
+    },
+  });
+
   // Velocity
-  await prisma.egg.upsert({
+  const velocityEgg = await prisma.egg.upsert({
     where: { uuid: '00000000-0000-0000-0000-000000000006' },
     update: {
       scriptInstall: VELOCITY_INSTALL_SCRIPT,
@@ -336,6 +369,54 @@ echo "Velocity $VELOCITY_VERSION-$VELOCITY_BUILD installed."`;
       scriptContainer: 'ghcr.io/pterodactyl/installers:alpine',
     },
   });
+
+  // Same SERVER_JARFILE mismatch as BungeeCord above — the script downloads
+  // velocity.jar.
+  await prisma.eggVariable.upsert({
+    where: { id: 'velocity-jarfile-var' },
+    update: { defaultValue: 'velocity.jar' },
+    create: {
+      id: 'velocity-jarfile-var',
+      eggId: velocityEgg.id,
+      name: 'Server Jar File',
+      description: 'The jar file to run',
+      envVariable: 'SERVER_JARFILE',
+      defaultValue: 'velocity.jar',
+      userViewable: true,
+      userEditable: false,
+    },
+  });
+
+  await prisma.eggVariable.upsert({
+    where: { id: 'velocity-version-var' },
+    update: {},
+    create: {
+      id: 'velocity-version-var',
+      eggId: velocityEgg.id,
+      name: 'Velocity Version',
+      description: 'Velocity version to install, or "latest"',
+      envVariable: 'VELOCITY_VERSION',
+      defaultValue: 'latest',
+      userViewable: true,
+      userEditable: true,
+    },
+  });
+
+  // Existing BungeeCord/Velocity servers created before the fix above still
+  // carry the wrong SERVER_JARFILE=server.jar default — correct them so
+  // their startup command points at the jar the install script actually
+  // downloaded.
+  for (const [eggId, jarfile] of [[bungeeEgg.id, 'bungeecord.jar'], [velocityEgg.id, 'velocity.jar']] as const) {
+    const affected = await prisma.server.findMany({ where: { eggId }, select: { id: true, env: true } });
+    for (const srv of affected) {
+      let env: Record<string, string> = {};
+      try { env = JSON.parse(srv.env as string) || {}; } catch { /* start fresh */ }
+      if (env.SERVER_JARFILE !== jarfile) {
+        env.SERVER_JARFILE = jarfile;
+        await prisma.server.update({ where: { id: srv.id }, data: { env: JSON.stringify(env) } });
+      }
+    }
+  }
 
   // Bedrock install script runs in ghcr.io/pterodactyl/installers:alpine
   // which has bash, curl, unzip — no Python3 dependency.
