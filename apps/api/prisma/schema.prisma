@@ -179,6 +179,11 @@ model Server {
   // default since not every owner wants their server publicly discoverable.
   publicStatusEnabled   Boolean @default(false)
   publicSlug            String? @unique
+  // Optional look-and-feel customization for the public status page —
+  // an accent color (hex) and a banner image URL. Both fall back to
+  // sensible defaults on the page itself when unset.
+  publicStatusAccentColor String?
+  publicStatusBanner      String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

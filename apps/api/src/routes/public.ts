@@ -28,11 +28,14 @@ router.get('/status/:slug', publicStatusLimiter, async (req: Request, res: Respo
 
   const base = {
     name: server.name,
+    description: server.description || null,
     online: false as boolean,
     playerCount: 0,
     maxPlayers: null as number | null,
     motd: null as string | null,
     address: server.allocation ? `${server.node?.fqdn}:${server.allocation.port}` : null,
+    accentColor: server.publicStatusAccentColor || null,
+    banner: server.publicStatusBanner || null,
   };
 
   if (!server.node) return res.json(base);

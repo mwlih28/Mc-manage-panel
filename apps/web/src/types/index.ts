@@ -136,6 +136,8 @@ export interface Server {
   autoOptimizeEnabled: boolean;
   publicStatusEnabled: boolean;
   publicSlug?: string | null;
+  publicStatusAccentColor?: string | null;
+  publicStatusBanner?: string | null;
   createdAt: string;
   updatedAt: string;
   user?: Pick<User, 'id' | 'email' | 'username'>;

@@ -269,7 +269,10 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
 
   if (!server) return res.status(404).json({ message: 'Server not found' });
 
-  const { name, description, mcVersion, crashDetectionEnabled, autoOptimizeEnabled, publicStatusEnabled } = req.body;
+  const {
+    name, description, mcVersion, crashDetectionEnabled, autoOptimizeEnabled, publicStatusEnabled,
+    publicStatusAccentColor, publicStatusBanner,
+  } = req.body;
   const updateData: Record<string, unknown> = {};
 
   if (name) updateData.name = name;
@@ -300,6 +303,26 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
         slug = `${base}-${Math.random().toString(36).slice(2, 6)}`;
       }
       updateData.publicSlug = slug;
+    }
+  }
+
+  if (publicStatusAccentColor !== undefined) {
+    if (publicStatusAccentColor === null || publicStatusAccentColor === '') {
+      updateData.publicStatusAccentColor = null;
+    } else if (typeof publicStatusAccentColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(publicStatusAccentColor)) {
+      updateData.publicStatusAccentColor = publicStatusAccentColor;
+    } else {
+      return res.status(400).json({ message: 'Accent color must be a hex code like #3b82f6' });
+    }
+  }
+
+  if (publicStatusBanner !== undefined) {
+    if (publicStatusBanner === null || publicStatusBanner === '') {
+      updateData.publicStatusBanner = null;
+    } else if (typeof publicStatusBanner === 'string' && /^https?:\/\/.{1,500}$/.test(publicStatusBanner)) {
+      updateData.publicStatusBanner = publicStatusBanner;
+    } else {
+      return res.status(400).json({ message: 'Banner must be a valid http(s) image URL' });
     }
   }
 
