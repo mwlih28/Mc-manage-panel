@@ -46,6 +46,34 @@ interface ManifestEntry {
 
 type Manifest = Record<string, ManifestEntry>;
 
+interface ModrinthFileMatch {
+  projectId: string;
+  projectTitle: string;
+  iconUrl: string | null;
+  versionId: string;
+  versionNumber: string;
+}
+
+interface CurseForgeFileMatch {
+  modId: number;
+  modName: string;
+  iconUrl: string | null;
+  fileId: number;
+  fileName: string;
+  latestFileId: number;
+  latestFileName: string;
+}
+
+interface DetectedEntry {
+  filename: string;
+  source: 'modrinth' | 'curseforge';
+  title: string;
+  iconUrl?: string | null;
+  hasUpdate: boolean;
+  modrinth?: { projectId: string; latestVersion?: ModrinthVersion };
+  curseforge?: { modId: number; latestFileId: number };
+}
+
 const SORT_OPTIONS = [
   { id: 'relevance', label: 'Relevance' },
   { id: 'downloads', label: 'Most Downloads' },
@@ -113,6 +141,7 @@ export function PluginManager({ serverId, mcVersion }: { serverId: string; mcVer
   const [toggling, setToggling] = useState<string | null>(null);
   const [updates, setUpdates] = useState<Record<string, ModrinthVersion>>({});
   const [checkingUpdates, setCheckingUpdates] = useState(false);
+  const [detected, setDetected] = useState<DetectedEntry[]>([]);
 
   const runSearch = useCallback(async (offset: number, append: boolean) => {
     if (append) setLoadingMore(true); else setSearching(true);
@@ -168,6 +197,8 @@ export function PluginManager({ serverId, mcVersion }: { serverId: string; mcVer
       );
       setInstalled(jars);
       setManifest(m);
+      setDetected([]);
+      setUpdates({});
     } catch {
       setInstalled([]);
     } finally {
@@ -251,7 +282,6 @@ export function PluginManager({ serverId, mcVersion }: { serverId: string; mcVer
     setCheckingUpdates(true);
     try {
       const entries = Object.entries(manifest);
-      if (entries.length === 0) { toast('No tracked plugins to check', { icon: 'ℹ️' }); return; }
       const found: Record<string, ModrinthVersion> = {};
       for (const [filename, meta] of entries) {
         try {
@@ -262,10 +292,78 @@ export function PluginManager({ serverId, mcVersion }: { serverId: string; mcVer
         } catch { /* skip this plugin, keep checking the rest */ }
       }
       setUpdates(found);
-      if (Object.keys(found).length === 0) toast.success('All plugins are up to date');
-      else toast(`${Object.keys(found).length} update(s) available`, { icon: '⬆️' });
+
+      // Files with no manifest entry (manually uploaded, or predating the
+      // manifest) — identify them by hash instead of trusting a filename.
+      const unmanaged = installed.filter((f) => !manifest[f.name]);
+      const newDetected: DetectedEntry[] = [];
+      if (unmanaged.length > 0) {
+        try {
+          const { data } = await api.get(`/servers/${serverId}/files/detect`, { params: { directory: '/plugins' } });
+          const rows: { name: string; modrinth: ModrinthFileMatch | null; curseforge: CurseForgeFileMatch | null }[] = data.data || [];
+          for (const row of rows) {
+            if (row.modrinth) {
+              let latestVersion: ModrinthVersion | undefined;
+              try {
+                const res = await fetch(`https://api.modrinth.com/v2/project/${row.modrinth.projectId}/version`);
+                const versions: ModrinthVersion[] = await res.json();
+                latestVersion = pickBestVersion(versions, mcVersion).version;
+              } catch { /* still show current identity even if latest lookup fails */ }
+              newDetected.push({
+                filename: row.name, source: 'modrinth',
+                title: row.modrinth.projectTitle, iconUrl: row.modrinth.iconUrl,
+                hasUpdate: !!latestVersion && latestVersion.id !== row.modrinth.versionId,
+                modrinth: { projectId: row.modrinth.projectId, latestVersion },
+              });
+            } else if (row.curseforge) {
+              newDetected.push({
+                filename: row.name, source: 'curseforge',
+                title: row.curseforge.modName, iconUrl: row.curseforge.iconUrl,
+                hasUpdate: row.curseforge.latestFileId !== row.curseforge.fileId,
+                curseforge: { modId: row.curseforge.modId, latestFileId: row.curseforge.latestFileId },
+              });
+            }
+          }
+        } catch { /* detection endpoint unavailable — manifest-based results still shown */ }
+      }
+      setDetected(newDetected);
+
+      const total = Object.keys(found).length + newDetected.filter((d) => d.hasUpdate).length;
+      if (total === 0) toast.success('All plugins are up to date');
+      else toast(`${total} update(s) available`, { icon: '⬆️' });
     } finally {
       setCheckingUpdates(false);
+    }
+  };
+
+  const applyDetectedUpdate = async (entry: DetectedEntry) => {
+    setInstalling(entry.filename);
+    try {
+      if (entry.source === 'modrinth' && entry.modrinth?.latestVersion) {
+        const file = entry.modrinth.latestVersion.files.find((f) => f.primary) ?? entry.modrinth.latestVersion.files[0];
+        if (!file) return;
+        await api.post(`/servers/${serverId}/files/delete`, { files: [`/plugins/${entry.filename}`] });
+        await api.post(`/servers/${serverId}/plugins/install`, { url: file.url, filename: file.filename, type: 'plugins' });
+        // Now that we know its identity, adopt it into the manifest so
+        // future checks are instant instead of re-detecting by hash.
+        const m = await loadManifest();
+        m[file.filename] = { projectId: entry.modrinth.projectId, versionId: entry.modrinth.latestVersion.id, title: entry.title, iconUrl: entry.iconUrl || undefined };
+        await saveManifest(m);
+      } else if (entry.source === 'curseforge' && entry.curseforge) {
+        const { data } = await api.get(`/curseforge/mods/${entry.curseforge.modId}/files`);
+        const files: { id: number; downloadUrl: string | null; fileName: string }[] = data.files || [];
+        const target = files.find((f) => f.id === entry.curseforge!.latestFileId);
+        if (!target?.downloadUrl) { toast.error('No direct download available for the latest file'); return; }
+        await api.post(`/servers/${serverId}/files/delete`, { files: [`/plugins/${entry.filename}`] });
+        await api.post(`/servers/${serverId}/plugins/install`, { url: target.downloadUrl, filename: target.fileName, type: 'plugins' });
+      }
+      setDetected((prev) => prev.filter((d) => d.filename !== entry.filename));
+      toast.success(`${entry.title} updated`);
+      loadInstalled();
+    } catch {
+      toast.error('Update failed');
+    } finally {
+      setInstalling(null);
     }
   };
 
@@ -381,6 +479,50 @@ export function PluginManager({ serverId, mcVersion }: { serverId: string; mcVer
           )}
         </div>
       </div>
+
+      {/* Hash-detected plugins that aren't tracked in the manifest yet
+          (manually uploaded, or predate it) */}
+      {detected.length > 0 && (
+        <div className="card">
+          <div className="card-header">
+            <h3 className="text-sm font-semibold text-slate-100">Detected (unmanaged)</h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Identified by file hash, not filename — installed outside this panel or before update-tracking was added.
+            </p>
+          </div>
+          <div className="divide-y divide-dark-800/50">
+            {detected.map((entry) => (
+              <div key={entry.filename} className="flex items-center gap-3 px-4 py-3">
+                {entry.iconUrl ? (
+                  <img src={entry.iconUrl} alt="" className="w-8 h-8 rounded-md shrink-0 object-cover" />
+                ) : (
+                  <div className="w-8 h-8 rounded-md bg-dark-800 flex items-center justify-center shrink-0">
+                    <Package size={14} className="text-slate-500" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-slate-200 truncate">{entry.title}</span>
+                    <span className="badge text-[10px] bg-dark-700 text-slate-500 shrink-0 capitalize">{entry.source}</span>
+                    {entry.hasUpdate && <span className="badge text-[10px] bg-blue-500/15 text-blue-400 shrink-0">Update available</span>}
+                  </div>
+                  <p className="text-xs text-slate-600 font-mono truncate">{entry.filename}</p>
+                </div>
+                {entry.hasUpdate && (
+                  <button
+                    className="p-1.5 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded transition-colors shrink-0"
+                    onClick={() => applyDetectedUpdate(entry)}
+                    disabled={installing === entry.filename}
+                    title="Update"
+                  >
+                    {installing === entry.filename ? <Spinner size="sm" /> : <ArrowDownToLine size={14} />}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Plugin marketplace */}
       <div className="card">

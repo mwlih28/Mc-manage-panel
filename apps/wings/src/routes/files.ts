@@ -2,11 +2,13 @@ import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import { getConfig } from '../config';
 import {
   listDirectory, readFile, writeFile, deleteFiles,
-  createDirectory, renameFile,
+  createDirectory, renameFile, getServerRoot, safePath,
 } from '../services/fileManager';
+import { curseForgeFingerprint } from '../utils/murmur2';
 
 const router = Router({ mergeParams: true });
 
@@ -104,6 +106,39 @@ router.post('/upload', upload.array('files'), async (req: Request, res: Response
   }
 
   return res.json({ message: `${files.length} file(s) uploaded` });
+});
+
+// GET /api/servers/:uuid/files/hashes?directory=/plugins — computes SHA1
+// (Modrinth) and CurseForge's fingerprint hash for each .jar in a
+// directory, so the panel can identify installed plugins/mods that don't
+// have a Kretase-written manifest entry (manually uploaded, or predating
+// the manifest) without ever streaming the jar bytes through the panel.
+router.get('/hashes', async (req: Request, res: Response) => {
+  const { uuid } = req.params;
+  const dir = (req.query.directory as string) || '/';
+  try {
+    const root = getServerRoot(uuid);
+    const target = safePath(root, dir);
+    if (!fs.existsSync(target)) return res.json({ files: [] });
+
+    const jars = fs.readdirSync(target, { withFileTypes: true })
+      .filter((e) => e.isFile() && e.name.toLowerCase().endsWith('.jar'));
+
+    const files = jars.map((entry) => {
+      const filePath = path.join(target, entry.name);
+      const buffer = fs.readFileSync(filePath);
+      return {
+        name: entry.name,
+        size: buffer.length,
+        sha1: crypto.createHash('sha1').update(buffer).digest('hex'),
+        murmur2: curseForgeFingerprint(buffer),
+      };
+    });
+
+    return res.json({ files });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
+  }
 });
 
 // Download file

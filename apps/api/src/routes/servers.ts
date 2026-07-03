@@ -7,8 +7,8 @@ import { authenticate, requireAdmin } from '../middleware/auth';
 import { AuthRequest } from '../types';
 import { sendPowerAction, sendCommand as wingsSendCommand, createServerOnNode, getServerResources, buildWingsConfig } from '../services/wingsClient';
 import { fetchPaperVersions, fetchPaperBuildDetails } from '../services/paperApi';
-import { resolveModpackInstall as resolveCurseForgeModpack } from '../services/curseforgeApi';
-import { resolveModpackInstall as resolveModrinthModpack } from '../services/modrinthApi';
+import { resolveModpackInstall as resolveCurseForgeModpack, matchFilesByFingerprint, CurseForgeFileMatch } from '../services/curseforgeApi';
+import { resolveModpackInstall as resolveModrinthModpack, matchFilesBySha1, ModrinthFileMatch } from '../services/modrinthApi';
 import { ResolvedModpack } from '../services/modpackTypes';
 import { logger } from '../utils/logger';
 
@@ -970,6 +970,46 @@ router.get('/:id/files', authenticate, async (req: AuthRequest, res: Response) =
   } catch (err) {
     const e = err as { response?: { data?: unknown; status?: number } };
     return res.status(e.response?.status || 500).json(e.response?.data || { message: 'Wings error' });
+  }
+});
+
+// GET /servers/:id/files/detect?directory=/plugins — identifies installed
+// jars against Modrinth/CurseForge by file hash, for ones that don't have
+// a Kretase-written manifest entry (manually uploaded, predate the
+// manifest, or dropped in by the modpack installer). Filename-independent,
+// unlike the manifest-based update check the plugin/mod managers already do.
+router.get('/:id/files/detect', authenticate, async (req: AuthRequest, res: Response) => {
+  if (hasPathTraversal(req.query)) return res.status(400).json({ message: 'Invalid path' });
+  const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
+  if (!ctx) return res.status(404).json({ message: 'Server not found' });
+  const directory = (req.query.directory as string) || '/plugins';
+
+  try {
+    const { data } = await ctx.client.get(`/servers/${ctx.server.uuid}/files/hashes`, { params: { directory }, timeout: 30000 });
+    const files: { name: string; size: number; sha1: string; murmur2: number }[] = data.files || [];
+    if (files.length === 0) return res.json({ data: [] });
+
+    const [modrinthMatches, curseforgeMatches] = await Promise.all([
+      matchFilesBySha1(files.map((f) => f.sha1)).catch((err) => {
+        logger.warn(`Modrinth hash lookup failed: ${(err as Error).message}`);
+        return new Map<string, ModrinthFileMatch>();
+      }),
+      matchFilesByFingerprint(files.map((f) => f.murmur2)).catch((err) => {
+        logger.warn(`CurseForge fingerprint lookup failed: ${(err as Error).message}`);
+        return new Map<number, CurseForgeFileMatch>();
+      }),
+    ]);
+
+    const result = files.map((f) => ({
+      name: f.name,
+      size: f.size,
+      modrinth: modrinthMatches.get(f.sha1) || null,
+      curseforge: curseforgeMatches.get(f.murmur2) || null,
+    }));
+    return res.json({ data: result });
+  } catch (err) {
+    logger.warn(`File detection failed for server ${req.params.id}: ${(err as Error).message}`);
+    return res.status(502).json({ message: 'Failed to detect installed files' });
   }
 });
 

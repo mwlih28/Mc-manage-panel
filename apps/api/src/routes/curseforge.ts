@@ -68,4 +68,18 @@ router.get('/modpacks/:modId/files', authenticate, async (req: AuthRequest, res:
   }
 });
 
+// GET /curseforge/mods/:modId/files — generic file list for any mod/plugin
+// (not just modpacks/worlds); used by the update-checker to resolve a
+// download URL for a specific file id found via fingerprint matching.
+router.get('/mods/:modId/files', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const modId = parseInt(req.params.modId);
+    const files = await getModpackFiles(modId);
+    return res.json({ files });
+  } catch (err) {
+    logger.error(`CurseForge mod files fetch failed: ${describeError(err)}`);
+    return res.status(502).json({ message: (err as Error).message || 'Failed to fetch mod files' });
+  }
+});
+
 export default router;

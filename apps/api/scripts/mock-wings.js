@@ -195,6 +195,51 @@ app.get('/api/servers/:uuid/files', (req, res) => {
   res.json({ files: dir === '/plugins' ? FILES_PLUGINS : FILES_ROOT });
 });
 
+// CurseForge fingerprint (murmur2, seed 1, whitespace bytes stripped) —
+// duplicated from apps/wings/src/utils/murmur2.ts since this mock is
+// plain JS and doesn't share a build with the TS daemon.
+function murmur2(data, seed) {
+  const m = 0x5bd1e995;
+  const r = 24;
+  let len = data.length;
+  let h = (seed ^ len) >>> 0;
+  let i = 0;
+  while (len >= 4) {
+    let k = (data[i] & 0xff) | ((data[i + 1] & 0xff) << 8) | ((data[i + 2] & 0xff) << 16) | ((data[i + 3] & 0xff) << 24);
+    k = Math.imul(k, m) >>> 0;
+    k ^= k >>> r;
+    k = Math.imul(k, m) >>> 0;
+    h = Math.imul(h, m) >>> 0;
+    h ^= k;
+    i += 4; len -= 4;
+  }
+  if (len === 3) h ^= (data[i + 2] & 0xff) << 16;
+  if (len >= 2) h ^= (data[i + 1] & 0xff) << 8;
+  if (len >= 1) { h ^= (data[i] & 0xff); h = Math.imul(h, m) >>> 0; }
+  h ^= h >>> 13;
+  h = Math.imul(h, m) >>> 0;
+  h ^= h >>> 15;
+  return h >>> 0;
+}
+function curseForgeFingerprint(buffer) {
+  const filtered = Buffer.from([...buffer].filter((b) => b !== 9 && b !== 10 && b !== 13 && b !== 32));
+  return murmur2(filtered, 1);
+}
+
+app.get('/api/servers/:uuid/files/hashes', (req, res) => {
+  const { uuid } = req.params;
+  const dir = String(req.query.directory || '/');
+  const target = path.join(DATA_ROOT, uuid, dir);
+  if (!fs.existsSync(target)) return res.json({ files: [] });
+  const files = fs.readdirSync(target, { withFileTypes: true })
+    .filter((e) => e.isFile() && e.name.toLowerCase().endsWith('.jar'))
+    .map((e) => {
+      const buf = fs.readFileSync(path.join(target, e.name));
+      return { name: e.name, size: buf.length, sha1: crypto.createHash('sha1').update(buf).digest('hex'), murmur2: curseForgeFingerprint(buf) };
+    });
+  res.json({ files });
+});
+
 app.get('/api/servers/:uuid/files/contents', (req, res) => {
   const file = String(req.query.file || '');
   if (file.endsWith('server.properties')) {

@@ -126,3 +126,45 @@ export async function resolveModpackInstall(versionId: string): Promise<Resolved
     },
   };
 }
+
+export interface ModrinthFileMatch {
+  projectId: string;
+  projectTitle: string;
+  iconUrl: string | null;
+  versionId: string;
+  versionNumber: string;
+}
+
+// Matches installed jars to Modrinth projects by SHA1 — works regardless
+// of filename, which is what makes it useful for jars that weren't
+// installed through this panel (manually uploaded, or predating the
+// per-install manifest this panel writes for its own installs).
+export async function matchFilesBySha1(hashes: string[]): Promise<Map<string, ModrinthFileMatch>> {
+  const result = new Map<string, ModrinthFileMatch>();
+  if (hashes.length === 0) return result;
+
+  const { data } = await client().post('/version_files', { hashes, algorithm: 'sha1' });
+  interface RawVersionFile {
+    project_id: string; id: string; version_number: string;
+    files: { hashes: { sha1: string } }[];
+  }
+  const versionsByHash = data as Record<string, RawVersionFile>;
+  const projectIds = [...new Set(Object.values(versionsByHash).map((v) => v.project_id))];
+  if (projectIds.length === 0) return result;
+
+  const { data: projects } = await client().get('/projects', { params: { ids: JSON.stringify(projectIds) } });
+  interface RawProject { id: string; title: string; icon_url: string | null }
+  const projectById = new Map<string, RawProject>((projects as RawProject[]).map((p) => [p.id, p]));
+
+  for (const [hash, version] of Object.entries(versionsByHash)) {
+    const project = projectById.get(version.project_id);
+    result.set(hash, {
+      projectId: version.project_id,
+      projectTitle: project?.title || version.project_id,
+      iconUrl: project?.icon_url || null,
+      versionId: version.id,
+      versionNumber: version.version_number,
+    });
+  }
+  return result;
+}

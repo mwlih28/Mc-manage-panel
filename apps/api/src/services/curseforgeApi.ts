@@ -221,3 +221,56 @@ export async function resolveModpackInstall(modId: number, fileId: number): Prom
     loader: { type: loaderType, minecraftVersion: manifest.minecraft.version, loaderVersion },
   };
 }
+
+export interface CurseForgeFileMatch {
+  modId: number;
+  modName: string;
+  iconUrl: string | null;
+  fileId: number;
+  fileName: string;
+  latestFileId: number;
+  latestFileName: string;
+  latestFileDate: string;
+}
+
+// Matches installed jars to CurseForge mods by their fingerprint (a
+// murmur2 hash of the file with whitespace bytes stripped — see
+// apps/wings/src/utils/murmur2.ts for why), then resolves the newest file
+// for each matched mod so the caller can tell if an update exists.
+export async function matchFilesByFingerprint(fingerprints: number[]): Promise<Map<number, CurseForgeFileMatch>> {
+  const result = new Map<number, CurseForgeFileMatch>();
+  const apiKey = await getApiKey();
+  if (!apiKey || fingerprints.length === 0) return result;
+
+  const { data } = await client(apiKey).post('/fingerprints', { fingerprints });
+  interface ExactMatch {
+    id: number; file: { id: number; fileName: string; modId: number };
+  }
+  const matches: ExactMatch[] = data.data?.exactMatches || [];
+  if (matches.length === 0) return result;
+
+  const modIds = [...new Set(matches.map((m) => m.file.modId))];
+  const { data: modsData } = await client(apiKey).post('/mods', { modIds });
+  interface RawMod {
+    id: number; name: string; logo?: { thumbnailUrl?: string } | null;
+    latestFiles: { id: number; fileName: string; fileDate: string }[];
+  }
+  const modById = new Map<number, RawMod>((modsData.data as RawMod[]).map((m) => [m.id, m]));
+
+  for (const match of matches) {
+    const mod = modById.get(match.file.modId);
+    if (!mod) continue;
+    const latest = [...(mod.latestFiles || [])].sort((a, b) => (a.fileDate < b.fileDate ? 1 : -1))[0];
+    result.set(match.id, {
+      modId: mod.id,
+      modName: mod.name,
+      iconUrl: mod.logo?.thumbnailUrl || null,
+      fileId: match.file.id,
+      fileName: match.file.fileName,
+      latestFileId: latest?.id ?? match.file.id,
+      latestFileName: latest?.fileName ?? match.file.fileName,
+      latestFileDate: latest?.fileDate ?? '',
+    });
+  }
+  return result;
+}
