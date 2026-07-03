@@ -22,6 +22,7 @@ PANEL_DIR="/var/www/kretase"
 PANEL_USER="mcpanel"
 NODE_VERSION="20"
 REPO_URL="https://github.com/mwlih28/mc-manage-panel"
+REPO_API="https://api.github.com/repos/mwlih28/mc-manage-panel"
 BRANCH="main"
 MIN_DISK_GB=5
 MIN_RAM_MB=512
@@ -30,6 +31,14 @@ DB_USER="mcpanel"
 SSL_OK="false"
 SSL_ATTEMPTED="false"
 SCHEME="http"
+
+# ── Resolve latest stable release ────────────────────────────────────
+# Installs always track the latest tagged release, not the tip of main —
+# main gets pushed to directly during development and can be broken
+# between releases. Falls back to main if no release exists yet or
+# GitHub is unreachable.
+LATEST_TAG=$(curl -fsSL -H "User-Agent: Kretase-Installer/1.0" "${REPO_API}/releases/latest" 2>/dev/null | grep -o '"tag_name": *"[^"]*"' | head -1 | cut -d'"' -f4 || true)
+[[ -n "$LATEST_TAG" ]] && BRANCH="$LATEST_TAG"
 
 # ── Lock file (prevent parallel installs) ────────────────────────────
 LOCKFILE="/tmp/kretase-install.lock"
@@ -191,6 +200,11 @@ success "User '${PANEL_USER}' ready"
 
 # ── Clone / update source ─────────────────────────────────────────────
 step "Fetching panel source"
+if [[ "$BRANCH" == "main" ]]; then
+  warn "No tagged release found — installing from main (may include unreleased changes)"
+else
+  info "Installing release ${BRANCH}"
+fi
 git config --global --add safe.directory "$PANEL_DIR" 2>/dev/null || true
 if [[ -d "${PANEL_DIR}/.git" ]]; then
   info "Updating existing installation..."

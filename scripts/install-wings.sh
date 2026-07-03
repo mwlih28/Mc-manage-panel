@@ -27,9 +27,15 @@ DATA_DIR="/var/lib/mc-wings"
 LOG_DIR="/var/log/mc-wings"
 NODE_VERSION="20"
 REPO_URL="https://github.com/mwlih28/mc-manage-panel"
+REPO_API="https://api.github.com/repos/mwlih28/mc-manage-panel"
 BRANCH="main"
 MIN_DISK_GB=10
 MIN_RAM_MB=512
+
+# ── Resolve latest stable release ────────────────────────────────────
+# Same reasoning as install-panel.sh — track releases, not main's tip.
+LATEST_TAG=$(curl -fsSL -H "User-Agent: Kretase-Installer/1.0" "${REPO_API}/releases/latest" 2>/dev/null | grep -o '"tag_name": *"[^"]*"' | head -1 | cut -d'"' -f4 || true)
+[[ -n "$LATEST_TAG" ]] && BRANCH="$LATEST_TAG"
 
 # ── Lock file ─────────────────────────────────────────────────────────
 LOCKFILE="/tmp/mc-wings-install.lock"
@@ -191,6 +197,11 @@ success "Directories created"
 
 # ── Clone / update source ─────────────────────────────────────────────
 step "Fetching Wings source"
+if [[ "$BRANCH" == "main" ]]; then
+  warn "No tagged release found — installing from main (may include unreleased changes)"
+else
+  info "Installing release ${BRANCH}"
+fi
 git config --global --add safe.directory "$WINGS_DIR" 2>/dev/null || true
 if [[ -d "${WINGS_DIR}/.git" ]]; then
   info "Updating existing installation..."

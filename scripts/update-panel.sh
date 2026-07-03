@@ -18,6 +18,7 @@ step()    { echo -e "\n${BOLD}${BLUE}┌─ $* ${NC}"; }
 
 PANEL_DIR="/var/www/kretase"
 PANEL_USER="mcpanel"
+REPO_API="https://api.github.com/repos/mwlih28/mc-manage-panel"
 BRANCH="main"
 LOGFILE="/var/log/kretase-update.log"
 
@@ -44,6 +45,19 @@ echo -e "${NC}"
 [[ -f "${PANEL_DIR}/apps/api/.env" ]] || error ".env not found — panel may not be properly installed."
 
 PRISMA_BIN="${PANEL_DIR}/node_modules/.bin/prisma"
+
+# ── Resolve latest stable release ────────────────────────────────────
+# Updates always track the latest tagged release, not the tip of main —
+# main gets pushed to directly during development and can be broken
+# between releases. Falls back to main if no release exists yet or
+# GitHub is unreachable.
+LATEST_TAG=$(curl -fsSL -H "User-Agent: Kretase-Updater/1.0" "${REPO_API}/releases/latest" 2>/dev/null | grep -o '"tag_name": *"[^"]*"' | head -1 | cut -d'"' -f4 || true)
+if [[ -n "$LATEST_TAG" ]]; then
+  BRANCH="$LATEST_TAG"
+  info "Latest release: ${BRANCH}"
+else
+  warn "No tagged release found — updating to main (may include unreleased changes)"
+fi
 
 # ── Check current version ──────────────────────────────────────────────
 CURRENT_COMMIT=$(git -C "$PANEL_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
