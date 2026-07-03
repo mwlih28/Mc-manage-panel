@@ -138,6 +138,9 @@ export interface Server {
   publicSlug?: string | null;
   publicStatusAccentColor?: string | null;
   publicStatusBanner?: string | null;
+  publicStatusLogo?: string | null;
+  publicStatusAnnouncement?: string | null;
+  publicStatusCustomCss?: string | null;
   createdAt: string;
   updatedAt: string;
   user?: Pick<User, 'id' | 'email' | 'username'>;

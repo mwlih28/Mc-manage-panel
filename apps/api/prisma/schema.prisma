@@ -184,6 +184,11 @@ model Server {
   // sensible defaults on the page itself when unset.
   publicStatusAccentColor String?
   publicStatusBanner      String?
+  publicStatusLogo         String?
+  publicStatusAnnouncement String?
+  // Raw CSS injected on the public page only (never in the panel) for
+  // owners who want full control beyond the built-in options above.
+  publicStatusCustomCss    String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

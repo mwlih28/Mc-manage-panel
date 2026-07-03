@@ -11,6 +11,7 @@ import { resolveModpackInstall as resolveCurseForgeModpack, matchFilesByFingerpr
 import { resolveModpackInstall as resolveModrinthModpack, matchFilesBySha1, ModrinthFileMatch } from '../services/modrinthApi';
 import { ResolvedModpack } from '../services/modpackTypes';
 import { computeNextRun } from '../services/scheduler';
+import { getLiveServerStatus } from '../services/serverStatus';
 import { logger } from '../utils/logger';
 
 export async function getWingsClient(serverId: string, userId: string, isAdmin: boolean) {
@@ -271,7 +272,7 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
 
   const {
     name, description, mcVersion, crashDetectionEnabled, autoOptimizeEnabled, publicStatusEnabled,
-    publicStatusAccentColor, publicStatusBanner,
+    publicStatusAccentColor, publicStatusBanner, publicStatusLogo, publicStatusAnnouncement, publicStatusCustomCss,
   } = req.body;
   const updateData: Record<string, unknown> = {};
 
@@ -316,13 +317,45 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     }
   }
 
+  const imageUrlField = (value: unknown, label: string): { ok: true; value: string | null } | { ok: false } => {
+    if (value === null || value === '') return { ok: true, value: null };
+    if (typeof value === 'string' && /^https?:\/\/.{1,500}$/.test(value)) return { ok: true, value };
+    logger.warn(`Rejected invalid ${label} on server ${server.id}`);
+    return { ok: false };
+  };
+
   if (publicStatusBanner !== undefined) {
-    if (publicStatusBanner === null || publicStatusBanner === '') {
-      updateData.publicStatusBanner = null;
-    } else if (typeof publicStatusBanner === 'string' && /^https?:\/\/.{1,500}$/.test(publicStatusBanner)) {
-      updateData.publicStatusBanner = publicStatusBanner;
+    const result = imageUrlField(publicStatusBanner, 'publicStatusBanner');
+    if (!result.ok) return res.status(400).json({ message: 'Banner must be a valid http(s) image URL' });
+    updateData.publicStatusBanner = result.value;
+  }
+
+  if (publicStatusLogo !== undefined) {
+    const result = imageUrlField(publicStatusLogo, 'publicStatusLogo');
+    if (!result.ok) return res.status(400).json({ message: 'Logo must be a valid http(s) image URL' });
+    updateData.publicStatusLogo = result.value;
+  }
+
+  if (publicStatusAnnouncement !== undefined) {
+    if (publicStatusAnnouncement === null || publicStatusAnnouncement === '') {
+      updateData.publicStatusAnnouncement = null;
+    } else if (typeof publicStatusAnnouncement === 'string' && publicStatusAnnouncement.length <= 200) {
+      updateData.publicStatusAnnouncement = publicStatusAnnouncement.trim();
     } else {
-      return res.status(400).json({ message: 'Banner must be a valid http(s) image URL' });
+      return res.status(400).json({ message: 'Announcement must be 200 characters or fewer' });
+    }
+  }
+
+  if (publicStatusCustomCss !== undefined) {
+    if (publicStatusCustomCss === null || publicStatusCustomCss === '') {
+      updateData.publicStatusCustomCss = null;
+    } else if (typeof publicStatusCustomCss === 'string' && publicStatusCustomCss.length <= 4000) {
+      // Strip anything that could break out of the <style> tag it's rendered
+      // in on the public page — it's still arbitrary CSS after this, which
+      // is the point, just not a script/HTML injection vector.
+      updateData.publicStatusCustomCss = publicStatusCustomCss.replace(/<\/style/gi, '');
+    } else {
+      return res.status(400).json({ message: 'Custom CSS must be 4000 characters or fewer' });
     }
   }
 
@@ -1645,6 +1678,22 @@ router.get('/:id/health', authenticate, async (req: AuthRequest, res: Response) 
     factors,
     inputs: { crashCount, optimizeCount, daysSinceBackup, avgCpu24h },
   });
+});
+
+// GET /servers/:id/public-preview — the same live online/player/motd lookup
+// the public status page uses, but authenticated and ignoring
+// publicStatusEnabled, so the owner can preview their customization before
+// (or without ever) actually turning the public page on.
+router.get('/:id/public-preview', authenticate, async (req: AuthRequest, res: Response) => {
+  const isAdmin = req.user!.role === 'ADMIN';
+  const server = await prisma.server.findFirst({
+    where: { id: req.params.id, ...(isAdmin ? {} : { userId: req.user!.id }) },
+    include: { node: true, allocation: true },
+  });
+  if (!server) return res.status(404).json({ message: 'Server not found' });
+
+  const live = await getLiveServerStatus(server);
+  return res.json({ name: server.name, description: server.description || null, ...live });
 });
 
 export default router;

@@ -9,7 +9,7 @@ import {
   MapPin, Clock, Sword, Hammer, Footprints, Ban, LogOut, Wifi, Navigation,
   StickyNote, CalendarClock, UserCog, Save, Copy, CheckCircle2, Globe2, Boxes,
   Settings as SettingsIcon, Gauge, RotateCw, Trophy, Map as MapIcon,
-  ExternalLink, Palette, Image as ImageIcon
+  ExternalLink, Palette
 } from 'lucide-react';
 import { io as ioClient, Socket } from 'socket.io-client';
 import api from '@/lib/axios';
@@ -25,12 +25,13 @@ import { PluginManager } from './PluginManager';
 import { ModManager } from './ModManager';
 import { WorldManager } from './WorldManager';
 import { WorldMapViewer } from './WorldMapViewer';
+import { PublicPageCustomizer } from './PublicPageCustomizer';
 import { ModpackManager } from './ModpackManager';
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts';
 
-type Tab = 'console' | 'files' | 'plugins' | 'mods' | 'modpacks' | 'versions' | 'worlds' | 'map' | 'stats' | 'backups' | 'players' | 'leaderboard' | 'notes' | 'schedule' | 'access' | 'settings';
+type Tab = 'console' | 'files' | 'plugins' | 'mods' | 'modpacks' | 'versions' | 'worlds' | 'map' | 'stats' | 'backups' | 'players' | 'leaderboard' | 'notes' | 'schedule' | 'access' | 'customize' | 'settings';
 
 const TAB_GROUPS: { label: string; tabs: { id: Tab; label: string; icon: typeof Terminal }[] }[] = [
   {
@@ -61,6 +62,7 @@ const TAB_GROUPS: { label: string; tabs: { id: Tab; label: string; icon: typeof 
       { id: 'notes', label: 'Notes', icon: StickyNote },
       { id: 'schedule', label: 'Schedule', icon: CalendarClock },
       { id: 'access', label: 'Access', icon: UserCog },
+      { id: 'customize', label: 'Customize', icon: Palette },
       { id: 'settings', label: 'Settings', icon: SettingsIcon },
     ],
   },
@@ -340,26 +342,19 @@ export function ServerDetailPage() {
   const [crashDetectionEnabled, setCrashDetectionEnabled] = useState(true);
   const [autoOptimizeEnabled, setAutoOptimizeEnabled] = useState(true);
   const [publicStatusEnabled, setPublicStatusEnabled] = useState(false);
-  const [publicStatusAccentColor, setPublicStatusAccentColor] = useState('#3b82f6');
-  const [publicStatusBanner, setPublicStatusBanner] = useState('');
   const [savingSettings, setSavingSettings] = useState(false);
   useEffect(() => {
     if (data) {
       setCrashDetectionEnabled(data.crashDetectionEnabled ?? true);
       setAutoOptimizeEnabled(data.autoOptimizeEnabled ?? true);
       setPublicStatusEnabled(data.publicStatusEnabled ?? false);
-      setPublicStatusAccentColor(data.publicStatusAccentColor || '#3b82f6');
-      setPublicStatusBanner(data.publicStatusBanner || '');
     }
   }, [data]);
 
   const saveServerSettings = async () => {
     setSavingSettings(true);
     try {
-      await api.patch(`/servers/${id}`, {
-        crashDetectionEnabled, autoOptimizeEnabled, publicStatusEnabled,
-        publicStatusAccentColor, publicStatusBanner: publicStatusBanner || null,
-      });
+      await api.patch(`/servers/${id}`, { crashDetectionEnabled, autoOptimizeEnabled, publicStatusEnabled });
       toast.success('Settings saved');
       queryClient.invalidateQueries({ queryKey: ['server', id] });
     } catch (err) {
@@ -1928,6 +1923,10 @@ export function ServerDetailPage() {
         </div>
       )}
 
+      {activeTab === 'customize' && (
+        <PublicPageCustomizer serverId={id!} server={data} />
+      )}
+
       {activeTab === 'settings' && (
         <div className="space-y-4">
           <div className="card">
@@ -2003,39 +2002,14 @@ export function ServerDetailPage() {
                   )}
 
                   {publicStatusEnabled && (
-                    <div className="mt-3 pt-3 border-t border-dark-700 space-y-3">
-                      <div className="flex items-center gap-1.5 text-xs font-medium text-slate-400">
-                        <Palette size={12} /> Customize the look
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="color"
-                          value={publicStatusAccentColor}
-                          onChange={(e) => setPublicStatusAccentColor(e.target.value)}
-                          className="w-9 h-9 rounded-lg border border-dark-700 bg-transparent cursor-pointer shrink-0"
-                          title="Accent color"
-                        />
-                        <input
-                          type="text"
-                          className="input py-1.5 text-xs font-mono w-28"
-                          value={publicStatusAccentColor}
-                          onChange={(e) => setPublicStatusAccentColor(e.target.value)}
-                          placeholder="#3b82f6"
-                        />
-                        <div className="flex-1 relative">
-                          <ImageIcon size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-600" />
-                          <input
-                            type="text"
-                            className="input py-1.5 pl-8 text-xs"
-                            value={publicStatusBanner}
-                            onChange={(e) => setPublicStatusBanner(e.target.value)}
-                            placeholder="Banner image URL (optional)"
-                          />
-                        </div>
-                      </div>
-                      <p className="text-[11px] text-slate-600">
-                        Sets the animated glow color and optional cover image on your public status page.
-                      </p>
+                    <div className="mt-3 pt-3 border-t border-dark-700">
+                      <button
+                        type="button"
+                        className="flex items-center gap-1.5 text-xs font-medium text-panel-400 hover:text-panel-300"
+                        onClick={(e) => { e.preventDefault(); setActiveTab('customize'); }}
+                      >
+                        <Palette size={12} /> Customize the look (logo, banner, colors, custom CSS) →
+                      </button>
                     </div>
                   )}
                 </span>
