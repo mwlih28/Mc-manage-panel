@@ -6,6 +6,8 @@ export type ServerStatus =
   | 'REINSTALLING'
   | 'SUSPENDED'
   | 'RESTORING_BACKUP'
+  | 'MIGRATING'
+  | 'MIGRATION_FAILED'
   | 'OFFLINE'
   | 'STARTING'
   | 'STOPPING'

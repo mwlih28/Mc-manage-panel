@@ -106,10 +106,14 @@ export function getOrConnectWings(node: NodeInfo, io: SocketServer): Socket {
       const panelStatus = WINGS_TO_PANEL_STATUS[payload.state as string]
         ?? (payload.state as string).toUpperCase();
       relayData = { ...payload, status: panelStatus };
-      // Keep DB in sync when Wings confirms a final state
+      // Keep DB in sync when Wings confirms a final state. Excludes
+      // MIGRATING/RESTORING_BACKUP — those are panel-orchestrated multi-step
+      // operations that may stop the container as an intermediate step (e.g.
+      // migration stops the server before snapshotting it), and a stray
+      // "offline" report from that stop must not be read as "operation done".
       if ((panelStatus === 'RUNNING' || panelStatus === 'OFFLINE') && uuid) {
         prisma.server.updateMany({
-          where: { uuid },
+          where: { uuid, status: { notIn: ['MIGRATING', 'RESTORING_BACKUP'] } },
           data: { status: panelStatus as 'RUNNING' | 'OFFLINE' },
         }).catch((err: Error) => logger.warn(`Status sync failed for ${uuid}: ${err.message}`));
       }

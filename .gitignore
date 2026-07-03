@@ -12,5 +12,5 @@ logs/
 coverage/
 .turbo/
 .claude/
-apps/api/scripts/.mock-wings-data/
-apps/api/scripts/.mock-wings-backups/
+apps/api/scripts/.mock-wings-data*/
+apps/api/scripts/.mock-wings-backups*/

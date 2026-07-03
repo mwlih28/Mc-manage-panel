@@ -26,6 +26,10 @@ export async function getWingsClient(serverId: string, userId: string, isAdmin: 
 
 const router = Router();
 
+// Migration touches two Wings daemons (snapshot on source, stream + extract
+// on destination) — generous enough not to abort on a large world.
+const MIGRATION_TIMEOUT_MS = 15 * 60 * 1000;
+
 function generateShortUuid() {
   return uuidv4().replace(/-/g, '').slice(0, 8);
 }
@@ -364,6 +368,148 @@ router.post('/:id/reinstall', authenticate, requireAdmin, async (req: AuthReques
   } catch (err) {
     logger.error('Reinstall error:', err);
     return res.status(500).json({ message: 'Internal server error during reinstall' });
+  }
+});
+
+// POST /servers/:id/migrate — Admin only. Moves a server to a different
+// node: snapshots it on the source node, streams that snapshot straight
+// into the destination node's upload-and-restore endpoint (never lands on
+// the panel's own disk), tears down the source copy, then repoints the DB
+// row. Pterodactyl has no equivalent of this — moving a server between
+// nodes there means manually re-uploading files.
+router.post('/:id/migrate', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
+  const server = await prisma.server.findUnique({
+    where: { id: req.params.id },
+    include: {
+      node: true,
+      egg: { select: { startup: true, dockerImage: true, scriptInstall: true, scriptContainer: true } },
+    },
+  });
+  if (!server) return res.status(404).json({ message: 'Server not found' });
+  if (!server.node) return res.status(422).json({ message: 'Server has no assigned node' });
+
+  const { targetNodeId, allocationId } = req.body as { targetNodeId?: string; allocationId?: string };
+  if (!targetNodeId) return res.status(422).json({ message: 'targetNodeId is required' });
+  if (targetNodeId === server.nodeId) return res.status(422).json({ message: 'Server is already on that node' });
+  if (['MIGRATING', 'INSTALLING', 'RESTORING_BACKUP', 'REINSTALLING'].includes(server.status)) {
+    return res.status(400).json({ message: 'Server has another operation in progress' });
+  }
+
+  const targetNode = await prisma.node.findUnique({ where: { id: targetNodeId } });
+  if (!targetNode) return res.status(422).json({ message: 'Target node not found' });
+
+  let finalAllocationId: string;
+  try {
+    finalAllocationId = await prisma.$transaction(async (tx) => {
+      if (allocationId) {
+        const requested = await tx.allocation.findUnique({ where: { id: allocationId } });
+        if (!requested || requested.nodeId !== targetNodeId) throw new Error('ALLOCATION_INVALID');
+        if (requested.assigned) throw new Error('ALLOCATION_IN_USE');
+        await tx.allocation.update({ where: { id: allocationId }, data: { assigned: true } });
+        return allocationId;
+      }
+      const freeAlloc = await tx.allocation.findFirst({
+        where: { nodeId: targetNodeId, assigned: false },
+        orderBy: { port: 'asc' },
+      });
+      if (!freeAlloc) throw new Error('NO_FREE_ALLOCATION');
+      await tx.allocation.update({ where: { id: freeAlloc.id }, data: { assigned: true } });
+      return freeAlloc.id;
+    });
+  } catch (err) {
+    const msg = (err as Error).message;
+    if (msg === 'NO_FREE_ALLOCATION') return res.status(422).json({ message: 'Target node has no free allocations' });
+    if (msg === 'ALLOCATION_IN_USE') return res.status(422).json({ message: 'Allocation already in use' });
+    if (msg === 'ALLOCATION_INVALID') return res.status(422).json({ message: 'Allocation does not belong to the target node' });
+    throw err;
+  }
+
+  const sourceNode = server.node;
+  const oldAllocationId = server.allocationId;
+  const wasRunning = server.status === 'RUNNING' || server.status === 'STARTING';
+  const migrationUuid = uuidv4();
+
+  await prisma.server.update({ where: { id: server.id }, data: { status: 'MIGRATING' } });
+  res.json({ message: 'Migration started' });
+
+  const sourceClient = axios.create({
+    baseURL: `${sourceNode.scheme}://${sourceNode.fqdn}:${sourceNode.daemonPort}/api`,
+    headers: { Authorization: `Bearer ${sourceNode.token}` },
+    timeout: MIGRATION_TIMEOUT_MS,
+  });
+  const destClient = axios.create({
+    baseURL: `${targetNode.scheme}://${targetNode.fqdn}:${targetNode.daemonPort}/api`,
+    headers: { Authorization: `Bearer ${targetNode.token}` },
+    timeout: MIGRATION_TIMEOUT_MS,
+    maxBodyLength: Infinity,
+    maxContentLength: Infinity,
+  });
+
+  try {
+    // Stop first so the snapshot captures a consistent world, not one mid-write.
+    if (wasRunning) {
+      await sourceClient.post(`/servers/${server.uuid}/power`, { action: 'stop' }).catch(() => {});
+      for (let i = 0; i < 30; i++) {
+        await new Promise((r) => setTimeout(r, 2000));
+        const stopped = await sourceClient
+          .get(`/servers/${server.uuid}/status`)
+          .then((r) => r.data.status === 'offline')
+          .catch(() => false);
+        if (stopped) break;
+      }
+    }
+
+    logger.info(`Migration: snapshotting ${server.uuid} on ${sourceNode.name}`);
+    await sourceClient.post(`/servers/${server.uuid}/backups`, { backupUuid: migrationUuid, ignoredFiles: [] });
+
+    logger.info(`Migration: registering ${server.uuid} on ${targetNode.name}`);
+    await destClient.post('/servers', buildWingsConfig(server as Parameters<typeof buildWingsConfig>[0]));
+
+    logger.info(`Migration: transferring snapshot for ${server.uuid}`);
+    const download = await sourceClient.get(`/servers/${server.uuid}/backups/${migrationUuid}/download`, {
+      responseType: 'stream',
+    });
+    await destClient.post(`/servers/${server.uuid}/backups/${migrationUuid}/upload`, download.data, {
+      headers: { 'Content-Type': 'application/octet-stream' },
+    });
+
+    await sourceClient.delete(`/servers/${server.uuid}`)
+      .catch((err) => logger.warn(`Migration cleanup: could not remove source server: ${(err as Error).message}`));
+    await sourceClient.delete(`/servers/${server.uuid}/backups/${migrationUuid}`).catch(() => {});
+    await destClient.delete(`/servers/${server.uuid}/backups/${migrationUuid}`).catch(() => {});
+
+    await prisma.$transaction(async (tx) => {
+      await tx.server.update({
+        where: { id: server.id },
+        data: { nodeId: targetNodeId, allocationId: finalAllocationId, status: 'OFFLINE' },
+      });
+      if (oldAllocationId) {
+        await tx.allocation.update({ where: { id: oldAllocationId }, data: { assigned: false } });
+      }
+    });
+
+    // Prior backups live on the source node's disk, which the destination
+    // Wings can't reach — restoring one would 404. Drop them rather than
+    // leave a backup entry that looks fine but silently can't be restored.
+    await prisma.backup.deleteMany({ where: { serverId: server.id } });
+
+    await prisma.activity.create({
+      data: {
+        userId: req.user!.id,
+        serverId: server.id,
+        event: 'server:migrate',
+        properties: JSON.stringify({ from: sourceNode.name, to: targetNode.name }),
+        ip: req.ip,
+      },
+    });
+    logger.info(`Migration complete: ${server.uuid} moved from ${sourceNode.name} to ${targetNode.name}`);
+  } catch (err) {
+    logger.error(`Migration failed for server ${server.uuid}: ${(err as Error).message}`);
+    await prisma.allocation.update({ where: { id: finalAllocationId }, data: { assigned: false } }).catch(() => {});
+    await prisma.server.update({ where: { id: server.id }, data: { status: 'MIGRATION_FAILED' } }).catch(() => {});
+    await destClient.delete(`/servers/${server.uuid}`).catch(() => {});
+    await destClient.delete(`/servers/${server.uuid}/backups/${migrationUuid}`).catch(() => {});
+    await sourceClient.delete(`/servers/${server.uuid}/backups/${migrationUuid}`).catch(() => {});
   }
 });
 

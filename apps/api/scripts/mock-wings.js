@@ -10,18 +10,26 @@ const archiver = require('archiver');
 const tar = require('tar');
 const { Server: SocketServer } = require('socket.io');
 
-const PORT = 8080;
+// Set MOCK_WINGS_PORT / MOCK_WINGS_SUFFIX to run a second instance standing
+// in for a second node (e.g. to exercise cross-node migration locally).
+const PORT = Number(process.env.MOCK_WINGS_PORT) || 8080;
+const SUFFIX = process.env.MOCK_WINGS_SUFFIX || '';
 const SERVER_UUID = process.env.DEMO_SERVER_UUID || '00000000-0000-0000-0000-000000000003';
 const MEMORY_LIMIT = 1024 * 1024 * 1024; // 1024MB
-const DATA_ROOT = path.join(__dirname, '.mock-wings-data');
-const BACKUPS_ROOT = path.join(__dirname, '.mock-wings-backups');
+const DATA_ROOT = path.join(__dirname, `.mock-wings-data${SUFFIX}`);
+const BACKUPS_ROOT = path.join(__dirname, `.mock-wings-backups${SUFFIX}`);
 
-// Seed a fake server directory so backup/restore has real files to work with.
-const seedDir = path.join(DATA_ROOT, SERVER_UUID);
-fs.mkdirSync(path.join(seedDir, 'world'), { recursive: true });
-if (!fs.existsSync(path.join(seedDir, 'server.properties'))) {
-  fs.writeFileSync(path.join(seedDir, 'server.properties'), 'motd=A Kretase-powered Paper server\n');
-  fs.writeFileSync(path.join(seedDir, 'world', 'level.dat'), 'fake-level-data\n');
+// Seed a fake server directory so backup/restore has real files to work
+// with — only for the primary (no-suffix) instance. A secondary instance
+// standing in for a migration destination should start empty, like a real
+// node's data dir does.
+if (!SUFFIX) {
+  const seedDir = path.join(DATA_ROOT, SERVER_UUID);
+  fs.mkdirSync(path.join(seedDir, 'world'), { recursive: true });
+  if (!fs.existsSync(path.join(seedDir, 'server.properties'))) {
+    fs.writeFileSync(path.join(seedDir, 'server.properties'), 'motd=A Kretase-powered Paper server\n');
+    fs.writeFileSync(path.join(seedDir, 'world', 'level.dat'), 'fake-level-data\n');
+  }
 }
 
 const app = express();
@@ -75,10 +83,42 @@ app.delete('/api/servers/:uuid/backups/:backupUuid', (req, res) => {
   res.status(204).send();
 });
 
-app.post('/api/servers', (_req, res) => res.json({ ok: true }));
-app.delete('/api/servers/:uuid', (_req, res) => res.json({ ok: true }));
+app.get('/api/servers/:uuid/backups/:backupUuid/download', (req, res) => {
+  const { uuid, backupUuid } = req.params;
+  const backupFile = path.join(BACKUPS_ROOT, uuid, `${backupUuid}.tar.gz`);
+  if (!fs.existsSync(backupFile)) return res.status(404).json({ message: 'Backup file not found' });
+  res.download(backupFile, `${backupUuid}.tar.gz`);
+});
+
+app.post('/api/servers/:uuid/backups/:backupUuid/upload', express.raw({ type: '*/*', limit: '10gb' }), async (req, res) => {
+  const { uuid, backupUuid } = req.params;
+  const backupDir = path.join(BACKUPS_ROOT, uuid);
+  const root = path.join(DATA_ROOT, uuid);
+  try {
+    fs.mkdirSync(backupDir, { recursive: true });
+    fs.mkdirSync(root, { recursive: true });
+    const backupFile = path.join(backupDir, `${backupUuid}.tar.gz`);
+    fs.writeFileSync(backupFile, req.body);
+    await tar.extract({ file: backupFile, cwd: root });
+    res.json({ message: 'Restored from upload' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.post('/api/servers', (req, res) => {
+  // Registering a server on this mock just means it's ready to receive a
+  // restored backup — real Wings creates the data dir here too.
+  if (req.body && req.body.uuid) fs.mkdirSync(path.join(DATA_ROOT, req.body.uuid), { recursive: true });
+  res.json({ ok: true });
+});
+app.delete('/api/servers/:uuid', (req, res) => {
+  fs.rmSync(path.join(DATA_ROOT, req.params.uuid), { recursive: true, force: true });
+  res.json({ ok: true });
+});
 app.post('/api/servers/:uuid/power', (_req, res) => res.json({ ok: true }));
 app.post('/api/servers/:uuid/command', (_req, res) => res.json({ ok: true }));
+app.get('/api/servers/:uuid/status', (_req, res) => res.json({ status: 'offline' }));
 
 app.get('/api/servers/:uuid/resources', (_req, res) => {
   res.json({ resources: currentResources() });

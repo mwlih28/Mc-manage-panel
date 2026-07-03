@@ -38,6 +38,8 @@ export function getServerStatusColor(status: ServerStatus): string {
     REINSTALLING: 'text-blue-400',
     SUSPENDED: 'text-red-400',
     RESTORING_BACKUP: 'text-purple-400',
+    MIGRATING: 'text-cyan-400',
+    MIGRATION_FAILED: 'text-red-400',
     UNKNOWN: 'text-slate-500',
   };
   return colors[status] || 'text-slate-400';
@@ -54,6 +56,8 @@ export function getServerStatusBadge(status: ServerStatus): string {
     REINSTALLING: 'badge-blue',
     SUSPENDED: 'badge-red',
     RESTORING_BACKUP: 'badge bg-purple-500/20 text-purple-400',
+    MIGRATING: 'badge bg-cyan-500/20 text-cyan-400',
+    MIGRATION_FAILED: 'badge-red',
     UNKNOWN: 'badge-gray',
   };
   return badges[status] || 'badge-gray';
@@ -70,6 +74,8 @@ export function getServerStatusDot(status: ServerStatus): string {
     REINSTALLING: 'bg-blue-400 animate-pulse',
     SUSPENDED: 'bg-red-400',
     RESTORING_BACKUP: 'bg-purple-400 animate-pulse',
+    MIGRATING: 'bg-cyan-400 animate-pulse',
+    MIGRATION_FAILED: 'bg-red-400',
     UNKNOWN: 'bg-slate-600',
   };
   return dots[status] || 'bg-slate-500';

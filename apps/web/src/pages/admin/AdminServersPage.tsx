@@ -23,6 +23,10 @@ export function AdminServersPage() {
     queryFn: () =>
       api.get('/servers', { params: { page, perPage: 15, search: search || undefined } })
         .then((r) => r.data),
+    refetchInterval: (query) => {
+      const list = (query.state.data as { data?: Server[] } | undefined)?.data || [];
+      return list.some((s) => s.status === 'MIGRATING') ? 4000 : false;
+    },
   });
 
   const deleteMutation = useMutation({
@@ -449,9 +453,12 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
 
 function EditServerModal({ server, onClose, onSuccess }: { server: Server; onClose: () => void; onSuccess: () => void }) {
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<'general' | 'resources' | 'startup' | 'danger'>('general');
+  const [tab, setTab] = useState<'general' | 'resources' | 'startup' | 'migrate' | 'danger'>('general');
   const [isSaving, setIsSaving] = useState(false);
   const [isReinstalling, setIsReinstalling] = useState(false);
+  const [migrateTargetNode, setMigrateTargetNode] = useState('');
+  const [migrateAllocationId, setMigrateAllocationId] = useState('');
+  const [isMigrating, setIsMigrating] = useState(false);
 
   const srv = server as Server & { image?: string; startup?: string; cpu?: number; swap?: number; backupLimit?: number; allocationId?: string; allocation?: { id: string; ip: string; port: number } };
 
@@ -481,6 +488,18 @@ function EditServerModal({ server, onClose, onSuccess }: { server: Server; onClo
     queryFn: () => api.get(`/nodes/${server.node?.id}/allocations`, { params: { perPage: 100 } }).then((r) => r.data.data).catch(() => []),
     enabled: !!server.node?.id,
   });
+  const { data: nodesData } = useQuery({
+    queryKey: ['nodes-list'],
+    queryFn: () => api.get('/nodes').then((r) => r.data.data),
+  });
+  const otherNodes: { id: string; name: string }[] = (nodesData || []).filter((n: { id: string }) => n.id !== server.node?.id);
+  const { data: targetAllocationsData } = useQuery({
+    queryKey: ['allocations-list', migrateTargetNode],
+    queryFn: () => api.get(`/nodes/${migrateTargetNode}/allocations`, { params: { perPage: 100 } }).then((r) => r.data.data).catch(() => []),
+    enabled: !!migrateTargetNode,
+  });
+  const freeTargetAllocations: { id: string; ip: string; port: number; assigned: boolean }[] =
+    (targetAllocationsData || []).filter((a: { assigned: boolean }) => !a.assigned);
 
   const save = async (payload: Record<string, unknown>) => {
     setIsSaving(true);
@@ -512,10 +531,32 @@ function EditServerModal({ server, onClose, onSuccess }: { server: Server; onClo
     }
   };
 
+  const handleMigrate = async () => {
+    if (!migrateTargetNode) return;
+    const targetName = otherNodes.find((n) => n.id === migrateTargetNode)?.name || 'the selected node';
+    if (!confirm(`Migrate "${server.name}" to ${targetName}? The server will be stopped, its files copied over, and it will come back online on the new node.`)) return;
+    setIsMigrating(true);
+    try {
+      await api.post(`/servers/${server.id}/migrate`, {
+        targetNodeId: migrateTargetNode,
+        allocationId: migrateAllocationId || undefined,
+      });
+      toast.success('Migration started — this can take a while for large worlds');
+      queryClient.invalidateQueries({ queryKey: ['admin-servers'] });
+      onClose();
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      toast.error(e.response?.data?.message || 'Failed to start migration');
+    } finally {
+      setIsMigrating(false);
+    }
+  };
+
   const tabs = [
     { id: 'general', label: 'General' },
     { id: 'resources', label: 'Resources' },
     { id: 'startup', label: 'Startup' },
+    { id: 'migrate', label: 'Migrate' },
     { id: 'danger', label: 'Danger Zone' },
   ] as const;
 
@@ -633,6 +674,72 @@ function EditServerModal({ server, onClose, onSuccess }: { server: Server; onClo
               {isSaving ? <Spinner size="sm" /> : 'Save'}
             </button>
           </div>
+        </div>
+      )}
+
+      {tab === 'migrate' && (
+        <div className="space-y-4">
+          {server.status === 'MIGRATING' ? (
+            <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-4">
+              <h3 className="text-sm font-semibold text-cyan-400 mb-1">Migration in progress</h3>
+              <p className="text-xs text-slate-400">
+                This server is currently being moved to another node. Close this dialog and check back — the status badge will update once it's done.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-4 text-xs text-slate-400">
+                Moves this server to a different node: stops it, snapshots its files, transfers them directly
+                to the new node, then brings it back online there. The old copy is removed once the transfer succeeds.
+                Existing backups won't carry over since they live on the old node's disk — take a fresh one after migrating if you need it.
+              </div>
+              {server.status === 'MIGRATION_FAILED' && (
+                <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-3 text-xs text-red-400">
+                  The last migration attempt failed. The server is still on its original node — you can retry below.
+                </div>
+              )}
+              <div>
+                <label className="label">Destination Node</label>
+                <select
+                  className="input"
+                  value={migrateTargetNode}
+                  onChange={(e) => { setMigrateTargetNode(e.target.value); setMigrateAllocationId(''); }}
+                >
+                  <option value="">Select node...</option>
+                  {otherNodes.map((n) => (
+                    <option key={n.id} value={n.id}>{n.name}</option>
+                  ))}
+                </select>
+                {otherNodes.length === 0 && (
+                  <p className="text-xs text-slate-500 mt-1">No other nodes available to migrate to.</p>
+                )}
+              </div>
+              {migrateTargetNode && (
+                <div>
+                  <label className="label">Allocation on destination <span className="text-slate-500 font-normal">(optional)</span></label>
+                  <select className="input" value={migrateAllocationId} onChange={(e) => setMigrateAllocationId(e.target.value)}>
+                    <option value="">Auto-pick a free allocation</option>
+                    {freeTargetAllocations.map((a) => (
+                      <option key={a.id} value={a.id}>{a.ip}:{a.port}</option>
+                    ))}
+                  </select>
+                  {freeTargetAllocations.length === 0 && (
+                    <p className="text-xs text-yellow-500 mt-1">No free allocations on this node — add one first or migration will fail.</p>
+                  )}
+                </div>
+              )}
+              <div className="flex gap-3 pt-2">
+                <button className="btn-secondary flex-1" onClick={onClose}>Cancel</button>
+                <button
+                  className="px-4 py-2 rounded-lg text-sm font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/20 transition-colors disabled:opacity-50 flex-1"
+                  disabled={isMigrating || !migrateTargetNode}
+                  onClick={handleMigrate}
+                >
+                  {isMigrating ? <Spinner size="sm" /> : 'Start Migration'}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
 
