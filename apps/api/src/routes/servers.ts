@@ -657,6 +657,138 @@ router.post('/:id/migrate', authenticate, requireAdmin, async (req: AuthRequest,
   }
 });
 
+// POST /servers/:id/clone — Admin only. Unlike migrate, the source server
+// is never stopped or touched beyond a normal hot backup — this creates a
+// brand-new server (its own id/uuid/allocation) that's a snapshot copy,
+// for testing a plugin/mod update or config change without risking the
+// live one. Reuses the same snapshot+stream+restore primitives as migrate.
+router.post('/:id/clone', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
+  const source = await prisma.server.findUnique({
+    where: { id: req.params.id },
+    include: { node: true, egg: { select: { startup: true, dockerImage: true, scriptInstall: true, scriptContainer: true } } },
+  });
+  if (!source) return res.status(404).json({ message: 'Server not found' });
+  if (!source.node) return res.status(422).json({ message: 'Server has no assigned node' });
+
+  const { targetNodeId, allocationId, name } = req.body as { targetNodeId?: string; allocationId?: string; name?: string };
+  const destNodeId = targetNodeId || source.nodeId;
+
+  const destNode = await prisma.node.findUnique({ where: { id: destNodeId } });
+  if (!destNode) return res.status(422).json({ message: 'Target node not found' });
+
+  let finalAllocationId: string;
+  try {
+    finalAllocationId = await prisma.$transaction(async (tx) => {
+      if (allocationId) {
+        const requested = await tx.allocation.findUnique({ where: { id: allocationId } });
+        if (!requested || requested.nodeId !== destNodeId) throw new Error('ALLOCATION_INVALID');
+        if (requested.assigned) throw new Error('ALLOCATION_IN_USE');
+        await tx.allocation.update({ where: { id: allocationId }, data: { assigned: true } });
+        return allocationId;
+      }
+      const freeAlloc = await tx.allocation.findFirst({
+        where: { nodeId: destNodeId, assigned: false },
+        orderBy: { port: 'asc' },
+      });
+      if (!freeAlloc) throw new Error('NO_FREE_ALLOCATION');
+      await tx.allocation.update({ where: { id: freeAlloc.id }, data: { assigned: true } });
+      return freeAlloc.id;
+    });
+  } catch (err) {
+    const msg = (err as Error).message;
+    if (msg === 'NO_FREE_ALLOCATION') return res.status(422).json({ message: 'Target node has no free allocations' });
+    if (msg === 'ALLOCATION_IN_USE') return res.status(422).json({ message: 'Allocation already in use' });
+    if (msg === 'ALLOCATION_INVALID') return res.status(422).json({ message: 'Allocation does not belong to the target node' });
+    throw err;
+  }
+
+  const clone = await prisma.server.create({
+    data: {
+      uuid: uuidv4(),
+      uuidShort: generateShortUuid(),
+      name: name || `${source.name} (Clone)`,
+      description: source.description,
+      userId: source.userId,
+      nodeId: destNodeId,
+      eggId: source.eggId,
+      allocationId: finalAllocationId,
+      memory: source.memory,
+      swap: source.swap,
+      disk: source.disk,
+      io: source.io,
+      cpu: source.cpu,
+      startup: source.startup,
+      image: source.image,
+      env: source.env,
+      eulaAccepted: source.eulaAccepted,
+      databaseLimit: source.databaseLimit,
+      allocationLimit: source.allocationLimit,
+      backupLimit: source.backupLimit,
+      crashDetectionEnabled: source.crashDetectionEnabled,
+      autoOptimizeEnabled: source.autoOptimizeEnabled,
+      status: 'CLONING',
+    },
+    include: {
+      user: { select: { id: true, email: true, username: true } },
+      node: { select: { id: true, name: true, fqdn: true } },
+      egg: { select: { id: true, name: true } },
+      allocation: true,
+    },
+  });
+
+  res.status(201).json({ data: clone, message: 'Clone started — files are being copied in the background' });
+
+  const cloneUuid = uuidv4();
+  const sourceClient = axios.create({
+    baseURL: `${source.node.scheme}://${source.node.fqdn}:${source.node.daemonPort}/api`,
+    headers: { Authorization: `Bearer ${source.node.token}` },
+    timeout: MIGRATION_TIMEOUT_MS,
+  });
+  const destClient = axios.create({
+    baseURL: `${destNode.scheme}://${destNode.fqdn}:${destNode.daemonPort}/api`,
+    headers: { Authorization: `Bearer ${destNode.token}` },
+    timeout: MIGRATION_TIMEOUT_MS,
+    maxBodyLength: Infinity,
+    maxContentLength: Infinity,
+  });
+
+  try {
+    logger.info(`Clone: snapshotting ${source.uuid} on ${source.node.name} for new server ${clone.uuid}`);
+    await sourceClient.post(`/servers/${source.uuid}/backups`, { backupUuid: cloneUuid, ignoredFiles: [] });
+
+    logger.info(`Clone: registering ${clone.uuid} on ${destNode.name}`);
+    await destClient.post('/servers', buildWingsConfig({ ...clone, egg: source.egg } as Parameters<typeof buildWingsConfig>[0]));
+
+    logger.info(`Clone: transferring snapshot into ${clone.uuid}`);
+    const download = await sourceClient.get(`/servers/${source.uuid}/backups/${cloneUuid}/download`, { responseType: 'stream' });
+    await destClient.post(`/servers/${clone.uuid}/backups/${cloneUuid}/upload`, download.data, {
+      headers: { 'Content-Type': 'application/octet-stream' },
+    });
+
+    await sourceClient.delete(`/servers/${source.uuid}/backups/${cloneUuid}`).catch(() => {});
+    await destClient.delete(`/servers/${clone.uuid}/backups/${cloneUuid}`).catch(() => {});
+
+    await prisma.server.update({ where: { id: clone.id }, data: { status: 'OFFLINE' } });
+    await prisma.activity.create({
+      data: {
+        userId: req.user!.id,
+        serverId: clone.id,
+        event: 'server:clone',
+        properties: JSON.stringify({ sourceServerId: source.id, sourceName: source.name }),
+        ip: req.ip,
+      },
+    });
+    logger.info(`Clone complete: ${clone.uuid} is a copy of ${source.uuid}`);
+  } catch (err) {
+    logger.error(`Clone failed for new server ${clone.uuid} (source ${source.uuid}): ${(err as Error).message}`);
+    await prisma.allocation.update({ where: { id: finalAllocationId }, data: { assigned: false } }).catch(() => {});
+    await prisma.server.update({ where: { id: clone.id }, data: { status: 'CLONE_FAILED' } }).catch(() => {});
+    await destClient.delete(`/servers/${clone.uuid}`).catch(() => {});
+    await destClient.delete(`/servers/${clone.uuid}/backups/${cloneUuid}`).catch(() => {});
+    await sourceClient.delete(`/servers/${source.uuid}/backups/${cloneUuid}`).catch(() => {});
+  }
+});
+
 // DELETE /servers/:id
 router.delete('/:id', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
   const server = await prisma.server.findUnique({ where: { id: req.params.id } });

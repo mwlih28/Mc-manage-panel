@@ -25,7 +25,7 @@ export function AdminServersPage() {
         .then((r) => r.data),
     refetchInterval: (query) => {
       const list = (query.state.data as { data?: Server[] } | undefined)?.data || [];
-      return list.some((s) => s.status === 'MIGRATING') ? 4000 : false;
+      return list.some((s) => s.status === 'MIGRATING' || s.status === 'CLONING') ? 4000 : false;
     },
   });
 
@@ -459,6 +459,10 @@ function EditServerModal({ server, onClose, onSuccess }: { server: Server; onClo
   const [migrateTargetNode, setMigrateTargetNode] = useState('');
   const [migrateAllocationId, setMigrateAllocationId] = useState('');
   const [isMigrating, setIsMigrating] = useState(false);
+  const [cloneTargetNode, setCloneTargetNode] = useState('');
+  const [cloneAllocationId, setCloneAllocationId] = useState('');
+  const [cloneName, setCloneName] = useState(`${server.name} (Clone)`);
+  const [isCloning, setIsCloning] = useState(false);
 
   const srv = server as Server & { image?: string; startup?: string; cpu?: number; swap?: number; backupLimit?: number; allocationId?: string; allocation?: { id: string; ip: string; port: number } };
 
@@ -502,6 +506,15 @@ function EditServerModal({ server, onClose, onSuccess }: { server: Server; onClo
   });
   const freeTargetAllocations: { id: string; ip: string; port: number; assigned: boolean }[] =
     (targetAllocationsData || []).filter((a: { assigned: boolean }) => !a.assigned);
+
+  const allNodes: { id: string; name: string }[] = nodesData || [];
+  const { data: cloneAllocationsData } = useQuery({
+    queryKey: ['allocations-list', cloneTargetNode || server.node?.id],
+    queryFn: () => api.get(`/nodes/${cloneTargetNode || server.node?.id}/allocations`, { params: { perPage: 100 } }).then((r) => r.data.data).catch(() => []),
+    enabled: !!(cloneTargetNode || server.node?.id),
+  });
+  const freeCloneAllocations: { id: string; ip: string; port: number; assigned: boolean }[] =
+    (cloneAllocationsData || []).filter((a: { assigned: boolean }) => !a.assigned);
 
   const save = async (payload: Record<string, unknown>) => {
     setIsSaving(true);
@@ -554,11 +567,31 @@ function EditServerModal({ server, onClose, onSuccess }: { server: Server; onClo
     }
   };
 
+  const handleClone = async () => {
+    if (!cloneName.trim()) return;
+    setIsCloning(true);
+    try {
+      await api.post(`/servers/${server.id}/clone`, {
+        targetNodeId: cloneTargetNode || undefined,
+        allocationId: cloneAllocationId || undefined,
+        name: cloneName.trim(),
+      });
+      toast.success('Clone started — the original server is untouched and stays online');
+      queryClient.invalidateQueries({ queryKey: ['admin-servers'] });
+      onClose();
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      toast.error(e.response?.data?.message || 'Failed to start clone');
+    } finally {
+      setIsCloning(false);
+    }
+  };
+
   const tabs = [
     { id: 'general', label: 'General' },
     { id: 'resources', label: 'Resources' },
     { id: 'startup', label: 'Startup' },
-    { id: 'migrate', label: 'Migrate' },
+    { id: 'migrate', label: 'Migrate / Clone' },
     { id: 'danger', label: 'Danger Zone' },
   ] as const;
 
@@ -772,6 +805,60 @@ function EditServerModal({ server, onClose, onSuccess }: { server: Server; onClo
               </div>
             </>
           )}
+
+          <div className="border-t border-dark-700 pt-4 mt-2">
+            {server.status === 'CLONING' ? (
+              <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-4">
+                <h3 className="text-sm font-semibold text-cyan-400 mb-1">Clone in progress</h3>
+                <p className="text-xs text-slate-400">
+                  A copy of this server is being created. The original is untouched and stays online.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-4 text-xs text-slate-400 mb-4">
+                  Creates a brand-new server that's a snapshot copy of this one — on the same node by default, or a
+                  different one. The original is never stopped or modified, so it's safe to try a plugin/mod update
+                  or config change on the copy first.
+                </div>
+                <div>
+                  <label className="label">Clone Name</label>
+                  <input className="input" value={cloneName} onChange={(e) => setCloneName(e.target.value)} />
+                </div>
+                <div className="mt-3">
+                  <label className="label">Destination Node</label>
+                  <select className="input" value={cloneTargetNode} onChange={(e) => { setCloneTargetNode(e.target.value); setCloneAllocationId(''); }}>
+                    <option value="">Same node ({server.node?.name})</option>
+                    {allNodes.filter((n) => n.id !== server.node?.id).map((n) => (
+                      <option key={n.id} value={n.id}>{n.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="mt-3">
+                  <label className="label">Allocation on destination <span className="text-slate-500 font-normal">(optional)</span></label>
+                  <select className="input" value={cloneAllocationId} onChange={(e) => setCloneAllocationId(e.target.value)}>
+                    <option value="">Auto-pick a free allocation</option>
+                    {freeCloneAllocations.map((a) => (
+                      <option key={a.id} value={a.id}>{a.ip}:{a.port}</option>
+                    ))}
+                  </select>
+                  {freeCloneAllocations.length === 0 && (
+                    <p className="text-xs text-yellow-500 mt-1">No free allocations on this node — add one first or cloning will fail.</p>
+                  )}
+                </div>
+                <div className="flex gap-3 pt-4">
+                  <button className="btn-secondary flex-1" onClick={onClose}>Cancel</button>
+                  <button
+                    className="px-4 py-2 rounded-lg text-sm font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/20 transition-colors disabled:opacity-50 flex-1"
+                    disabled={isCloning || !cloneName.trim()}
+                    onClick={handleClone}
+                  >
+                    {isCloning ? <Spinner size="sm" /> : 'Create Clone'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
 

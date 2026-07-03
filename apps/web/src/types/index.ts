@@ -8,6 +8,8 @@ export type ServerStatus =
   | 'RESTORING_BACKUP'
   | 'MIGRATING'
   | 'MIGRATION_FAILED'
+  | 'CLONING'
+  | 'CLONE_FAILED'
   | 'OFFLINE'
   | 'STARTING'
   | 'STOPPING'
