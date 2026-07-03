@@ -168,22 +168,45 @@ model Server {
   databaseLimit   Int      @default(0)
   allocationLimit Int      @default(0)
   backupLimit     Int      @default(0)
+  // Auto-restart the server if its process exits without an explicit
+  // stop request. Wings caps this at a few attempts within a rolling
+  // window so a broken config can't boot-loop forever.
+  crashDetectionEnabled Boolean @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  user       User       @relation(fields: [userId], references: [id])
-  node       Node       @relation(fields: [nodeId], references: [id])
-  egg        Egg        @relation(fields: [eggId], references: [id])
-  allocation Allocation? @relation("ServerAllocation", fields: [allocationId], references: [id])
-  backups    Backup[]
-  databases  Database[]
-  activities Activity[]
-  note       ServerNote?
-  subUsers   ServerSubUser[]
-  schedules  ScheduledTask[]
+  user        User       @relation(fields: [userId], references: [id])
+  node        Node       @relation(fields: [nodeId], references: [id])
+  egg         Egg        @relation(fields: [eggId], references: [id])
+  allocation  Allocation? @relation("ServerAllocation", fields: [allocationId], references: [id])
+  backups     Backup[]
+  databases   Database[]
+  activities  Activity[]
+  note        ServerNote?
+  subUsers    ServerSubUser[]
+  schedules   ScheduledTask[]
+  statSamples ServerStatSample[]
 
   @@index([userId])
   @@index([nodeId])
+}
+
+// Periodic (~1/min, written from the live Wings stats stream) resource
+// snapshots, kept for a rolling window so the panel can chart usage over
+// hours/days — the in-memory statsBuffer in wingsRelay.ts only covers the
+// last couple of minutes and is lost on API restart.
+model ServerStatSample {
+  id               String   @id @default(uuid())
+  serverId         String
+  cpu              Float
+  memoryBytes      BigInt
+  memoryLimitBytes BigInt
+  diskBytes        BigInt
+  timestamp        DateTime @default(now())
+
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@index([serverId, timestamp])
 }
 
 model Backup {

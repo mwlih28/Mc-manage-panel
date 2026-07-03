@@ -15,6 +15,13 @@ import type { ServerConfig, ServerStatus, ResourceUsage } from '../types';
 
 const MAX_LOG_BUFFER = 500;
 
+// Crash auto-restart: how many unexpected exits are tolerated in the
+// window before Wings gives up and leaves the server offline, so a
+// broken jar/config can't boot-loop forever.
+const CRASH_WINDOW_MS = 10 * 60 * 1000;
+const MAX_CRASHES_IN_WINDOW = 3;
+const CRASH_RESTART_DELAY_MS = 5000;
+
 // TTY-attached containers (used for proper console interaction) often emit ANSI color
 // codes that break the join/leave regex matching below — strip them before processing.
 // eslint-disable-next-line no-control-regex
@@ -47,6 +54,7 @@ class ServerManager extends EventEmitter {
   private servers = new Map<string, ManagedServer>();
   private playerSessions = new Map<string, Map<string, string>>(); // serverUuid -> Map<playerName, playerUuid>
   private allPlayerHistory = new Map<string, Map<string, PlayerHistoryEntry>>(); // serverUuid -> Map<playerName, entry>
+  private crashTimestamps = new Map<string, number[]>(); // serverUuid -> recent unexpected-exit times
   private io?: SocketServer;
 
   setSocketServer(io: SocketServer) {
@@ -797,11 +805,43 @@ class ServerManager extends EventEmitter {
           buffer = '';
         }
         const server = this.servers.get(uuid);
+        // Only a container that was 'running' with nobody having called
+        // stopServer() (which flips status to 'stopping' before touching
+        // the container) counts as an unexpected exit — a normal stop
+        // reaches this same 'end' event through the exact same code path.
+        const wasUnexpectedExit = server?.status === 'running';
         if (server?.status === 'running' || server?.status === 'stopping') {
           this.setStatus(uuid, 'offline');
         }
+        if (wasUnexpectedExit) this.handleCrash(uuid);
       });
     });
+  }
+
+  private handleCrash(uuid: string) {
+    const server = this.servers.get(uuid);
+    if (!server) return;
+    this.sendConsole(uuid, '[Wings] Server process exited unexpectedly (crash detected).');
+
+    if (server.config.crashDetectionEnabled === false) return;
+
+    const now = Date.now();
+    const recent = (this.crashTimestamps.get(uuid) ?? []).filter(t => now - t < CRASH_WINDOW_MS);
+    recent.push(now);
+    this.crashTimestamps.set(uuid, recent);
+
+    if (recent.length > MAX_CRASHES_IN_WINDOW) {
+      this.sendConsole(
+        uuid,
+        `[Wings] Crashed ${recent.length} times in the last ${CRASH_WINDOW_MS / 60000} minutes — auto-restart disabled to avoid a boot loop. Start it manually once the issue is fixed.`
+      );
+      return;
+    }
+
+    this.sendConsole(uuid, `[Wings] Restarting automatically in ${CRASH_RESTART_DELAY_MS / 1000}s (attempt ${recent.length}/${MAX_CRASHES_IN_WINDOW})...`);
+    setTimeout(() => {
+      this.startServer(uuid).catch(err => logger.error(`Auto-restart failed for ${uuid}: ${(err as Error).message}`));
+    }, CRASH_RESTART_DELAY_MS);
   }
 
   private attachStdinStream(uuid: string, containerId: string): Promise<void> {

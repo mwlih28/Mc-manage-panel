@@ -41,6 +41,7 @@ export interface ServerConfig {
   image: string;
   installScript?: string;
   scriptContainer?: string;
+  crashDetectionEnabled?: boolean;
   build: {
     memory_limit: number;
     swap: number;

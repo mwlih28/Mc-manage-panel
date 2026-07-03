@@ -11,6 +11,7 @@ interface WingsServerConfig {
   image: string;
   installScript?: string;
   scriptContainer?: string;
+  crashDetectionEnabled: boolean;
   build: {
     memory_limit: number;
     swap: number;
@@ -101,6 +102,7 @@ export function buildWingsConfig(server: ServerWithEgg): WingsServerConfig {
     image: server.image || server.egg.dockerImage,
     installScript: server.egg.scriptInstall ?? undefined,
     scriptContainer: server.egg.scriptContainer ?? undefined,
+    crashDetectionEnabled: server.crashDetectionEnabled,
     build: {
       memory_limit: server.memory,
       swap: server.swap,
@@ -176,6 +178,7 @@ export async function getNodeServers(nodeId: string): Promise<WingsServerConfig[
       image: server.image,
       installScript: server.egg.scriptInstall ?? undefined,
       scriptContainer: server.egg.scriptContainer ?? undefined,
+      crashDetectionEnabled: server.crashDetectionEnabled,
       build: {
         memory_limit: server.memory,
         swap: server.swap,

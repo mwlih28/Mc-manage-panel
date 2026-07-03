@@ -130,6 +130,7 @@ export interface Server {
   databaseLimit: number;
   allocationLimit: number;
   backupLimit: number;
+  crashDetectionEnabled: boolean;
   createdAt: string;
   updatedAt: string;
   user?: Pick<User, 'id' | 'email' | 'username'>;

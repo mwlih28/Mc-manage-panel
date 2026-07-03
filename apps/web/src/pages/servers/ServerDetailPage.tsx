@@ -23,6 +23,9 @@ import { PluginManager } from './PluginManager';
 import { ModManager } from './ModManager';
 import { WorldManager } from './WorldManager';
 import { ModpackManager } from './ModpackManager';
+import {
+  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
+} from 'recharts';
 
 type Tab = 'console' | 'files' | 'plugins' | 'mods' | 'modpacks' | 'versions' | 'worlds' | 'stats' | 'backups' | 'players' | 'notes' | 'schedule' | 'access';
 
@@ -295,6 +298,15 @@ export function ServerDetailPage() {
     queryFn: () => api.get(`/servers/${id}/stats/history`).then((r) => r.data),
     enabled: activeTab === 'stats' && !!id,
     refetchInterval: activeTab === 'stats' ? 10000 : false,
+  });
+
+  // Longer-range history (DB-backed, unlike the live in-memory buffer above)
+  const [historyRange, setHistoryRange] = useState<'1h' | '24h' | '7d'>('1h');
+  const { data: longStatsHistory } = useQuery({
+    queryKey: ['server-stats-history-range', id, historyRange],
+    queryFn: () => api.get(`/servers/${id}/stats/history`, { params: { range: historyRange } }).then((r) => r.data),
+    enabled: activeTab === 'stats' && !!id,
+    refetchInterval: activeTab === 'stats' ? 60000 : false,
   });
 
   useEffect(() => {
@@ -1269,6 +1281,26 @@ export function ServerDetailPage() {
               <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-0.5 bg-blue-400 rounded" /> RAM %</span>
             </div>
           </div>
+
+          {/* Long-range history (persisted, survives restarts) */}
+          <div className="card card-body">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-slate-300">History</h3>
+              <div className="flex gap-1 rounded-lg bg-dark-800 p-1">
+                {(['1h', '24h', '7d'] as const).map((r) => (
+                  <button
+                    key={r}
+                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${historyRange === r ? 'bg-panel-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                    onClick={() => setHistoryRange(r)}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <StatsHistoryChart history={(longStatsHistory?.data ?? []) as StatsHistoryPoint[]} />
+          </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="card card-body">
             <h3 className="text-sm font-semibold text-slate-300 mb-4">Server Information</h3>
@@ -2151,6 +2183,59 @@ function InfoRow({ label, value, mono, small }: {
         {value}
       </dd>
     </div>
+  );
+}
+
+function StatsHistoryChart({ history }: { history: StatsHistoryPoint[] }) {
+  if (!history || history.length < 2) {
+    return (
+      <div className="flex items-center justify-center h-56 text-slate-600 text-xs rounded-lg" style={{ background: '#0b0f14' }}>
+        Not enough history yet — check back in a few minutes
+      </div>
+    );
+  }
+
+  const points = history.map((p) => ({
+    time: typeof p.timestamp === 'number' ? p.timestamp : new Date(p.timestamp).getTime(),
+    cpu: Math.max(0, p.cpuAbsolute ?? 0),
+    ramPct: p.memoryLimitBytes > 0 ? Math.min((p.memoryBytes / p.memoryLimitBytes) * 100, 100) : 0,
+  }));
+
+  const span = points[points.length - 1].time - points[0].time;
+  const formatTick = (t: number) =>
+    span > 20 * 60 * 60 * 1000
+      ? new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+      : new Date(t).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+
+  return (
+    <ResponsiveContainer width="100%" height={224}>
+      <AreaChart data={points} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+        <defs>
+          <linearGradient id="cpuGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="#4ade80" stopOpacity={0.35} />
+            <stop offset="95%" stopColor="#4ade80" stopOpacity={0} />
+          </linearGradient>
+          <linearGradient id="ramGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="#60a5fa" stopOpacity={0.35} />
+            <stop offset="95%" stopColor="#60a5fa" stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" vertical={false} />
+        <XAxis
+          dataKey="time" type="number" domain={['dataMin', 'dataMax']}
+          tickFormatter={formatTick} stroke="#475569" fontSize={10} tickLine={false} axisLine={false}
+        />
+        <YAxis domain={[0, 100]} ticks={[0, 25, 50, 75, 100]} stroke="#475569" fontSize={10} tickLine={false} axisLine={false} width={40} tickFormatter={(v) => `${v}%`} />
+        <Tooltip
+          contentStyle={{ background: '#0f1520', border: '1px solid #1e293b', borderRadius: 8, fontSize: 12 }}
+          labelStyle={{ color: '#94a3b8' }}
+          labelFormatter={(t: number) => new Date(t).toLocaleString()}
+          formatter={(value: number, name: string) => [`${value.toFixed(1)}%`, name === 'cpu' ? 'CPU' : 'RAM']}
+        />
+        <Area type="monotone" dataKey="cpu" name="cpu" stroke="#4ade80" fill="url(#cpuGradient)" strokeWidth={1.5} isAnimationActive={false} />
+        <Area type="monotone" dataKey="ramPct" name="ramPct" stroke="#60a5fa" fill="url(#ramGradient)" strokeWidth={1.5} isAnimationActive={false} />
+      </AreaChart>
+    </ResponsiveContainer>
   );
 }
 

@@ -283,7 +283,7 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   }
 
   if (isAdmin) {
-    const { memory, swap, disk, io, cpu, startup, image, suspended, userId, allocationId, backupLimit, databaseLimit } = req.body;
+    const { memory, swap, disk, io, cpu, startup, image, suspended, userId, allocationId, backupLimit, databaseLimit, crashDetectionEnabled } = req.body;
     if (memory) updateData.memory = parseInt(memory);
     if (swap !== undefined) updateData.swap = parseInt(swap);
     if (disk) updateData.disk = parseInt(disk);
@@ -294,6 +294,7 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     if (typeof suspended === 'boolean') updateData.suspended = suspended;
     if (backupLimit !== undefined) updateData.backupLimit = parseInt(backupLimit);
     if (databaseLimit !== undefined) updateData.databaseLimit = parseInt(databaseLimit);
+    if (typeof crashDetectionEnabled === 'boolean') updateData.crashDetectionEnabled = crashDetectionEnabled;
 
     // Owner change
     if (userId && userId !== server.userId) {
@@ -459,6 +460,7 @@ router.post('/:id/modpack/install', authenticate, requireAdmin, async (req: Auth
       image: fabricEgg.dockerImage,
       installScript: fabricEgg.scriptInstall ?? undefined,
       scriptContainer: fabricEgg.scriptContainer ?? undefined,
+      crashDetectionEnabled: server.crashDetectionEnabled,
       build: {
         memory_limit: server.memory, swap: server.swap, disk_space: server.disk,
         io_weight: server.io, cpu_limit: server.cpu, oom_disabled: server.oomDisabled,
@@ -1275,15 +1277,49 @@ router.delete('/:id/schedules/:taskId', authenticate, async (req: AuthRequest, r
 
 // ─── Stats History (for graphs) ───────────────────────────────────────────────
 
+const HISTORY_RANGE_MS: Record<string, number> = {
+  '1h': 60 * 60 * 1000,
+  '24h': 24 * 60 * 60 * 1000,
+  '7d': 7 * 24 * 60 * 60 * 1000,
+};
+const HISTORY_MAX_POINTS = 300;
+
 router.get('/:id/stats/history', authenticate, async (req: AuthRequest, res: Response) => {
   const isAdmin = req.user!.role === 'ADMIN';
   const server = await prisma.server.findFirst({
     where: { id: req.params.id, ...(isAdmin ? {} : { userId: req.user!.id }) },
   });
   if (!server) return res.status(404).json({ message: 'Server not found' });
-  const { statsBuffer } = await import('../services/wingsRelay');
-  const history = statsBuffer.get(server.uuid) ?? [];
-  return res.json({ data: history });
+
+  const range = req.query.range as string | undefined;
+  if (!range || range === 'live') {
+    const { statsBuffer } = await import('../services/wingsRelay');
+    const history = statsBuffer.get(server.uuid) ?? [];
+    return res.json({ data: history });
+  }
+
+  const windowMs = HISTORY_RANGE_MS[range];
+  if (!windowMs) return res.status(422).json({ message: 'range must be "live", "1h", "24h", or "7d"' });
+
+  const samples = await prisma.serverStatSample.findMany({
+    where: { serverId: server.id, timestamp: { gte: new Date(Date.now() - windowMs) } },
+    orderBy: { timestamp: 'asc' },
+  });
+
+  // Thin out to a chart-friendly point count instead of shipping thousands
+  // of 1-per-minute rows for the 7-day range.
+  const step = Math.max(1, Math.ceil(samples.length / HISTORY_MAX_POINTS));
+  const data = samples
+    .filter((_, i) => i % step === 0)
+    .map((s) => ({
+      cpuAbsolute: s.cpu,
+      memoryBytes: Number(s.memoryBytes),
+      memoryLimitBytes: Number(s.memoryLimitBytes),
+      diskBytes: Number(s.diskBytes),
+      timestamp: s.timestamp.getTime(),
+    }));
+
+  return res.json({ data });
 });
 
 export default router;

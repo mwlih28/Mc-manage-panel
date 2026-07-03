@@ -474,6 +474,7 @@ function EditServerModal({ server, onClose, onSuccess }: { server: Server; onClo
     cpu: String(srv.cpu ?? 0),
     backupLimit: String(srv.backupLimit ?? 0),
   });
+  const [crashDetectionEnabled, setCrashDetectionEnabled] = useState(server.crashDetectionEnabled ?? true);
   const [startup, setStartup] = useState({
     image: srv.image || 'ghcr.io/pterodactyl/yolks:java_21',
     startupCmd: srv.startup || '',
@@ -642,6 +643,20 @@ function EditServerModal({ server, onClose, onSuccess }: { server: Server; onClo
               <input type="number" className="input" value={resources.backupLimit} onChange={(e) => setResources({ ...resources, backupLimit: e.target.value })} />
             </div>
           </div>
+          <label className="flex items-start gap-3 p-3 rounded-lg border border-dark-700 bg-dark-800/40 cursor-pointer">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={crashDetectionEnabled}
+              onChange={(e) => setCrashDetectionEnabled(e.target.checked)}
+            />
+            <span>
+              <span className="block text-sm text-slate-200">Auto-restart on crash</span>
+              <span className="block text-xs text-slate-500 mt-0.5">
+                If the server process exits unexpectedly, Wings restarts it automatically (up to 3 times within 10 minutes, to avoid a boot loop). Takes effect on next start.
+              </span>
+            </span>
+          </label>
           <div className="flex gap-3 pt-2">
             <button className="btn-secondary flex-1" onClick={onClose}>Cancel</button>
             <button className="btn-primary flex-1" disabled={isSaving} onClick={() => save({
@@ -649,6 +664,7 @@ function EditServerModal({ server, onClose, onSuccess }: { server: Server; onClo
               disk: resources.disk,
               cpu: resources.cpu,
               backupLimit: resources.backupLimit,
+              crashDetectionEnabled,
             })}>
               {isSaving ? <Spinner size="sm" /> : 'Save'}
             </button>

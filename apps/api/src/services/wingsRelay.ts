@@ -36,6 +36,44 @@ export interface StatsEntry {
 const MAX_STATS_BUFFER = 120;
 export const statsBuffer = new Map<string, StatsEntry[]>();
 
+// statsBuffer above only covers the last couple of minutes and lives in
+// process memory — persist a thinned-out sample to the DB periodically so
+// the panel can chart usage over hours/days and survive an API restart.
+const PERSIST_INTERVAL_MS = 60 * 1000;
+const STAT_SAMPLE_RETENTION_DAYS = 7;
+const lastPersistedAt = new Map<string, number>();
+let lastCleanupAt = 0;
+
+function persistStatSample(uuid: string, entry: StatsEntry): void {
+  const now = Date.now();
+  const last = lastPersistedAt.get(uuid) ?? 0;
+  if (now - last < PERSIST_INTERVAL_MS) return;
+  lastPersistedAt.set(uuid, now);
+
+  prisma.server.findFirst({ where: { uuid }, select: { id: true } })
+    .then((server) => {
+      if (!server) return;
+      return prisma.serverStatSample.create({
+        data: {
+          serverId: server.id,
+          cpu: entry.cpuAbsolute,
+          memoryBytes: BigInt(Math.round(entry.memoryBytes)),
+          memoryLimitBytes: BigInt(Math.round(entry.memoryLimitBytes)),
+          diskBytes: BigInt(Math.round(entry.diskBytes)),
+        },
+      });
+    })
+    .catch((err: Error) => logger.warn(`Failed to persist stat sample for ${uuid}: ${err.message}`));
+
+  if (now - lastCleanupAt > 6 * 60 * 60 * 1000) {
+    lastCleanupAt = now;
+    const cutoff = new Date(now - STAT_SAMPLE_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+    prisma.serverStatSample.deleteMany({ where: { timestamp: { lt: cutoff } } })
+      .then((r) => { if (r.count > 0) logger.info(`Pruned ${r.count} old stat sample(s)`); })
+      .catch((err: Error) => logger.warn(`Stat sample cleanup failed: ${err.message}`));
+  }
+}
+
 export function pushConsoleBuffer(uuid: string, line: ConsoleLine): void {
   const buf = consoleBuffer.get(uuid) ?? [];
   buf.push(line);
@@ -130,6 +168,7 @@ export function getOrConnectWings(node: NodeInfo, io: SocketServer): Socket {
       sbuf.push(statsEntry);
       if (sbuf.length > MAX_STATS_BUFFER) sbuf.shift();
       statsBuffer.set(uuid, sbuf);
+      persistStatSample(uuid, statsEntry);
 
       relayData = {
         uuid,
