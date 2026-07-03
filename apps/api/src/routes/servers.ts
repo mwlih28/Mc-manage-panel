@@ -30,6 +30,17 @@ function generateShortUuid() {
   return uuidv4().replace(/-/g, '').slice(0, 8);
 }
 
+// Belt-and-braces guard for the file-manager routes below — traversal
+// protection is expected to live in Wings too, but the API shouldn't
+// forward an obviously malicious path just because Wings is trusted to
+// catch it.
+function hasPathTraversal(value: unknown): boolean {
+  if (typeof value === 'string') return value.split(/[/\\]/).includes('..') || value.includes('\0');
+  if (Array.isArray(value)) return value.some(hasPathTraversal);
+  if (value && typeof value === 'object') return Object.values(value).some(hasPathTraversal);
+  return false;
+}
+
 // GET /servers - Admin sees all, user sees own
 router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
   const page = parseInt(req.query.page as string) || 1;
@@ -528,6 +539,7 @@ router.get('/:id/activity', authenticate, async (req: AuthRequest, res: Response
 
 // GET /servers/:id/files?directory=/
 router.get('/:id/files', authenticate, async (req: AuthRequest, res: Response) => {
+  if (hasPathTraversal(req.query)) return res.status(400).json({ message: 'Invalid path' });
   const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
   try {
@@ -541,6 +553,7 @@ router.get('/:id/files', authenticate, async (req: AuthRequest, res: Response) =
 
 // GET /servers/:id/files/contents?file=path
 router.get('/:id/files/contents', authenticate, async (req: AuthRequest, res: Response) => {
+  if (hasPathTraversal(req.query)) return res.status(400).json({ message: 'Invalid path' });
   const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
   try {
@@ -554,6 +567,7 @@ router.get('/:id/files/contents', authenticate, async (req: AuthRequest, res: Re
 
 // POST /servers/:id/files/write
 router.post('/:id/files/write', authenticate, async (req: AuthRequest, res: Response) => {
+  if (hasPathTraversal(req.body)) return res.status(400).json({ message: 'Invalid path' });
   const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
   try {
@@ -567,6 +581,7 @@ router.post('/:id/files/write', authenticate, async (req: AuthRequest, res: Resp
 
 // POST /servers/:id/files/delete
 router.post('/:id/files/delete', authenticate, async (req: AuthRequest, res: Response) => {
+  if (hasPathTraversal(req.body)) return res.status(400).json({ message: 'Invalid path' });
   const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
   try {
@@ -580,6 +595,7 @@ router.post('/:id/files/delete', authenticate, async (req: AuthRequest, res: Res
 
 // POST /servers/:id/files/create-folder
 router.post('/:id/files/create-folder', authenticate, async (req: AuthRequest, res: Response) => {
+  if (hasPathTraversal(req.body)) return res.status(400).json({ message: 'Invalid path' });
   const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
   try {
@@ -593,6 +609,7 @@ router.post('/:id/files/create-folder', authenticate, async (req: AuthRequest, r
 
 // PUT /servers/:id/files/rename
 router.put('/:id/files/rename', authenticate, async (req: AuthRequest, res: Response) => {
+  if (hasPathTraversal(req.body)) return res.status(400).json({ message: 'Invalid path' });
   const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
   try {
@@ -949,6 +966,10 @@ router.put('/:id/schedules/:taskId', authenticate, async (req: AuthRequest, res:
     where: { id: req.params.id, ...(isAdmin ? {} : { userId: req.user!.id }) },
   });
   if (!server) return res.status(404).json({ message: 'Server not found' });
+  // Confirm the task actually belongs to this server before touching it —
+  // otherwise owning any server would let you edit any other server's tasks.
+  const existing = await prisma.scheduledTask.findFirst({ where: { id: req.params.taskId, serverId: server.id } });
+  if (!existing) return res.status(404).json({ message: 'Scheduled task not found' });
   const { name, cronExpression, action, payload, enabled } = req.body;
   const task = await prisma.scheduledTask.update({
     where: { id: req.params.taskId },
@@ -963,6 +984,8 @@ router.delete('/:id/schedules/:taskId', authenticate, async (req: AuthRequest, r
     where: { id: req.params.id, ...(isAdmin ? {} : { userId: req.user!.id }) },
   });
   if (!server) return res.status(404).json({ message: 'Server not found' });
+  const existing = await prisma.scheduledTask.findFirst({ where: { id: req.params.taskId, serverId: server.id } });
+  if (!existing) return res.status(404).json({ message: 'Scheduled task not found' });
   await prisma.scheduledTask.delete({ where: { id: req.params.taskId } });
   return res.json({ ok: true });
 });

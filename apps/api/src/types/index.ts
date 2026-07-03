@@ -9,6 +9,9 @@ export interface JwtPayload {
   userId: string;
   email: string;
   role: string;
+  // Only ever set on the short-lived token minted by POST /auth/login when
+  // 2FA is required — must never be accepted as a real access token.
+  pending?: boolean;
   iat?: number;
   exp?: number;
 }

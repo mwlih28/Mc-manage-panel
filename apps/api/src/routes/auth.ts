@@ -5,7 +5,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { prisma } from '../utils/prisma';
-import { generateTokenPair } from '../utils/jwt';
+import { generateTokenPair, verifyRefreshToken } from '../utils/jwt';
 import { authenticate } from '../middleware/auth';
 import { AuthRequest } from '../types';
 import { verify } from 'otplib';
@@ -109,6 +109,7 @@ router.post('/2fa/verify', authLimiter, async (req: Request, res: Response) => {
 
 router.post(
   '/register',
+  authLimiter,
   [
     body('email').isEmail().normalizeEmail(),
     body('username').isLength({ min: 3, max: 20 }).matches(/^[a-zA-Z0-9_]+$/),
@@ -161,8 +162,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
   }
 
   try {
-    const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'fallback-refresh-secret';
-    const payload = jwt.verify(refreshToken, JWT_REFRESH_SECRET) as { userId: string };
+    const payload = verifyRefreshToken(refreshToken);
     const user = await prisma.user.findUnique({ where: { id: payload.userId } });
 
     if (!user) {

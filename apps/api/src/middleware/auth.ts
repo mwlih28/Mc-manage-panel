@@ -13,6 +13,14 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
 
   try {
     const payload = verifyAccessToken(token);
+
+    // The pending-2FA token from POST /auth/login is signed with the same
+    // secret as a real access token but only proves the password step —
+    // it must never grant access beyond POST /auth/2fa/verify.
+    if (payload.pending) {
+      return res.status(401).json({ message: 'Invalid or expired token' });
+    }
+
     const user = await prisma.user.findUnique({ where: { id: payload.userId } });
 
     if (!user) {
@@ -43,6 +51,7 @@ export function optionalAuth(req: AuthRequest, _res: Response, next: NextFunctio
 
   try {
     const payload = verifyAccessToken(token);
+    if (payload.pending) return next();
     prisma.user.findUnique({ where: { id: payload.userId } }).then((user) => {
       if (user) req.user = user;
       next();

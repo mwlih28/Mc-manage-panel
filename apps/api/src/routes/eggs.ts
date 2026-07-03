@@ -7,7 +7,7 @@ import { AuthRequest } from '../types';
 const router = Router();
 
 // GET /nests
-router.get('/nests', authenticate, async (_req: AuthRequest, res: Response) => {
+router.get('/nests', authenticate, requireAdmin, async (_req: AuthRequest, res: Response) => {
   const nests = await prisma.nest.findMany({
     include: {
       _count: { select: { eggs: true } },
@@ -18,7 +18,7 @@ router.get('/nests', authenticate, async (_req: AuthRequest, res: Response) => {
 });
 
 // GET /nests/:nestId/eggs
-router.get('/nests/:nestId/eggs', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/nests/:nestId/eggs', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
   const eggs = await prisma.egg.findMany({
     where: { nestId: req.params.nestId },
     include: { variables: true },
@@ -137,7 +137,7 @@ router.delete('/:id', authenticate, requireAdmin, async (req: AuthRequest, res: 
 });
 
 // GET /eggs/:id
-router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:id', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
   const egg = await prisma.egg.findUnique({
     where: { id: req.params.id },
     include: {

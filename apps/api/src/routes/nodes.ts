@@ -129,7 +129,7 @@ router.delete('/:id', authenticate, requireAdmin, async (req: AuthRequest, res: 
 });
 
 // GET /nodes/:id/allocations
-router.get('/:id/allocations', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:id/allocations', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
   const page = parseInt(req.query.page as string) || 1;
   const perPage = parseInt(req.query.perPage as string) || 50;
 

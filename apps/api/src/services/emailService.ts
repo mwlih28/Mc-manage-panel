@@ -18,7 +18,6 @@ function makeTransport(conf: Record<string, string>) {
     port,
     secure: port === 465,
     auth: { user: conf['smtp.user'], pass: conf['smtp.pass'] },
-    tls: { rejectUnauthorized: false },
   });
 }
 

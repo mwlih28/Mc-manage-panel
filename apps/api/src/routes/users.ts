@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import bcrypt from 'bcryptjs';
+import rateLimit from 'express-rate-limit';
 import { prisma } from '../utils/prisma';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import { AuthRequest } from '../types';
@@ -8,6 +9,16 @@ import { generateSecret, verify, generateURI } from 'otplib';
 import QRCode from 'qrcode';
 
 const router = Router();
+
+// A stolen/short-lived session token shouldn't be enough to brute-force a
+// 6-digit TOTP code against these endpoints — same budget as login.
+const totpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many attempts. Please try again later.' },
+});
 
 // GET /users - Admin only
 router.get('/', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
@@ -213,7 +224,7 @@ router.post('/profile/2fa/setup', authenticate, async (req: AuthRequest, res: Re
   return res.json({ secret, qrCode, otpauthUrl });
 });
 
-router.post('/profile/2fa/enable', authenticate, async (req: AuthRequest, res: Response) => {
+router.post('/profile/2fa/enable', authenticate, totpLimiter, async (req: AuthRequest, res: Response) => {
   const { code } = req.body;
   if (!code) return res.status(422).json({ message: 'Code required' });
   const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
@@ -227,7 +238,7 @@ router.post('/profile/2fa/enable', authenticate, async (req: AuthRequest, res: R
   return res.json({ message: '2FA enabled' });
 });
 
-router.delete('/profile/2fa', authenticate, async (req: AuthRequest, res: Response) => {
+router.delete('/profile/2fa', authenticate, totpLimiter, async (req: AuthRequest, res: Response) => {
   const { code } = req.body;
   const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
   if (!user || !user.twoFactor || !user.twoFactorSecret) return res.status(400).json({ message: '2FA not enabled' });
