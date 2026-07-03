@@ -269,7 +269,7 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
 
   if (!server) return res.status(404).json({ message: 'Server not found' });
 
-  const { name, description, mcVersion, crashDetectionEnabled, autoOptimizeEnabled } = req.body;
+  const { name, description, mcVersion, crashDetectionEnabled, autoOptimizeEnabled, publicStatusEnabled } = req.body;
   const updateData: Record<string, unknown> = {};
 
   if (name) updateData.name = name;
@@ -288,6 +288,20 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   // admin-only.
   if (typeof crashDetectionEnabled === 'boolean') updateData.crashDetectionEnabled = crashDetectionEnabled;
   if (typeof autoOptimizeEnabled === 'boolean') updateData.autoOptimizeEnabled = autoOptimizeEnabled;
+
+  if (typeof publicStatusEnabled === 'boolean') {
+    updateData.publicStatusEnabled = publicStatusEnabled;
+    if (publicStatusEnabled && !server.publicSlug) {
+      const base = server.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'server';
+      let slug = base;
+      for (let i = 0; i < 5; i++) {
+        const clash = await prisma.server.findUnique({ where: { publicSlug: slug } });
+        if (!clash) break;
+        slug = `${base}-${Math.random().toString(36).slice(2, 6)}`;
+      }
+      updateData.publicSlug = slug;
+    }
+  }
 
   if (isAdmin) {
     const { memory, swap, disk, io, cpu, startup, image, suspended, userId, allocationId, backupLimit, databaseLimit } = req.body;

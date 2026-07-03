@@ -175,6 +175,10 @@ model Server {
   // Automatically mitigate sustained high CPU/memory (e.g. clear dropped
   // -item lag) instead of just letting it ride. See wingsRelay.ts.
   autoOptimizeEnabled   Boolean @default(true)
+  // Opt-in public status page (no auth) at /status/:publicSlug — off by
+  // default since not every owner wants their server publicly discoverable.
+  publicStatusEnabled   Boolean @default(false)
+  publicSlug            String? @unique
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

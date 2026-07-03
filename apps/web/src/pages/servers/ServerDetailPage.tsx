@@ -336,18 +336,20 @@ export function ServerDetailPage() {
   // Server behavior settings (crash auto-restart, lag auto-optimize)
   const [crashDetectionEnabled, setCrashDetectionEnabled] = useState(true);
   const [autoOptimizeEnabled, setAutoOptimizeEnabled] = useState(true);
+  const [publicStatusEnabled, setPublicStatusEnabled] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   useEffect(() => {
     if (data) {
       setCrashDetectionEnabled(data.crashDetectionEnabled ?? true);
       setAutoOptimizeEnabled(data.autoOptimizeEnabled ?? true);
+      setPublicStatusEnabled(data.publicStatusEnabled ?? false);
     }
   }, [data]);
 
   const saveServerSettings = async () => {
     setSavingSettings(true);
     try {
-      await api.patch(`/servers/${id}`, { crashDetectionEnabled, autoOptimizeEnabled });
+      await api.patch(`/servers/${id}`, { crashDetectionEnabled, autoOptimizeEnabled, publicStatusEnabled });
       toast.success('Settings saved');
       queryClient.invalidateQueries({ queryKey: ['server', id] });
     } catch {
@@ -1944,6 +1946,36 @@ export function ServerDetailPage() {
                   <span className="block text-xs text-slate-500 mt-0.5">
                     If CPU stays above 90% (or memory above 95%) for a sustained minute, dropped-item lag is cleared automatically and logged to Activity. At most once every 5 minutes.
                   </span>
+                </span>
+              </label>
+              <label className="flex items-start gap-3 p-3 rounded-lg border border-dark-700 bg-dark-800/40 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={publicStatusEnabled}
+                  onChange={(e) => setPublicStatusEnabled(e.target.checked)}
+                />
+                <span>
+                  <span className="flex items-center gap-1.5 text-sm text-slate-200"><Globe2 size={13} /> Public status page</span>
+                  <span className="block text-xs text-slate-500 mt-0.5">
+                    A shareable, no-login page showing online/offline, player count, and how to join — safe to post in Discord or on a website.
+                  </span>
+                  {publicStatusEnabled && data?.publicSlug && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <code className="text-xs px-2 py-1 rounded bg-dark-900 text-panel-400 truncate">{`${window.location.origin}/status/${data.publicSlug}`}</code>
+                      <button
+                        type="button"
+                        className="p-1 text-slate-500 hover:text-slate-300"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          navigator.clipboard.writeText(`${window.location.origin}/status/${data.publicSlug}`);
+                          toast.success('Link copied');
+                        }}
+                      >
+                        <Copy size={13} />
+                      </button>
+                    </div>
+                  )}
                 </span>
               </label>
               <div className="flex justify-end pt-1">

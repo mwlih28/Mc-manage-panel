@@ -43,6 +43,7 @@ import installerRoutes from './routes/installer';
 import aiRoutes from './routes/ai';
 import curseforgeRoutes from './routes/curseforge';
 import modrinthRoutes from './routes/modrinth';
+import publicRoutes from './routes/public';
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -99,6 +100,7 @@ api.use('/installer', installerRoutes);
 api.use('/ai', aiRoutes);
 api.use('/curseforge', curseforgeRoutes);
 api.use('/modrinth', modrinthRoutes);
+api.use('/public', publicRoutes);
 
 app.use('/api/v1', api);
 

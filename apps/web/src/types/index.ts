@@ -134,6 +134,8 @@ export interface Server {
   backupLimit: number;
   crashDetectionEnabled: boolean;
   autoOptimizeEnabled: boolean;
+  publicStatusEnabled: boolean;
+  publicSlug?: string | null;
   createdAt: string;
   updatedAt: string;
   user?: Pick<User, 'id' | 'email' | 'username'>;

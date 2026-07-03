@@ -29,6 +29,7 @@ const AdminServersPage   = lazy(() => import('@/pages/admin/AdminServersPage').t
 const AdminEggsPage      = lazy(() => import('@/pages/admin/AdminEggsPage').then(m => ({ default: m.AdminEggsPage })));
 const AdminActivityPage  = lazy(() => import('@/pages/admin/AdminActivityPage').then(m => ({ default: m.AdminActivityPage })));
 const AdminSettingsPage  = lazy(() => import('@/pages/admin/AdminSettingsPage').then(m => ({ default: m.AdminSettingsPage })));
+const PublicStatusPage   = lazy(() => import('@/pages/PublicStatusPage').then(m => ({ default: m.PublicStatusPage })));
 
 function RouteFallback() {
   return (
@@ -65,6 +66,7 @@ export default function App() {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/status/:slug" element={<PublicStatusPage />} />
 
         {/* Protected user routes */}
         <Route element={<RequireAuth />}>
