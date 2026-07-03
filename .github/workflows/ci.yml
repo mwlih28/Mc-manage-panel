@@ -31,7 +31,7 @@ jobs:
         working-directory: apps/api
         run: |
           sed -i 's/provider = "postgresql"/provider = "sqlite"/' prisma/schema.prisma
-          DATABASE_URL="file:./test.db" npx prisma generate
+          DATABASE_URL="file:./test.db" npx prisma@5 generate
 
       - name: TypeCheck API
         working-directory: apps/api
