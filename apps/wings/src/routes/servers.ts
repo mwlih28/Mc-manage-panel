@@ -174,6 +174,43 @@ router.get('/:uuid/players/:playerUuid/details', (req: Request, res: Response) =
   return res.json({ stats, location, inventory: inv.inventory, enderChest: inv.enderChest, ban });
 });
 
+// Leaderboard — aggregate stats for every player who's ever appeared in
+// this world, read straight off disk (world/stats/<uuid>.json) rather than
+// Wings' in-memory join-history log, so it's complete even for players who
+// last joined before this Wings process started.
+router.get('/:uuid/players/leaderboard', (req: Request, res: Response) => {
+  const { uuid } = req.params;
+  const cfg = getConfig();
+  const dataPath = path.join(cfg.system.data, uuid);
+  const statsDir = path.join(dataPath, 'world', 'stats');
+  if (!fs.existsSync(statsDir)) return res.json({ players: [] });
+
+  const usercachePath = path.join(dataPath, 'usercache.json');
+  const nameByUuid = new Map<string, string>();
+  if (fs.existsSync(usercachePath)) {
+    try {
+      const cache: { name: string; uuid: string }[] = JSON.parse(fs.readFileSync(usercachePath, 'utf8'));
+      for (const entry of cache) nameByUuid.set(entry.uuid, entry.name);
+    } catch { /* ignore */ }
+  }
+
+  try {
+    const files = fs.readdirSync(statsDir).filter((f) => f.endsWith('.json'));
+    const players = files.map((file) => {
+      const playerUuid = file.replace(/\.json$/, '');
+      const stats = readPlayerStats(path.join(statsDir, file));
+      return {
+        uuid: playerUuid,
+        name: nameByUuid.get(playerUuid) || playerUuid.slice(0, 8),
+        ...stats,
+      };
+    });
+    return res.json({ players });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
+  }
+});
+
 // Ban a player
 router.post('/:uuid/players/:playerUuid/ban', async (req: Request, res: Response) => {
   const { uuid, playerUuid } = req.params;

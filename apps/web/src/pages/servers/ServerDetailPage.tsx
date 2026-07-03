@@ -8,7 +8,7 @@ import {
   Package, Users, Search, Download, RefreshCw, Tag, AlertTriangle, Shield, ShieldOff,
   MapPin, Clock, Sword, Hammer, Footprints, Ban, LogOut, Wifi, Navigation,
   StickyNote, CalendarClock, UserCog, Save, Copy, CheckCircle2, Globe2, Boxes,
-  Settings as SettingsIcon, Gauge, RotateCw
+  Settings as SettingsIcon, Gauge, RotateCw, Trophy
 } from 'lucide-react';
 import { io as ioClient, Socket } from 'socket.io-client';
 import api from '@/lib/axios';
@@ -28,7 +28,7 @@ import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts';
 
-type Tab = 'console' | 'files' | 'plugins' | 'mods' | 'modpacks' | 'versions' | 'worlds' | 'stats' | 'backups' | 'players' | 'notes' | 'schedule' | 'access' | 'settings';
+type Tab = 'console' | 'files' | 'plugins' | 'mods' | 'modpacks' | 'versions' | 'worlds' | 'stats' | 'backups' | 'players' | 'leaderboard' | 'notes' | 'schedule' | 'access' | 'settings';
 
 const TAB_GROUPS: { label: string; tabs: { id: Tab; label: string; icon: typeof Terminal }[] }[] = [
   {
@@ -49,6 +49,7 @@ const TAB_GROUPS: { label: string; tabs: { id: Tab; label: string; icon: typeof 
       { id: 'stats', label: 'Stats', icon: BarChart2 },
       { id: 'backups', label: 'Backups', icon: Archive },
       { id: 'players', label: 'Players', icon: Users },
+      { id: 'leaderboard', label: 'Leaderboard', icon: Trophy },
     ],
   },
   {
@@ -123,6 +124,36 @@ interface PlayerHistoryEntry {
   lastSeen: string;
   joinCount: number;
   online: boolean;
+}
+
+interface LeaderboardEntry {
+  uuid: string;
+  name: string;
+  playTimeTicks: number;
+  deaths: number;
+  walkOneCm: number;
+  sprintOneCm: number;
+  jumps: number;
+  playerKills: number;
+  mobKills: number;
+  blocksMinedTotal: number;
+}
+
+type LeaderboardSortKey = Exclude<keyof LeaderboardEntry, 'uuid' | 'name'>;
+
+const LEADERBOARD_COLUMNS: { key: LeaderboardSortKey; label: string }[] = [
+  { key: 'playTimeTicks', label: 'Playtime' },
+  { key: 'mobKills', label: 'Mob Kills' },
+  { key: 'playerKills', label: 'Player Kills' },
+  { key: 'deaths', label: 'Deaths' },
+  { key: 'blocksMinedTotal', label: 'Blocks Mined' },
+  { key: 'jumps', label: 'Jumps' },
+];
+
+function formatPlaytime(ticks: number): string {
+  const hours = ticks / 20 / 3600;
+  if (hours < 1) return `${Math.round(ticks / 20 / 60)}m`;
+  return `${hours.toFixed(1)}h`;
 }
 
 interface PlayerDetails {
@@ -234,6 +265,13 @@ export function ServerDetailPage() {
     queryFn: () => api.get(`/servers/${id}/players/all`).then((r) => r.data),
     enabled: (activeTab === 'players' || activeTab === 'console') && !!id,
     refetchInterval: (activeTab === 'players' || activeTab === 'console') ? 30000 : false,
+  });
+
+  const [leaderboardSort, setLeaderboardSort] = useState<LeaderboardSortKey>('playTimeTicks');
+  const { data: leaderboardData, isLoading: leaderboardLoading } = useQuery({
+    queryKey: ['server-leaderboard', id],
+    queryFn: () => api.get(`/servers/${id}/players/leaderboard`).then((r) => r.data),
+    enabled: activeTab === 'leaderboard' && !!id,
   });
 
   const openFile = async (filePath: string) => {
@@ -1472,6 +1510,77 @@ export function ServerDetailPage() {
                               ><Shield size={13} /></button>
                             </div>
                           </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {activeTab === 'leaderboard' && (() => {
+        const players: LeaderboardEntry[] = leaderboardData?.players ?? [];
+        const sorted = [...players].sort((a, b) => b[leaderboardSort] - a[leaderboardSort]);
+        const medalFor = (rank: number) => rank === 0 ? '🥇' : rank === 1 ? '🥈' : rank === 2 ? '🥉' : null;
+        return (
+          <div className="space-y-4">
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-dark-800/50 border border-dark-700 text-slate-500 text-xs">
+              <Trophy size={14} className="shrink-0 mt-0.5" />
+              <span>Read straight from each player's Minecraft stats file — playtime, kills, deaths, and more, ranked across everyone who's ever joined this server.</span>
+            </div>
+            <div className="card">
+              <div className="card-header flex items-center justify-between flex-wrap gap-2">
+                <h3 className="text-sm font-semibold text-slate-100">Leaderboard</h3>
+                <div className="flex items-center gap-1 flex-wrap">
+                  {LEADERBOARD_COLUMNS.map((col) => (
+                    <button
+                      key={col.key}
+                      className={cn(
+                        'px-2.5 py-1 rounded-md text-xs font-medium transition-colors',
+                        leaderboardSort === col.key ? 'bg-panel-600 text-white' : 'bg-dark-800 text-slate-400 hover:text-slate-200'
+                      )}
+                      onClick={() => setLeaderboardSort(col.key)}
+                    >
+                      {col.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {leaderboardLoading ? (
+                <div className="flex justify-center py-12"><Spinner /></div>
+              ) : sorted.length === 0 ? (
+                <div className="p-10 text-center text-slate-500">
+                  <Trophy size={28} className="mx-auto mb-2 opacity-20" />
+                  <p className="text-sm">No player stats yet — they show up here once someone's played a bit</p>
+                </div>
+              ) : (
+                <div className="table-container">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>#</th><th>Player</th><th>Playtime</th><th>Mob Kills</th>
+                        <th>Player Kills</th><th>Deaths</th><th>Blocks Mined</th><th>Jumps</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sorted.map((p, i) => (
+                        <tr key={p.uuid}>
+                          <td className="text-slate-500 font-mono text-xs w-10">{medalFor(i) ?? i + 1}</td>
+                          <td>
+                            <div className="flex items-center gap-2.5">
+                              <img src={`https://mc-heads.net/avatar/${p.name}/32`} alt="" className="w-7 h-7 rounded pixelated shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                              <span className="font-medium text-slate-200">{p.name}</span>
+                            </div>
+                          </td>
+                          <td className={leaderboardSort === 'playTimeTicks' ? 'text-panel-400 font-semibold' : 'text-slate-300'}>{formatPlaytime(p.playTimeTicks)}</td>
+                          <td className={leaderboardSort === 'mobKills' ? 'text-panel-400 font-semibold' : 'text-slate-300'}>{p.mobKills.toLocaleString()}</td>
+                          <td className={leaderboardSort === 'playerKills' ? 'text-panel-400 font-semibold' : 'text-slate-300'}>{p.playerKills.toLocaleString()}</td>
+                          <td className={leaderboardSort === 'deaths' ? 'text-panel-400 font-semibold' : 'text-slate-300'}>{p.deaths.toLocaleString()}</td>
+                          <td className={leaderboardSort === 'blocksMinedTotal' ? 'text-panel-400 font-semibold' : 'text-slate-300'}>{p.blocksMinedTotal.toLocaleString()}</td>
+                          <td className={leaderboardSort === 'jumps' ? 'text-panel-400 font-semibold' : 'text-slate-300'}>{p.jumps.toLocaleString()}</td>
                         </tr>
                       ))}
                     </tbody>

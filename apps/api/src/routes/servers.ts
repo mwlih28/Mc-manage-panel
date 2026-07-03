@@ -1118,6 +1118,16 @@ router.get('/:id/players/all', authenticate, async (req: AuthRequest, res: Respo
   } catch { return res.json({ players: [], count: 0 }); }
 });
 
+// GET /servers/:id/players/leaderboard
+router.get('/:id/players/leaderboard', authenticate, async (req: AuthRequest, res: Response) => {
+  const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
+  if (!ctx) return res.status(404).json({ message: 'Server not found' });
+  try {
+    const { data } = await ctx.client.get(`/servers/${ctx.server.uuid}/players/leaderboard`, { timeout: 10000 });
+    return res.json(data);
+  } catch { return res.json({ players: [] }); }
+});
+
 // GET /servers/:id/players/:playerUuid/details
 router.get('/:id/players/:playerUuid/details', authenticate, async (req: AuthRequest, res: Response) => {
   const isAdmin = req.user!.role === 'ADMIN';

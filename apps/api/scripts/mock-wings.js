@@ -293,6 +293,44 @@ app.get('/api/servers/:uuid/players/:playerUuid/inventory', (_req, res) => {
   });
 });
 
+app.get('/api/servers/:uuid/players/leaderboard', (req, res) => {
+  const { uuid } = req.params;
+  const dataPath = path.join(DATA_ROOT, uuid);
+  const statsDir = path.join(dataPath, 'world', 'stats');
+  if (!fs.existsSync(statsDir)) return res.json({ players: [] });
+
+  const usercachePath = path.join(dataPath, 'usercache.json');
+  const nameByUuid = new Map();
+  if (fs.existsSync(usercachePath)) {
+    try {
+      for (const entry of JSON.parse(fs.readFileSync(usercachePath, 'utf8'))) nameByUuid.set(entry.uuid, entry.name);
+    } catch { /* ignore */ }
+  }
+
+  const files = fs.readdirSync(statsDir).filter((f) => f.endsWith('.json'));
+  const players = files.map((file) => {
+    const playerUuid = file.replace(/\.json$/, '');
+    let stats = { playTimeTicks: 0, deaths: 0, walkOneCm: 0, sprintOneCm: 0, jumps: 0, playerKills: 0, mobKills: 0, blocksMinedTotal: 0 };
+    try {
+      const data = JSON.parse(fs.readFileSync(path.join(statsDir, file), 'utf8'));
+      const custom = data?.stats?.['minecraft:custom'] ?? {};
+      const mined = data?.stats?.['minecraft:mined'] ?? {};
+      stats = {
+        playTimeTicks: custom['minecraft:play_time'] ?? 0,
+        deaths: custom['minecraft:deaths'] ?? 0,
+        walkOneCm: custom['minecraft:walk_one_cm'] ?? 0,
+        sprintOneCm: custom['minecraft:sprint_one_cm'] ?? 0,
+        jumps: custom['minecraft:jump'] ?? 0,
+        playerKills: custom['minecraft:player_kills'] ?? 0,
+        mobKills: custom['minecraft:mob_kills'] ?? 0,
+        blocksMinedTotal: Object.values(mined).reduce((a, v) => a + v, 0),
+      };
+    } catch { /* ignore malformed file */ }
+    return { uuid: playerUuid, name: nameByUuid.get(playerUuid) || playerUuid.slice(0, 8), ...stats };
+  });
+  res.json({ players });
+});
+
 app.get('/api/servers/:uuid/players/all', (_req, res) => {
   res.json({
     players: ONLINE_PLAYERS.map((p, i) => ({
