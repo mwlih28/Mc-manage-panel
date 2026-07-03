@@ -7,6 +7,28 @@ import { AuthRequest } from '../types';
 
 const router = Router();
 
+function generateSetupToken() {
+  return uuidv4().replace(/-/g, '') + uuidv4().replace(/-/g, '');
+}
+const SETUP_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24h — long enough to provision a VPS and come back
+
+// GET /nodes/setup/:code — public bootstrap endpoint for `install-wings.sh
+// --panel --code`. Unauthenticated by necessity: a freshly-provisioned game
+// server has no panel credentials yet. Security comes from the code itself
+// being a long random one-time value with a short expiry, not from auth.
+router.get('/setup/:code', async (req: AuthRequest, res: Response) => {
+  const node = await prisma.node.findUnique({ where: { setupToken: req.params.code } });
+  if (!node || !node.setupTokenExpiresAt || node.setupTokenExpiresAt < new Date()) {
+    return res.status(404).json({ message: 'Activation code invalid or expired' });
+  }
+  return res.json({
+    nodeToken: node.token,
+    fqdn: node.fqdn,
+    daemonPort: node.daemonPort,
+    scheme: node.scheme,
+  });
+});
+
 // GET /nodes
 router.get('/', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
   const page = parseInt(req.query.page as string) || 1;
@@ -81,12 +103,31 @@ router.post(
         uploadSize: parseInt(uploadSize) || 100,
         behindProxy: behindProxy || false,
         token,
+        setupToken: generateSetupToken(),
+        setupTokenExpiresAt: new Date(Date.now() + SETUP_TOKEN_TTL_MS),
       },
     });
 
     return res.status(201).json({ data: node });
   }
 );
+
+// POST /nodes/:id/regenerate-setup-token — issue a fresh activation code,
+// e.g. because the previous one expired before Wings was installed.
+router.post('/:id/regenerate-setup-token', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
+  const node = await prisma.node.findUnique({ where: { id: req.params.id } });
+  if (!node) return res.status(404).json({ message: 'Node not found' });
+
+  const updated = await prisma.node.update({
+    where: { id: node.id },
+    data: {
+      setupToken: generateSetupToken(),
+      setupTokenExpiresAt: new Date(Date.now() + SETUP_TOKEN_TTL_MS),
+    },
+  });
+
+  return res.json({ setupToken: updated.setupToken, setupTokenExpiresAt: updated.setupTokenExpiresAt });
+});
 
 // PATCH /nodes/:id
 router.patch('/:id', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {

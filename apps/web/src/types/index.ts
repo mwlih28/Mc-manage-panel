@@ -47,6 +47,8 @@ export interface Node {
   maintenanceMode: boolean;
   token: string;
   status: NodeStatus;
+  setupToken?: string | null;
+  setupTokenExpiresAt?: string | null;
   createdAt: string;
   updatedAt: string;
   _count?: { servers: number; allocations: number };

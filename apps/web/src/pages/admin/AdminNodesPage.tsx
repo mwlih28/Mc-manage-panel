@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Cpu, Trash2, Settings, Wifi, WifiOff, Copy, Check, Terminal, Network } from 'lucide-react';
+import { Plus, Cpu, Trash2, Settings, Wifi, WifiOff, Copy, Check, Terminal, Network, RefreshCw, Zap, ChevronDown } from 'lucide-react';
 import api from '@/lib/axios';
 import { Node } from '@/types';
 
@@ -192,8 +192,31 @@ function NodeDetailModal({ node, onClose, onSuccess }: { node: Node; onClose: ()
     gameSubdomain: (node as typeof node & { gameSubdomain?: string }).gameSubdomain || '',
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [showManual, setShowManual] = useState(false);
+  const [setupToken, setSetupToken] = useState(node.setupToken || null);
+  const [setupTokenExpiresAt, setSetupTokenExpiresAt] = useState(node.setupTokenExpiresAt || null);
+  const [regenerating, setRegenerating] = useState(false);
 
-  const installCmd = `bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/claude%2Fpterodactyl-panel-builder-8uy3tp/scripts/install-wings.sh)`;
+  const panelUrl = window.location.origin;
+  const installCmd = `bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/install-wings.sh)`;
+  const isCodeExpired = !setupTokenExpiresAt || new Date(setupTokenExpiresAt) < new Date();
+  const quickDeployCmd = setupToken && !isCodeExpired
+    ? `bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/install-wings.sh) --panel=${panelUrl} --code=${setupToken}`
+    : '';
+
+  const regenerateCode = async () => {
+    setRegenerating(true);
+    try {
+      const { data } = await api.post(`/nodes/${node.id}/regenerate-setup-token`);
+      setSetupToken(data.setupToken);
+      setSetupTokenExpiresAt(data.setupTokenExpiresAt);
+      toast.success('New activation code generated');
+    } catch {
+      toast.error('Failed to generate activation code');
+    } finally {
+      setRegenerating(false);
+    }
+  };
 
   const { data: allocData, isLoading: allocLoading } = useQuery({
     queryKey: ['node-allocations', node.id],
@@ -282,59 +305,110 @@ function NodeDetailModal({ node, onClose, onSuccess }: { node: Node; onClose: ()
 
       {tab === 'configuration' && (
         <div className="space-y-4">
-          {/* Token */}
-          <div>
-            <label className="label">Node Token</label>
-            <p className="text-xs text-slate-500 mb-2">
-              Paste this token when running the Wings install script on your game server.
+          {/* Quick deploy — one command, no manual copy/paste of token/URL/FQDN */}
+          <div className="rounded-lg border border-panel-500/30 bg-panel-500/5 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-slate-100 flex items-center gap-2">
+                <Zap size={14} className="text-panel-400" /> Quick Deploy
+              </p>
+              <button
+                type="button"
+                onClick={regenerateCode}
+                disabled={regenerating}
+                className="text-xs text-slate-400 hover:text-slate-200 transition-colors flex items-center gap-1 disabled:opacity-50"
+                title="Generate a new activation code"
+              >
+                <RefreshCw size={11} className={regenerating ? 'animate-spin' : ''} /> New code
+              </button>
+            </div>
+            <p className="text-xs text-slate-400">
+              Paste this into your game server's terminal — it fetches the panel URL, token, and
+              node config automatically, no manual copy/paste required.
             </p>
-            <div className="flex items-center gap-2 bg-dark-950/80 border border-slate-700/50 rounded-lg px-3 py-2">
-              <code className="flex-1 text-xs text-green-400 font-mono break-all select-all">
-                {node.token}
-              </code>
-              <CopyButton text={node.token} />
-            </div>
-          </div>
-
-          {/* Panel URL */}
-          <div>
-            <label className="label">Panel URL</label>
-            <p className="text-xs text-slate-500 mb-2">Enter this when the Wings installer asks for the panel URL.</p>
-            <div className="flex items-center gap-2 bg-dark-950/80 border border-slate-700/50 rounded-lg px-3 py-2">
-              <code className="flex-1 text-xs text-blue-400 font-mono break-all select-all">
-                {window.location.origin}
-              </code>
-              <CopyButton text={window.location.origin} />
-            </div>
-          </div>
-
-          {/* Install command */}
-          <div>
-            <label className="label flex items-center gap-2">
-              <Terminal size={13} /> Wings Install Command
-            </label>
-            <p className="text-xs text-slate-500 mb-2">
-              Run this on your <strong className="text-slate-300">game server</strong> (not the panel server).
-            </p>
-            <div className="flex items-start gap-2 bg-dark-950/80 border border-slate-700/50 rounded-lg px-3 py-2.5">
-              <code className="flex-1 text-xs text-slate-300 font-mono break-all select-all leading-relaxed">
-                {installCmd}
-              </code>
-              <CopyButton text={installCmd} />
-            </div>
+            {quickDeployCmd ? (
+              <div className="flex items-start gap-2 bg-dark-950/80 border border-slate-700/50 rounded-lg px-3 py-2.5">
+                <code className="flex-1 text-xs text-panel-300 font-mono break-all select-all leading-relaxed">
+                  {quickDeployCmd}
+                </code>
+                <CopyButton text={quickDeployCmd} />
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-2 bg-dark-950/80 border border-yellow-500/20 rounded-lg px-3 py-2.5">
+                <span className="text-xs text-yellow-400">This node's activation code has expired.</span>
+                <button type="button" className="btn-secondary btn-sm shrink-0" onClick={regenerateCode} disabled={regenerating}>
+                  {regenerating ? <Spinner size="sm" /> : 'Generate code'}
+                </button>
+              </div>
+            )}
+            {quickDeployCmd && setupTokenExpiresAt && (
+              <p className="text-[11px] text-slate-500">
+                Expires {new Date(setupTokenExpiresAt).toLocaleString()} — codes are single-node and safe to regenerate anytime.
+              </p>
+            )}
           </div>
 
           {/* Steps */}
           <div className="rounded-lg bg-blue-500/5 border border-blue-500/20 p-4 space-y-2">
             <p className="text-xs font-semibold text-blue-300">How to connect this node</p>
             <ol className="text-xs text-slate-400 space-y-1 list-decimal list-inside">
-              <li>SSH into your game server</li>
-              <li>Run the Wings install command above</li>
-              <li>Enter the Panel URL when prompted</li>
-              <li>Enter the Node Token when prompted</li>
+              <li>SSH into your game server (not the panel server)</li>
+              <li>Paste the Quick Deploy command above</li>
               <li>When install finishes, this node will show <span className="text-green-400">ONLINE</span></li>
             </ol>
           </div>
+
+          {/* Manual fallback */}
+          <button
+            type="button"
+            onClick={() => setShowManual((v) => !v)}
+            className="text-xs text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-1"
+          >
+            <ChevronDown size={12} className={`transition-transform ${showManual ? 'rotate-180' : ''}`} />
+            {showManual ? 'Hide manual setup' : 'Set up manually instead'}
+          </button>
+
+          {showManual && (
+            <div className="space-y-4 pt-1">
+              <div>
+                <label className="label">Node Token</label>
+                <p className="text-xs text-slate-500 mb-2">
+                  Paste this token when running the Wings install script on your game server.
+                </p>
+                <div className="flex items-center gap-2 bg-dark-950/80 border border-slate-700/50 rounded-lg px-3 py-2">
+                  <code className="flex-1 text-xs text-green-400 font-mono break-all select-all">
+                    {node.token}
+                  </code>
+                  <CopyButton text={node.token} />
+                </div>
+              </div>
+
+              <div>
+                <label className="label">Panel URL</label>
+                <p className="text-xs text-slate-500 mb-2">Enter this when the Wings installer asks for the panel URL.</p>
+                <div className="flex items-center gap-2 bg-dark-950/80 border border-slate-700/50 rounded-lg px-3 py-2">
+                  <code className="flex-1 text-xs text-blue-400 font-mono break-all select-all">
+                    {panelUrl}
+                  </code>
+                  <CopyButton text={panelUrl} />
+                </div>
+              </div>
+
+              <div>
+                <label className="label flex items-center gap-2">
+                  <Terminal size={13} /> Wings Install Command
+                </label>
+                <p className="text-xs text-slate-500 mb-2">
+                  Run this on your <strong className="text-slate-300">game server</strong> (not the panel server), then enter the Panel URL and Node Token above when prompted.
+                </p>
+                <div className="flex items-start gap-2 bg-dark-950/80 border border-slate-700/50 rounded-lg px-3 py-2.5">
+                  <code className="flex-1 text-xs text-slate-300 font-mono break-all select-all leading-relaxed">
+                    {installCmd}
+                  </code>
+                  <CopyButton text={installCmd} />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

@@ -58,6 +58,11 @@ model Node {
   token               String    @unique
   gameSubdomain       String?
   status              String    @default("OFFLINE")
+  // One-time bootstrap code for the install-wings.sh --panel/--code
+  // auto-activation flow — separate from the long-lived `token` above,
+  // which is what Wings actually authenticates with after setup.
+  setupToken          String?   @unique
+  setupTokenExpiresAt DateTime?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 

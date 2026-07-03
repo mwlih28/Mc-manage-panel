@@ -37,6 +37,20 @@ MIN_RAM_MB=512
 LATEST_TAG=$(curl -fsSL -H "User-Agent: Kretase-Installer/1.0" "${REPO_API}/releases/latest" 2>/dev/null | grep -o '"tag_name": *"[^"]*"' | head -1 | cut -d'"' -f4 || true)
 [[ -n "$LATEST_TAG" ]] && BRANCH="$LATEST_TAG"
 
+# ── Auto-activation (paste-and-go, like Pterodactyl's node deploy) ─────
+# Admin → Nodes → your node shows a one-liner with these baked in:
+#   bash <(curl -fsSL .../install-wings.sh) --panel=https://panel.example.com --code=XXXX
+# Skips every prompt below by fetching the node's real config from the
+# panel instead of asking the admin to copy each field by hand.
+AUTO_PANEL=""
+AUTO_CODE=""
+for arg in "$@"; do
+  case "$arg" in
+    --panel=*) AUTO_PANEL="${arg#--panel=}" ;;
+    --code=*)  AUTO_CODE="${arg#--code=}" ;;
+  esac
+done
+
 # ── Lock file ─────────────────────────────────────────────────────────
 LOCKFILE="/tmp/mc-wings-install.lock"
 if [[ -f "$LOCKFILE" ]]; then
@@ -87,42 +101,62 @@ info "RAM: ${AVAIL_RAM_MB}MB available"
 
 # ── Collect inputs ────────────────────────────────────────────────────
 step "Configuration"
-echo ""
-echo -e "  ${BOLD}Where to find the token:${NC}"
-echo "    1. Open your panel → Admin → Nodes → your node"
-echo "    2. Click the Configuration tab → copy the Token"
-echo ""
 
-read -rp "  Panel URL (e.g. https://panel.yourdomain.com): " PANEL_URL
-[[ -z "$PANEL_URL" ]] && error "Panel URL is required."
-PANEL_URL="${PANEL_URL%/}"  # strip trailing slash
+if [[ -n "$AUTO_PANEL" && -n "$AUTO_CODE" ]]; then
+  info "Auto-activating using the code from the panel..."
+  PANEL_URL="${AUTO_PANEL%/}"
+  SETUP_JSON=$(curl -fsSL --max-time 15 "${PANEL_URL}/api/v1/nodes/setup/${AUTO_CODE}") \
+    || error "Could not reach ${PANEL_URL} — check the URL and your network, then try again."
 
-read -rp "  Node token (from Admin → Nodes → your node): " NODE_TOKEN
-[[ -z "$NODE_TOKEN" ]] && error "Node token is required."
-[[ ${#NODE_TOKEN} -lt 16 ]] && error "Node token looks too short. Copy the full token from the panel."
+  NODE_TOKEN=$(echo "$SETUP_JSON" | grep -o '"nodeToken":"[^"]*"' | cut -d'"' -f4)
+  NODE_FQDN=$(echo "$SETUP_JSON" | grep -o '"fqdn":"[^"]*"' | cut -d'"' -f4)
+  WINGS_PORT=$(echo "$SETUP_JSON" | grep -o '"daemonPort":[0-9]*' | grep -o '[0-9]*$')
+  NODE_SCHEME=$(echo "$SETUP_JSON" | grep -o '"scheme":"[^"]*"' | cut -d'"' -f4)
+  [[ -z "$NODE_TOKEN" || -z "$NODE_FQDN" || -z "$WINGS_PORT" ]] && \
+    error "Activation code invalid or expired. Generate a new one from Admin → Nodes → your node."
+  WINGS_SSL="n"; [[ "$NODE_SCHEME" == "https" ]] && WINGS_SSL="y"
 
-read -rp "  This server's FQDN or public IP: " NODE_FQDN
-[[ -z "$NODE_FQDN" ]] && error "FQDN/IP is required."
+  success "Activated as node: ${NODE_FQDN}"
+else
+  echo ""
+  echo -e "  ${BOLD}Where to find the token:${NC}"
+  echo "    1. Open your panel → Admin → Nodes → your node"
+  echo "    2. Click the Configuration tab → copy the Token"
+  echo "       (or copy the one-liner install command shown there instead"
+  echo "       of typing these in by hand)"
+  echo ""
 
-read -rp "  Wings listen port [8080]: " WINGS_PORT
-WINGS_PORT="${WINGS_PORT:-8080}"
+  read -rp "  Panel URL (e.g. https://panel.yourdomain.com): " PANEL_URL
+  [[ -z "$PANEL_URL" ]] && error "Panel URL is required."
+  PANEL_URL="${PANEL_URL%/}"  # strip trailing slash
 
-# Validate port is numeric
-[[ "$WINGS_PORT" =~ ^[0-9]+$ ]] || error "Port must be a number."
-[[ "$WINGS_PORT" -ge 1 && "$WINGS_PORT" -le 65535 ]] || error "Port must be between 1 and 65535."
+  read -rp "  Node token (from Admin → Nodes → your node): " NODE_TOKEN
+  [[ -z "$NODE_TOKEN" ]] && error "Node token is required."
+  [[ ${#NODE_TOKEN} -lt 16 ]] && error "Node token looks too short. Copy the full token from the panel."
 
-read -rp "  Enable HTTPS on Wings? Requires a domain for this node. [y/N]: " WINGS_SSL
-WINGS_SSL="${WINGS_SSL:-n}"
+  read -rp "  This server's FQDN or public IP: " NODE_FQDN
+  [[ -z "$NODE_FQDN" ]] && error "FQDN/IP is required."
 
-echo ""
-echo -e "  ${BOLD}Summary:${NC}"
-echo "    Panel URL  : $PANEL_URL"
-echo "    Node FQDN  : $NODE_FQDN"
-echo "    Wings port : $WINGS_PORT"
-echo "    HTTPS      : $WINGS_SSL"
-echo ""
-read -rp "  Proceed? [Y/n]: " CONFIRM
-[[ "${CONFIRM,,}" == "n" ]] && { echo "Aborted."; exit 0; }
+  read -rp "  Wings listen port [8080]: " WINGS_PORT
+  WINGS_PORT="${WINGS_PORT:-8080}"
+
+  # Validate port is numeric
+  [[ "$WINGS_PORT" =~ ^[0-9]+$ ]] || error "Port must be a number."
+  [[ "$WINGS_PORT" -ge 1 && "$WINGS_PORT" -le 65535 ]] || error "Port must be between 1 and 65535."
+
+  read -rp "  Enable HTTPS on Wings? Requires a domain for this node. [y/N]: " WINGS_SSL
+  WINGS_SSL="${WINGS_SSL:-n}"
+
+  echo ""
+  echo -e "  ${BOLD}Summary:${NC}"
+  echo "    Panel URL  : $PANEL_URL"
+  echo "    Node FQDN  : $NODE_FQDN"
+  echo "    Wings port : $WINGS_PORT"
+  echo "    HTTPS      : $WINGS_SSL"
+  echo ""
+  read -rp "  Proceed? [Y/n]: " CONFIRM
+  [[ "${CONFIRM,,}" == "n" ]] && { echo "Aborted."; exit 0; }
+fi
 
 # ── Verify panel is reachable before spending time installing ─────────
 info "Verifying panel connectivity..."
