@@ -283,6 +283,17 @@ export function subscribeServerOnWings(nodeId: string, serverUuid: string): void
   const conn = nodeConnections.get(nodeId);
   if (!conn) return;
 
+  // Idempotent on purpose: every browser tab that opens/reopens a server's
+  // console (or reconnects after any brief network blip) calls this. If we
+  // re-emitted 'subscribe' to Wings every time, Wings would resend its full
+  // log buffer as a fresh server:console:history — which gets broadcast to
+  // the whole room and wipes out anything already-connected viewers had
+  // accumulated beyond that buffer, looking exactly like console logs
+  // randomly disappearing. Only ask Wings again once the underlying node
+  // connection itself actually reconnects (handled in the 'connect' handler
+  // above, which re-subscribes everything in subscribedUuids from scratch).
+  if (conn.subscribedUuids.has(serverUuid)) return;
+
   conn.subscribedUuids.add(serverUuid);
   if (conn.socket.connected) {
     conn.socket.emit('subscribe', serverUuid);

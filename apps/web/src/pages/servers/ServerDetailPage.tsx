@@ -512,7 +512,10 @@ export function ServerDetailPage() {
     });
 
     socket.on('server:console:history', (lines: ConsoleLine[]) => {
-      setConsoleLines(lines.map((l) => ({ ...l, historical: true } as ConsoleLine & { historical?: boolean })));
+      // Only ever used to backfill an empty console (fresh page load). If
+      // lines are already showing, a stray/duplicate history replay must
+      // never wipe them out from under the viewer.
+      setConsoleLines((prev) => (prev.length > 0 ? prev : lines.map((l) => ({ ...l, historical: true } as ConsoleLine & { historical?: boolean }))));
     });
 
     socket.on('server:console', (msg: { data: string; type?: ConsoleLine['type']; timestamp?: number }) => {
