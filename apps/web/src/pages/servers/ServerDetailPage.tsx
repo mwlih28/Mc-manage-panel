@@ -7,7 +7,8 @@ import {
   Folder, FolderOpen, File, ChevronRight, ArrowLeft, Pencil, Trash2, Plus, X, Check,
   Package, Users, Search, Download, RefreshCw, Tag, AlertTriangle, Shield, ShieldOff,
   MapPin, Clock, Sword, Hammer, Footprints, Ban, LogOut, Wifi, Navigation,
-  StickyNote, CalendarClock, UserCog, Save, Copy, CheckCircle2, Globe2, Boxes
+  StickyNote, CalendarClock, UserCog, Save, Copy, CheckCircle2, Globe2, Boxes,
+  Settings as SettingsIcon, Gauge, RotateCw
 } from 'lucide-react';
 import { io as ioClient, Socket } from 'socket.io-client';
 import api from '@/lib/axios';
@@ -27,7 +28,7 @@ import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts';
 
-type Tab = 'console' | 'files' | 'plugins' | 'mods' | 'modpacks' | 'versions' | 'worlds' | 'stats' | 'backups' | 'players' | 'notes' | 'schedule' | 'access';
+type Tab = 'console' | 'files' | 'plugins' | 'mods' | 'modpacks' | 'versions' | 'worlds' | 'stats' | 'backups' | 'players' | 'notes' | 'schedule' | 'access' | 'settings';
 
 const TAB_GROUPS: { label: string; tabs: { id: Tab; label: string; icon: typeof Terminal }[] }[] = [
   {
@@ -56,6 +57,7 @@ const TAB_GROUPS: { label: string; tabs: { id: Tab; label: string; icon: typeof 
       { id: 'notes', label: 'Notes', icon: StickyNote },
       { id: 'schedule', label: 'Schedule', icon: CalendarClock },
       { id: 'access', label: 'Access', icon: UserCog },
+      { id: 'settings', label: 'Settings', icon: SettingsIcon },
     ],
   },
 ];
@@ -291,6 +293,30 @@ export function ServerDetailPage() {
       setNotesContent(notesData.content ?? notesData.notes ?? '');
     }
   }, [notesData]);
+
+  // Server behavior settings (crash auto-restart, lag auto-optimize)
+  const [crashDetectionEnabled, setCrashDetectionEnabled] = useState(true);
+  const [autoOptimizeEnabled, setAutoOptimizeEnabled] = useState(true);
+  const [savingSettings, setSavingSettings] = useState(false);
+  useEffect(() => {
+    if (data) {
+      setCrashDetectionEnabled(data.crashDetectionEnabled ?? true);
+      setAutoOptimizeEnabled(data.autoOptimizeEnabled ?? true);
+    }
+  }, [data]);
+
+  const saveServerSettings = async () => {
+    setSavingSettings(true);
+    try {
+      await api.patch(`/servers/${id}`, { crashDetectionEnabled, autoOptimizeEnabled });
+      toast.success('Settings saved');
+      queryClient.invalidateQueries({ queryKey: ['server', id] });
+    } catch {
+      toast.error('Failed to save settings');
+    } finally {
+      setSavingSettings(false);
+    }
+  };
 
   // Stats history
   const { data: statsHistory } = useQuery({
@@ -1751,6 +1777,52 @@ export function ServerDetailPage() {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'settings' && (
+        <div className="space-y-4">
+          <div className="card">
+            <div className="card-header flex items-center gap-2">
+              <SettingsIcon size={14} className="text-slate-400" />
+              <h3 className="text-sm font-semibold text-slate-100">Server Behavior</h3>
+            </div>
+            <div className="p-5 space-y-3">
+              <label className="flex items-start gap-3 p-3 rounded-lg border border-dark-700 bg-dark-800/40 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={crashDetectionEnabled}
+                  onChange={(e) => setCrashDetectionEnabled(e.target.checked)}
+                />
+                <span>
+                  <span className="flex items-center gap-1.5 text-sm text-slate-200"><RotateCw size={13} /> Auto-restart on crash</span>
+                  <span className="block text-xs text-slate-500 mt-0.5">
+                    If the server process exits unexpectedly, it's restarted automatically (up to 3 times within 10 minutes, to avoid a boot loop). Takes effect on next start.
+                  </span>
+                </span>
+              </label>
+              <label className="flex items-start gap-3 p-3 rounded-lg border border-dark-700 bg-dark-800/40 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={autoOptimizeEnabled}
+                  onChange={(e) => setAutoOptimizeEnabled(e.target.checked)}
+                />
+                <span>
+                  <span className="flex items-center gap-1.5 text-sm text-slate-200"><Gauge size={13} /> Auto-optimize on lag spikes</span>
+                  <span className="block text-xs text-slate-500 mt-0.5">
+                    If CPU stays above 90% (or memory above 95%) for a sustained minute, dropped-item lag is cleared automatically and logged to Activity. At most once every 5 minutes.
+                  </span>
+                </span>
+              </label>
+              <div className="flex justify-end pt-1">
+                <button className="btn-primary btn-sm" onClick={saveServerSettings} disabled={savingSettings}>
+                  {savingSettings ? <Spinner size="sm" /> : <><Save size={13} /> Save</>}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

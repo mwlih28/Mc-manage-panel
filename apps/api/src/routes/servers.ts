@@ -268,7 +268,7 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
 
   if (!server) return res.status(404).json({ message: 'Server not found' });
 
-  const { name, description, mcVersion } = req.body;
+  const { name, description, mcVersion, crashDetectionEnabled, autoOptimizeEnabled } = req.body;
   const updateData: Record<string, unknown> = {};
 
   if (name) updateData.name = name;
@@ -282,8 +282,14 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     updateData.env = JSON.stringify({ ...currentEnv, MC_VERSION: mcVersion });
   }
 
+  // Behavior toggles, not resource allocation — the owning user can flip
+  // these on their own server, unlike memory/disk/etc. below which stay
+  // admin-only.
+  if (typeof crashDetectionEnabled === 'boolean') updateData.crashDetectionEnabled = crashDetectionEnabled;
+  if (typeof autoOptimizeEnabled === 'boolean') updateData.autoOptimizeEnabled = autoOptimizeEnabled;
+
   if (isAdmin) {
-    const { memory, swap, disk, io, cpu, startup, image, suspended, userId, allocationId, backupLimit, databaseLimit, crashDetectionEnabled, autoOptimizeEnabled } = req.body;
+    const { memory, swap, disk, io, cpu, startup, image, suspended, userId, allocationId, backupLimit, databaseLimit } = req.body;
     if (memory) updateData.memory = parseInt(memory);
     if (swap !== undefined) updateData.swap = parseInt(swap);
     if (disk) updateData.disk = parseInt(disk);
@@ -294,8 +300,6 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     if (typeof suspended === 'boolean') updateData.suspended = suspended;
     if (backupLimit !== undefined) updateData.backupLimit = parseInt(backupLimit);
     if (databaseLimit !== undefined) updateData.databaseLimit = parseInt(databaseLimit);
-    if (typeof crashDetectionEnabled === 'boolean') updateData.crashDetectionEnabled = crashDetectionEnabled;
-    if (typeof autoOptimizeEnabled === 'boolean') updateData.autoOptimizeEnabled = autoOptimizeEnabled;
 
     // Owner change
     if (userId && userId !== server.userId) {
