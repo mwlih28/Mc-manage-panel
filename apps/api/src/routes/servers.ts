@@ -1352,6 +1352,37 @@ router.delete('/:id/worlds/:name', authenticate, async (req: AuthRequest, res: R
   }
 });
 
+// GET /servers/:id/world/map — proxy a static top-down PNG render of the
+// server's world, read straight off the real .mca files by Wings.
+router.get('/:id/world/map', authenticate, async (req: AuthRequest, res: Response) => {
+  const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
+  if (!ctx) return res.status(404).json({ message: 'Server not found' });
+  try {
+    const wingsRes = await ctx.client.get(`/servers/${ctx.server.uuid}/world/map`, {
+      params: { centerX: req.query.centerX, centerZ: req.query.centerZ, radius: req.query.radius },
+      responseType: 'arraybuffer',
+      timeout: 60000,
+    });
+    res.setHeader('Content-Type', 'image/png');
+    for (const header of ['x-map-center-x', 'x-map-center-z', 'x-map-radius', 'x-map-chunks-rendered']) {
+      const value = wingsRes.headers[header];
+      if (value) res.setHeader(header, value);
+    }
+    return res.send(Buffer.from(wingsRes.data as ArrayBuffer));
+  } catch (err) {
+    const e = err as { response?: { data?: unknown; status?: number } };
+    let message = 'Failed to render world map';
+    const raw = e.response?.data as Buffer | ArrayBuffer | undefined;
+    if (raw) {
+      try {
+        const buf = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
+        message = JSON.parse(buf.toString('utf8')).message || message;
+      } catch { /* ignore */ }
+    }
+    return res.status(e.response?.status || 500).json({ message });
+  }
+});
+
 // ─── Server Notes ─────────────────────────────────────────────────────────────
 
 router.get('/:id/notes', authenticate, async (req: AuthRequest, res: Response) => {

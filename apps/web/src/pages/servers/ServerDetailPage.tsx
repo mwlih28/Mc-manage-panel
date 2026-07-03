@@ -8,7 +8,7 @@ import {
   Package, Users, Search, Download, RefreshCw, Tag, AlertTriangle, Shield, ShieldOff,
   MapPin, Clock, Sword, Hammer, Footprints, Ban, LogOut, Wifi, Navigation,
   StickyNote, CalendarClock, UserCog, Save, Copy, CheckCircle2, Globe2, Boxes,
-  Settings as SettingsIcon, Gauge, RotateCw, Trophy
+  Settings as SettingsIcon, Gauge, RotateCw, Trophy, Map as MapIcon
 } from 'lucide-react';
 import { io as ioClient, Socket } from 'socket.io-client';
 import api from '@/lib/axios';
@@ -23,12 +23,13 @@ import toast from 'react-hot-toast';
 import { PluginManager } from './PluginManager';
 import { ModManager } from './ModManager';
 import { WorldManager } from './WorldManager';
+import { WorldMapViewer } from './WorldMapViewer';
 import { ModpackManager } from './ModpackManager';
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts';
 
-type Tab = 'console' | 'files' | 'plugins' | 'mods' | 'modpacks' | 'versions' | 'worlds' | 'stats' | 'backups' | 'players' | 'leaderboard' | 'notes' | 'schedule' | 'access' | 'settings';
+type Tab = 'console' | 'files' | 'plugins' | 'mods' | 'modpacks' | 'versions' | 'worlds' | 'map' | 'stats' | 'backups' | 'players' | 'leaderboard' | 'notes' | 'schedule' | 'access' | 'settings';
 
 const TAB_GROUPS: { label: string; tabs: { id: Tab; label: string; icon: typeof Terminal }[] }[] = [
   {
@@ -41,6 +42,7 @@ const TAB_GROUPS: { label: string; tabs: { id: Tab; label: string; icon: typeof 
       { id: 'modpacks', label: 'Modpacks', icon: Boxes },
       { id: 'versions', label: 'Versions', icon: Tag },
       { id: 'worlds', label: 'Worlds', icon: Globe2 },
+      { id: 'map', label: 'Map', icon: MapIcon },
     ],
   },
   {
@@ -1346,6 +1348,11 @@ export function ServerDetailPage() {
       {/* Worlds Tab */}
       {activeTab === 'worlds' && (
         <WorldManager serverId={id!} />
+      )}
+
+      {/* Map Tab */}
+      {activeTab === 'map' && (
+        <WorldMapViewer serverId={id!} />
       )}
 
       {/* Stats Tab */}

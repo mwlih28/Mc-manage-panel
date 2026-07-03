@@ -10,6 +10,16 @@ const archiver = require('archiver');
 const tar = require('tar');
 const { Server: SocketServer } = require('socket.io');
 
+// Reuse the real (compiled) Wings world-map renderer instead of
+// reimplementing NBT/Anvil parsing here — that logic is complex enough that
+// a second hand-copy would risk silently drifting from the shipped code.
+let worldMap = null;
+try {
+  worldMap = require('../../wings/dist/utils/worldMap');
+} catch {
+  console.warn('[mock-wings] wings/dist not built — GET /world/map will 501. Run `npm run build` in apps/wings.');
+}
+
 // Set MOCK_WINGS_PORT / MOCK_WINGS_SUFFIX to run a second instance standing
 // in for a second node (e.g. to exercise cross-node migration locally).
 const PORT = Number(process.env.MOCK_WINGS_PORT) || 8080;
@@ -329,6 +339,31 @@ app.get('/api/servers/:uuid/players/leaderboard', (req, res) => {
     return { uuid: playerUuid, name: nameByUuid.get(playerUuid) || playerUuid.slice(0, 8), ...stats };
   });
   res.json({ players });
+});
+
+app.get('/api/servers/:uuid/world/map', (req, res) => {
+  if (!worldMap) return res.status(501).json({ message: 'wings/dist not built' });
+  const { uuid } = req.params;
+  const worldDir = path.join(DATA_ROOT, uuid, 'world');
+  const radius = Math.max(16, Math.min(parseInt(req.query.radius, 10) || 256, 1024));
+  let centerX = parseInt(req.query.centerX, 10);
+  let centerZ = parseInt(req.query.centerZ, 10);
+  if (Number.isNaN(centerX) || Number.isNaN(centerZ)) {
+    const spawn = worldMap.getWorldSpawn(worldDir);
+    centerX = spawn?.x ?? 0;
+    centerZ = spawn?.z ?? 0;
+  }
+  try {
+    const result = worldMap.renderWorldMapCached(worldDir, { centerX, centerZ, radius });
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('X-Map-Center-X', String(centerX));
+    res.setHeader('X-Map-Center-Z', String(centerZ));
+    res.setHeader('X-Map-Radius', String(radius));
+    res.setHeader('X-Map-Chunks-Rendered', String(result.chunksRendered));
+    res.send(result.png);
+  } catch (err) {
+    res.status(404).json({ message: err.message });
+  }
 });
 
 app.get('/api/servers/:uuid/players/all', (_req, res) => {

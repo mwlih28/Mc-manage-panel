@@ -9,6 +9,8 @@ import { serverManager } from '../services/serverManager';
 import { logger } from '../utils/logger';
 import { getConfig } from '../config';
 import { readPlayerDat, readPlayerLocation, readPlayerStats, removeInventoryItem } from '../services/nbtReader';
+import { getActiveWorldName } from '../services/fileManager';
+import { renderWorldMapCached, getWorldSpawn } from '../utils/worldMap';
 import type { ServerConfig } from '../types';
 
 const execFileAsync = promisify(execFile);
@@ -208,6 +210,36 @@ router.get('/:uuid/players/leaderboard', (req: Request, res: Response) => {
     return res.json({ players });
   } catch (err) {
     return res.status(500).json({ message: (err as Error).message });
+  }
+});
+
+// Renders a static top-down PNG map of the server's world by reading the
+// real .mca region files directly off disk (no Docker port-publishing or
+// third-party map server required — this reads what's already saved).
+router.get('/:uuid/world/map', (req: Request, res: Response) => {
+  const { uuid } = req.params;
+  const cfg = getConfig();
+  const worldDir = path.join(cfg.system.data, uuid, getActiveWorldName(uuid));
+
+  const radius = Math.max(16, Math.min(parseInt((req.query.radius as string) || '256', 10) || 256, 1024));
+  let centerX = parseInt(req.query.centerX as string, 10);
+  let centerZ = parseInt(req.query.centerZ as string, 10);
+  if (Number.isNaN(centerX) || Number.isNaN(centerZ)) {
+    const spawn = getWorldSpawn(worldDir);
+    centerX = spawn?.x ?? 0;
+    centerZ = spawn?.z ?? 0;
+  }
+
+  try {
+    const result = renderWorldMapCached(worldDir, { centerX, centerZ, radius });
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('X-Map-Center-X', String(centerX));
+    res.setHeader('X-Map-Center-Z', String(centerZ));
+    res.setHeader('X-Map-Radius', String(radius));
+    res.setHeader('X-Map-Chunks-Rendered', String(result.chunksRendered));
+    return res.send(result.png);
+  } catch (err) {
+    return res.status(404).json({ message: (err as Error).message });
   }
 });
 
