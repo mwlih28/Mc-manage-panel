@@ -1,3 +1,9 @@
+## 🚀 v1.2.0 OUT NOW!
+
+Server migration & cloning, one-click modpack installs, crash auto-restart, auto-optimize on lag, a real working Schedule tab, player leaderboard, server health score, a suspicious-activity alarm, a fully customizable public status page (logo/banner/announcement/custom CSS + live preview), and a real top-down world map rendered from your actual world files. See the [full changelog](./CHANGELOG.md#v120) for every detail.
+
+---
+
 # Kretase
 
 **Self-hosted, open-source game server management panel — a modern alternative to Pterodactyl.**
@@ -85,20 +91,30 @@ The script will ask for:
 
 - **Server Management** — Create, start, stop, restart, kill game servers
 - **Real-time Console** — Live server output + command input via WebSocket, with history replay on reconnect
-- **Resource Monitoring** — CPU, RAM, disk stats streamed from Wings nodes
-- **Plugin Manager** — Search, install, update, enable/disable Paper/Spigot/Bukkit plugins directly from Modrinth — no manual `.jar` uploads needed
+- **Resource Monitoring** — CPU, RAM, disk stats streamed from Wings nodes, with persistent 1h/24h/7d history charts
+- **Server Migration** — Move a server between nodes (all files, databases, everything) without recreating it — something Pterodactyl can't do
+- **Server Cloning** — Duplicate a live server into a brand-new one without touching or stopping the original
+- **Crash Auto-Restart** — Automatically restarts a server if its process exits unexpectedly (capped to prevent boot loops), toggleable per-server
+- **Auto-Optimize on Lag** — Automatically clears dropped-item lag when CPU/memory stays critically high for a sustained period, toggleable per-server
+- **Server Health Score** — A transparent 0–100 score from crash history, backup freshness, and CPU load, with a visible factor breakdown
+- **Suspicious Activity Alarm** — Flags sensitive commands and command-spam (macro/script abuse) in real time
+- **Player Leaderboard** — Sortable rankings (playtime, kills, deaths, blocks mined) from real per-player stats
+- **Public Status Page** — Opt-in, no-login shareable page with online/player status, fully customizable (logo, animated banner, announcement, accent color, custom CSS) with a live preview editor
+- **World Map** — A real top-down render of your world generated directly from the actual Minecraft region files, with radius/coordinate navigation
+- **Plugin Manager** — Search, install, update, enable/disable Paper/Spigot/Bukkit plugins directly from Modrinth — no manual `.jar` uploads needed, and detects/updates unmanaged jars too
 - **Mod Manager** — Same experience for Fabric mods, with automatic loader/Minecraft-version matching
+- **One-Click Modpack Install** — Install a full CurseForge or Modrinth modpack (Fabric) in a single click
 - **Version Manager** — Browse and switch Paper versions/builds with changelog view, downgrade protection, and an optional pre-install backup
 - **World Manager** — Manage local worlds (switch active world, export/download, delete) and browse/install premade worlds (castles, mansions, and more) from CurseForge
-- **Backup System** — Create and restore server backups
-- **Player Management** — Online/offline player list, ban/kick/IP-ban, inventory & ender chest viewer
+- **Backup System** — Create and restore real server backups
+- **Player Management** — Online/offline player list, ban/kick/IP-ban, inventory & ender chest viewer with real Minecraft item icons
 - **EULA Consent Flow** — Server owner explicitly accepts/declines Mojang's EULA on first start
-- **Scheduled Tasks** — Cron-based power actions and console commands per server
+- **Scheduled Tasks** — Real cron-based power actions and console commands per server, with an in-game warning before scheduled restarts
 - **Subuser Access Control** — Grant other users scoped access to a server
 - **AI Tools** — MOTD and server logo generators; free built-in algorithm by default, optional real AI generation (OpenAI/Gemini/Anthropic) using the admin's own API key
 - **Password Reset** — Self-service reset via the panel owner's own configured SMTP
 - **User Management** — Admin and user roles, create/edit/delete users
-- **Node Management** — Add Wings nodes, manage port allocations
+- **Node Management** — Add Wings nodes, manage port allocations, one-command activation
 - **Egg System** — Server configuration templates (Minecraft Paper, Bedrock, Vanilla, Fabric, BungeeCord, Velocity, and more)
 - **Activity Log** — Full audit trail of panel actions
 - **JWT Authentication** — Access + refresh token pair, secure bcrypt hashing
