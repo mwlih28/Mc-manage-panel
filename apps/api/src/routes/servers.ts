@@ -10,6 +10,7 @@ import { fetchPaperVersions, fetchPaperBuildDetails } from '../services/paperApi
 import { resolveModpackInstall as resolveCurseForgeModpack, matchFilesByFingerprint, CurseForgeFileMatch } from '../services/curseforgeApi';
 import { resolveModpackInstall as resolveModrinthModpack, matchFilesBySha1, ModrinthFileMatch } from '../services/modrinthApi';
 import { ResolvedModpack } from '../services/modpackTypes';
+import { computeNextRun } from '../services/scheduler';
 import { logger } from '../utils/logger';
 
 export async function getWingsClient(serverId: string, userId: string, isAdmin: boolean) {
@@ -1416,8 +1417,10 @@ router.post('/:id/schedules', authenticate, async (req: AuthRequest, res: Respon
   });
   if (!server) return res.status(404).json({ message: 'Server not found' });
   const { name, cronExpression, action, payload, enabled } = req.body;
+  const nextRun = computeNextRun(cronExpression);
+  if (!nextRun) return res.status(422).json({ message: 'Invalid cron expression' });
   const task = await prisma.scheduledTask.create({
-    data: { serverId: server.id, name, cronExpression, action, payload: JSON.stringify(payload || {}), enabled: enabled !== false },
+    data: { serverId: server.id, name, cronExpression, action, payload: JSON.stringify(payload || {}), enabled: enabled !== false, nextRun },
   });
   return res.json(task);
 });
@@ -1433,9 +1436,18 @@ router.put('/:id/schedules/:taskId', authenticate, async (req: AuthRequest, res:
   const existing = await prisma.scheduledTask.findFirst({ where: { id: req.params.taskId, serverId: server.id } });
   if (!existing) return res.status(404).json({ message: 'Scheduled task not found' });
   const { name, cronExpression, action, payload, enabled } = req.body;
+  // Recompute nextRun whenever the schedule itself could have changed —
+  // a stale nextRun from before the edit would fire at the wrong time.
+  const nextRun = computeNextRun(cronExpression || existing.cronExpression);
+  if (!nextRun) return res.status(422).json({ message: 'Invalid cron expression' });
   const task = await prisma.scheduledTask.update({
     where: { id: req.params.taskId },
-    data: { name, cronExpression, action, ...(payload !== undefined ? { payload: JSON.stringify(payload) } : {}), ...(enabled !== undefined ? { enabled } : {}) },
+    data: {
+      name, cronExpression, action,
+      ...(payload !== undefined ? { payload: JSON.stringify(payload) } : {}),
+      ...(enabled !== undefined ? { enabled } : {}),
+      nextRun,
+    },
   });
   return res.json(task);
 });

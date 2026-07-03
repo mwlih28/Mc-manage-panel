@@ -28,6 +28,7 @@ import compression from 'compression';
 import { logger } from './utils/logger';
 import { errorHandler, notFound } from './middleware/errorHandler';
 import { initSocketServer } from './services/socketService';
+import { startScheduler } from './services/scheduler';
 
 import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
@@ -114,6 +115,7 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   logger.info(`Kretase API running on port ${PORT}`);
   logger.info(`Environment: ${process.env.NODE_ENV}`);
   logger.info(`CORS Origin: ${CORS_ORIGIN}`);
+  startScheduler();
 });
 
 export { app, io };

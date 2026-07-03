@@ -70,7 +70,8 @@ interface ScheduledTask {
   payload?: string;
   cronExpression: string;
   enabled: boolean;
-  nextRunAt?: string;
+  lastRun?: string;
+  nextRun?: string;
 }
 
 // ── Access / Sub-user types ────────────────────────────────────────────────────
@@ -1551,10 +1552,15 @@ export function ServerDetailPage() {
                       <div className="flex items-center gap-3 mt-0.5 text-xs text-slate-500 flex-wrap">
                         <span className="font-mono">{task.cronExpression}</span>
                         {task.payload && <span>→ {task.payload}</span>}
-                        {task.nextRunAt && (
+                        {task.enabled && task.nextRun && (
                           <span className="flex items-center gap-1">
                             <Clock size={10} />
-                            Next: {new Date(task.nextRunAt).toLocaleString()}
+                            Next: {new Date(task.nextRun).toLocaleString()}
+                          </span>
+                        )}
+                        {task.lastRun && (
+                          <span className="flex items-center gap-1 text-slate-600">
+                            Last ran: {new Date(task.lastRun).toLocaleString()}
                           </span>
                         )}
                       </div>

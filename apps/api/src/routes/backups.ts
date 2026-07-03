@@ -1,10 +1,10 @@
 import { Router, Response } from 'express';
 import axios from 'axios';
-import { v4 as uuidv4 } from 'uuid';
 import { prisma } from '../utils/prisma';
 import { authenticate } from '../middleware/auth';
 import { AuthRequest } from '../types';
 import { getWingsClient } from './servers';
+import { startBackup } from '../services/backupService';
 import { logger } from '../utils/logger';
 
 const router = Router({ mergeParams: true });
@@ -57,56 +57,13 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
   }
 
   const { name, ignoredFiles } = req.body;
-
-  const backup = await prisma.backup.create({
-    data: {
-      serverId: server.id,
-      uuid: uuidv4(),
-      name: name || `Backup ${new Date().toISOString()}`,
-      ignoredFiles: JSON.stringify(ignoredFiles || []),
-      isSuccessful: false,
-    },
-  });
-
-  await prisma.activity.create({
-    data: {
-      userId: req.user!.id,
-      serverId: server.id,
-      event: 'server:backup.start',
-      properties: JSON.stringify({ name: backup.name }),
-      ip: req.ip,
-    },
-  });
+  const { backup, run } = await startBackup(server, { name, ignoredFiles, userId: req.user!.id });
 
   // Respond immediately with the pending row — the frontend polls until
   // isSuccessful flips. The actual archiving happens on Wings and can take
   // a while, so it isn't awaited here.
   res.status(201).json({ data: backup });
-
-  const node = server.node;
-  const client = axios.create({
-    baseURL: `${node.scheme}://${node.fqdn}:${node.daemonPort}/api`,
-    headers: { Authorization: `Bearer ${node.token}` },
-    timeout: BACKUP_TIMEOUT_MS,
-  });
-
-  try {
-    const { data } = await client.post(`/servers/${server.uuid}/backups`, {
-      backupUuid: backup.uuid,
-      ignoredFiles: ignoredFiles || [],
-    });
-    await prisma.backup.update({
-      where: { id: backup.id },
-      data: {
-        isSuccessful: true,
-        bytes: BigInt(data.size || 0),
-        checksum: data.checksum || null,
-        completedAt: new Date(),
-      },
-    });
-  } catch (err) {
-    logger.warn(`Backup ${backup.uuid} failed for server ${server.uuid}: ${(err as Error).message}`);
-  }
+  run();
 });
 
 // DELETE /servers/:serverId/backups/:backupId
