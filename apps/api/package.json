@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@prisma/client": "^5.7.0",
+    "adm-zip": "^0.5.16",
     "axios": "^1.6.2",
     "bcryptjs": "^2.4.3",
     "compression": "^1.8.1",
@@ -36,6 +37,7 @@
     "winston": "^3.11.0"
   },
   "devDependencies": {
+    "@types/adm-zip": "^0.5.7",
     "@types/bcryptjs": "^2.4.6",
     "@types/compression": "^1.8.1",
     "@types/cookie-parser": "^1.4.6",

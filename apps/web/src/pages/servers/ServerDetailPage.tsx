@@ -7,7 +7,7 @@ import {
   Folder, FolderOpen, File, ChevronRight, ArrowLeft, Pencil, Trash2, Plus, X, Check,
   Package, Users, Search, Download, RefreshCw, Tag, AlertTriangle, Shield, ShieldOff,
   MapPin, Clock, Sword, Hammer, Footprints, Ban, LogOut, Wifi, Navigation,
-  StickyNote, CalendarClock, UserCog, Save, Copy, CheckCircle2, Globe2
+  StickyNote, CalendarClock, UserCog, Save, Copy, CheckCircle2, Globe2, Boxes
 } from 'lucide-react';
 import { io as ioClient, Socket } from 'socket.io-client';
 import api from '@/lib/axios';
@@ -22,8 +22,9 @@ import toast from 'react-hot-toast';
 import { PluginManager } from './PluginManager';
 import { ModManager } from './ModManager';
 import { WorldManager } from './WorldManager';
+import { ModpackManager } from './ModpackManager';
 
-type Tab = 'console' | 'files' | 'plugins' | 'mods' | 'versions' | 'worlds' | 'stats' | 'backups' | 'players' | 'notes' | 'schedule' | 'access';
+type Tab = 'console' | 'files' | 'plugins' | 'mods' | 'modpacks' | 'versions' | 'worlds' | 'stats' | 'backups' | 'players' | 'notes' | 'schedule' | 'access';
 
 const TAB_GROUPS: { label: string; tabs: { id: Tab; label: string; icon: typeof Terminal }[] }[] = [
   {
@@ -33,6 +34,7 @@ const TAB_GROUPS: { label: string; tabs: { id: Tab; label: string; icon: typeof 
       { id: 'files', label: 'Files', icon: Folder },
       { id: 'plugins', label: 'Plugins', icon: Package },
       { id: 'mods', label: 'Mods', icon: Hammer },
+      { id: 'modpacks', label: 'Modpacks', icon: Boxes },
       { id: 'versions', label: 'Versions', icon: Tag },
       { id: 'worlds', label: 'Worlds', icon: Globe2 },
     ],
@@ -145,11 +147,11 @@ export function ServerDetailPage() {
 
   const isTransitional = currentStatus === 'STARTING' || currentStatus === 'STOPPING';
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, refetch } = useQuery({
     queryKey: ['server', id],
     queryFn: () => api.get(`/servers/${id}`).then((r) => r.data.data as Server),
     enabled: !!id,
-    refetchInterval: isTransitional ? 3000 : false,
+    refetchInterval: isTransitional || currentStatus === 'INSTALLING' ? 3000 : false,
   });
 
   const [currentDir, setCurrentDir] = useState('/');
@@ -1134,6 +1136,10 @@ export function ServerDetailPage() {
       {/* Mods Tab */}
       {activeTab === 'mods' && (
         <ModManager serverId={id!} mcVersion={serverMcVersion} eggName={data.egg?.name} />
+      )}
+
+      {activeTab === 'modpacks' && (
+        <ModpackManager serverId={id!} serverStatus={currentStatus} onInstalled={() => refetch()} />
       )}
 
       {/* Versions Tab */}

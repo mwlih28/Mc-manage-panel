@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { authenticate } from '../middleware/auth';
 import { AuthRequest } from '../types';
-import { searchWorlds, getWorldFiles, isCurseForgeConfigured } from '../services/curseforgeApi';
+import { searchWorlds, getWorldFiles, isCurseForgeConfigured, searchModpacks, getModpackFiles } from '../services/curseforgeApi';
 import { logger } from '../utils/logger';
 
 const router = Router();
@@ -39,6 +39,32 @@ router.get('/worlds/:modId/files', authenticate, async (req: AuthRequest, res: R
   } catch (err) {
     logger.error(`CurseForge world files fetch failed: ${describeError(err)}`);
     return res.status(502).json({ message: (err as Error).message || 'Failed to fetch world files' });
+  }
+});
+
+// GET /curseforge/modpacks/search?query=&index=&pageSize=
+router.get('/modpacks/search', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const query = (req.query.query as string) || '';
+    const index = parseInt(req.query.index as string) || 0;
+    const pageSize = Math.min(parseInt(req.query.pageSize as string) || 20, 50);
+    const result = await searchModpacks(query, index, pageSize);
+    return res.json(result);
+  } catch (err) {
+    logger.error(`CurseForge modpack search failed: ${describeError(err)}`);
+    return res.status(502).json({ message: (err as Error).message || 'CurseForge search failed' });
+  }
+});
+
+// GET /curseforge/modpacks/:modId/files
+router.get('/modpacks/:modId/files', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const modId = parseInt(req.params.modId);
+    const files = await getModpackFiles(modId);
+    return res.json({ files });
+  } catch (err) {
+    logger.error(`CurseForge modpack files fetch failed: ${describeError(err)}`);
+    return res.status(502).json({ message: (err as Error).message || 'Failed to fetch modpack files' });
   }
 });
 

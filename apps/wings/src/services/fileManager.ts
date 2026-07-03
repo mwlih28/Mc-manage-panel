@@ -8,12 +8,12 @@ import * as tar from 'tar';
 import { getConfig } from '../config';
 import { logger } from '../utils/logger';
 
-function getServerRoot(uuid: string): string {
+export function getServerRoot(uuid: string): string {
   const cfg = getConfig();
   return path.join(cfg.system.data, uuid);
 }
 
-function safePath(root: string, filePath: string): string {
+export function safePath(root: string, filePath: string): string {
   const resolved = path.resolve(root, filePath.replace(/^\/+/, ''));
   if (!resolved.startsWith(root)) {
     throw new Error('Path traversal attempt detected');

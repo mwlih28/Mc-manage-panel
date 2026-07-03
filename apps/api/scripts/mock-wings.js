@@ -33,7 +33,7 @@ if (!SUFFIX) {
 }
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 
@@ -119,6 +119,56 @@ app.delete('/api/servers/:uuid', (req, res) => {
 app.post('/api/servers/:uuid/power', (_req, res) => res.json({ ok: true }));
 app.post('/api/servers/:uuid/command', (_req, res) => res.json({ ok: true }));
 app.get('/api/servers/:uuid/status', (_req, res) => res.json({ status: 'offline' }));
+
+app.post('/api/servers/:uuid/reinstall', (req, res) => {
+  // Real Wings wipes the data dir and reinstalls the loader here — the mock
+  // just recreates an empty dir so modpack install has somewhere to write.
+  const { uuid } = req.params;
+  const root = path.join(DATA_ROOT, uuid);
+  fs.rmSync(root, { recursive: true, force: true });
+  fs.mkdirSync(root, { recursive: true });
+  res.json({ message: 'Reinstall initiated' });
+});
+
+app.post('/api/servers/:uuid/modpack/overrides', (req, res) => {
+  const { uuid } = req.params;
+  const { files } = req.body;
+  const root = path.join(DATA_ROOT, uuid);
+  fs.mkdirSync(root, { recursive: true });
+  let written = 0;
+  const failed = [];
+  for (const f of files || []) {
+    try {
+      const target = path.join(root, f.path);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, Buffer.from(f.contentBase64, 'base64'));
+      written++;
+    } catch (err) {
+      failed.push({ path: f.path, error: err.message });
+    }
+  }
+  res.json({ written, failed });
+});
+
+app.post('/api/servers/:uuid/modpack/mods', async (req, res) => {
+  const { uuid } = req.params;
+  const { mods } = req.body;
+  const root = path.join(DATA_ROOT, uuid);
+  fs.mkdirSync(root, { recursive: true });
+  let installed = 0;
+  const failed = [];
+  for (const mod of mods || []) {
+    try {
+      const target = path.join(root, mod.path);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, `mock jar for ${mod.url}`);
+      installed++;
+    } catch (err) {
+      failed.push({ path: mod.path, error: err.message });
+    }
+  }
+  res.json({ installed, failed });
+});
 
 app.get('/api/servers/:uuid/resources', (_req, res) => {
   res.json({ resources: currentResources() });

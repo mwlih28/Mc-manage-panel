@@ -7,6 +7,9 @@ import { authenticate, requireAdmin } from '../middleware/auth';
 import { AuthRequest } from '../types';
 import { sendPowerAction, sendCommand as wingsSendCommand, createServerOnNode, getServerResources, buildWingsConfig } from '../services/wingsClient';
 import { fetchPaperVersions, fetchPaperBuildDetails } from '../services/paperApi';
+import { resolveModpackInstall as resolveCurseForgeModpack } from '../services/curseforgeApi';
+import { resolveModpackInstall as resolveModrinthModpack } from '../services/modrinthApi';
+import { ResolvedModpack } from '../services/modpackTypes';
 import { logger } from '../utils/logger';
 
 export async function getWingsClient(serverId: string, userId: string, isAdmin: boolean) {
@@ -368,6 +371,140 @@ router.post('/:id/reinstall', authenticate, requireAdmin, async (req: AuthReques
   } catch (err) {
     logger.error('Reinstall error:', err);
     return res.status(500).json({ message: 'Internal server error during reinstall' });
+  }
+});
+
+// POST /servers/:id/modpack/install — Admin only. Reinstalls the server
+// onto the Fabric egg with the modpack's exact MC/loader version, then
+// pushes the pack's mods (downloaded straight to Wings, never through the
+// panel) and bundled overrides (small config files, base64'd through the
+// panel since they come from inside the pack's zip). Only Fabric packs are
+// supported today — Forge/NeoForge/Quilt have no matching egg yet.
+router.post('/:id/modpack/install', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
+  const { source, packName, modId, fileId, versionId } = req.body as {
+    source?: 'curseforge' | 'modrinth'; packName?: string;
+    modId?: number; fileId?: number; versionId?: string;
+  };
+  if (source !== 'curseforge' && source !== 'modrinth') {
+    return res.status(422).json({ message: 'source must be "curseforge" or "modrinth"' });
+  }
+
+  const server = await prisma.server.findUnique({ where: { id: req.params.id }, include: { node: true } });
+  if (!server) return res.status(404).json({ message: 'Server not found' });
+  if (!server.node) return res.status(422).json({ message: 'Server has no assigned node' });
+  if (['MIGRATING', 'INSTALLING', 'RESTORING_BACKUP', 'REINSTALLING'].includes(server.status)) {
+    return res.status(400).json({ message: 'Server has another operation in progress' });
+  }
+
+  let resolved: ResolvedModpack;
+  try {
+    if (source === 'curseforge') {
+      if (!modId || !fileId) return res.status(422).json({ message: 'modId and fileId are required' });
+      resolved = await resolveCurseForgeModpack(modId, fileId);
+    } else {
+      if (!versionId) return res.status(422).json({ message: 'versionId is required' });
+      resolved = await resolveModrinthModpack(versionId);
+    }
+  } catch (err) {
+    return res.status(502).json({ message: (err as Error).message || 'Failed to resolve modpack' });
+  }
+
+  if (resolved.loader.type !== 'fabric') {
+    return res.status(422).json({
+      message: `This pack uses ${resolved.loader.type === 'unknown' ? 'an unrecognized loader' : resolved.loader.type}. Only Fabric modpacks can be auto-installed right now — Forge/NeoForge/Quilt support is coming soon.`,
+    });
+  }
+  if (resolved.mods.length === 0 && resolved.overrides.length === 0) {
+    return res.status(422).json({ message: 'This pack has no installable files' });
+  }
+
+  const fabricEgg = await prisma.egg.findFirst({
+    where: { name: 'Fabric' },
+    select: { id: true, startup: true, dockerImage: true, scriptInstall: true, scriptContainer: true },
+  });
+  if (!fabricEgg) return res.status(500).json({ message: 'Fabric egg not found on this panel' });
+
+  let env: Record<string, string> = {};
+  try { env = JSON.parse(server.env); } catch { /* ignore */ }
+  env.MC_VERSION = resolved.loader.minecraftVersion;
+  env.FABRIC_LOADER_VERSION = resolved.loader.loaderVersion || 'latest';
+
+  await prisma.server.update({
+    where: { id: server.id },
+    data: {
+      eggId: fabricEgg.id,
+      startup: fabricEgg.startup,
+      image: fabricEgg.dockerImage,
+      env: JSON.stringify(env),
+      status: 'INSTALLING',
+    },
+  });
+
+  res.json({ message: 'Modpack install started — this reinstalls the server onto Fabric first, then adds the pack files' });
+
+  const node = server.node;
+  const client = axios.create({
+    baseURL: `${node.scheme}://${node.fqdn}:${node.daemonPort}/api`,
+    headers: { Authorization: `Bearer ${node.token}` },
+    timeout: MIGRATION_TIMEOUT_MS,
+  });
+
+  try {
+    logger.info(`Modpack install: reinstalling ${server.uuid} onto Fabric ${env.MC_VERSION}`);
+    await client.post(`/servers/${server.uuid}/reinstall`, {
+      uuid: server.uuid,
+      suspended: server.suspended,
+      environment: env,
+      invocation: fabricEgg.startup,
+      image: fabricEgg.dockerImage,
+      installScript: fabricEgg.scriptInstall ?? undefined,
+      scriptContainer: fabricEgg.scriptContainer ?? undefined,
+      build: {
+        memory_limit: server.memory, swap: server.swap, disk_space: server.disk,
+        io_weight: server.io, cpu_limit: server.cpu, oom_disabled: server.oomDisabled,
+      },
+      mounts: [],
+      egg: { id: fabricEgg.id, file_denylist: [] },
+      container: { image: fabricEgg.dockerImage, requires_rebuild: false },
+    });
+
+    // Wings flips status back to 'offline' once the reinstall (loader
+    // download/install) finishes — wait for that before adding pack files,
+    // since reinstall wipes the data directory first.
+    let reinstalled = false;
+    for (let i = 0; i < 90; i++) {
+      await new Promise((r) => setTimeout(r, 2000));
+      reinstalled = await client.get(`/servers/${server.uuid}/status`).then((r) => r.data.status === 'offline').catch(() => false);
+      if (reinstalled) break;
+    }
+    if (!reinstalled) throw new Error('Timed out waiting for Fabric install to finish');
+
+    if (resolved.overrides.length > 0) {
+      logger.info(`Modpack install: writing ${resolved.overrides.length} override file(s) for ${server.uuid}`);
+      await client.post(`/servers/${server.uuid}/modpack/overrides`, { files: resolved.overrides });
+    }
+    if (resolved.mods.length > 0) {
+      logger.info(`Modpack install: downloading ${resolved.mods.length} mod(s) for ${server.uuid}`);
+      const { data } = await client.post(`/servers/${server.uuid}/modpack/mods`, { mods: resolved.mods }, { timeout: MIGRATION_TIMEOUT_MS });
+      if (data.failed?.length) {
+        logger.warn(`Modpack install: ${data.failed.length} mod(s) failed to download for ${server.uuid}`);
+      }
+    }
+
+    await prisma.server.update({ where: { id: server.id }, data: { status: 'OFFLINE' } });
+    await prisma.activity.create({
+      data: {
+        userId: req.user!.id,
+        serverId: server.id,
+        event: 'server:modpack-install',
+        properties: JSON.stringify({ source, packName: packName || null, mcVersion: env.MC_VERSION }),
+        ip: req.ip,
+      },
+    });
+    logger.info(`Modpack install complete for ${server.uuid}`);
+  } catch (err) {
+    logger.error(`Modpack install failed for server ${server.uuid}: ${(err as Error).message}`);
+    await prisma.server.update({ where: { id: server.id }, data: { status: 'INSTALL_FAILED' } }).catch(() => {});
   }
 });
 
