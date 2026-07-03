@@ -189,8 +189,20 @@ export function getOrConnectWings(node: NodeInfo, io: SocketServer): Socket {
 
   // Relay all Wings events to panel clients in the correct room
   wingsSocket.onAny((event: string, data: unknown) => {
-    const handled = ['server:console', 'server:stats', 'server:status', 'server:console:history'];
+    const handled = ['server:console', 'server:stats', 'server:status', 'server:console:history', 'server:crash'];
     if (!handled.includes(event)) return;
+
+    if (event === 'server:crash') {
+      const { uuid } = data as { uuid?: string };
+      if (uuid) {
+        prisma.server.findFirst({ where: { uuid }, select: { id: true } })
+          .then((server) => {
+            if (!server) return;
+            return prisma.activity.create({ data: { serverId: server.id, event: 'server:crash' } });
+          })
+          .catch((err: Error) => logger.warn(`Failed to log crash event for ${uuid}: ${err.message}`));
+      }
+    }
 
     const payload = data as Record<string, unknown>;
     const uuid = payload?.uuid as string;

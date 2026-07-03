@@ -822,6 +822,12 @@ class ServerManager extends EventEmitter {
     const server = this.servers.get(uuid);
     if (!server) return;
     this.sendConsole(uuid, '[Wings] Server process exited unexpectedly (crash detected).');
+    // Distinct from the console line above — this is what the panel listens
+    // for to record a real, queryable crash event (used by the health score
+    // and eventually alerting), rather than trying to string-match console
+    // output for something this important.
+    this.io?.to(`server:${uuid}`).emit('server:crash', { uuid, timestamp: Date.now() });
+    this.emit('crash', { uuid });
 
     if (server.config.crashDetectionEnabled === false) return;
 

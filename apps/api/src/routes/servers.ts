@@ -1521,4 +1521,62 @@ router.get('/:id/stats/history', authenticate, async (req: AuthRequest, res: Res
   return res.json({ data });
 });
 
+// ─── Health score ──────────────────────────────────────────────────────────
+// A single number synthesized from data this panel already collects —
+// crash events, auto-optimize triggers, backup freshness, sustained CPU —
+// instead of one more raw chart to interpret. Every deduction is listed so
+// it's inspectable, not a black-box score.
+router.get('/:id/health', authenticate, async (req: AuthRequest, res: Response) => {
+  const isAdmin = req.user!.role === 'ADMIN';
+  const server = await prisma.server.findFirst({
+    where: { id: req.params.id, ...(isAdmin ? {} : { userId: req.user!.id }) },
+  });
+  if (!server) return res.status(404).json({ message: 'Server not found' });
+
+  const now = Date.now();
+  const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
+  const oneDayAgo = new Date(now - 24 * 60 * 60 * 1000);
+
+  const [crashCount, optimizeCount, lastBackup, recentStats] = await Promise.all([
+    prisma.activity.count({ where: { serverId: server.id, event: 'server:crash', timestamp: { gte: sevenDaysAgo } } }),
+    prisma.activity.count({ where: { serverId: server.id, event: 'server:auto-optimize', timestamp: { gte: sevenDaysAgo } } }),
+    prisma.backup.findFirst({ where: { serverId: server.id, isSuccessful: true }, orderBy: { completedAt: 'desc' } }),
+    prisma.serverStatSample.findMany({ where: { serverId: server.id, timestamp: { gte: oneDayAgo } }, select: { cpu: true } }),
+  ]);
+
+  const avgCpu24h = recentStats.length > 0 ? recentStats.reduce((sum, s) => sum + s.cpu, 0) / recentStats.length : null;
+  const daysSinceBackup = lastBackup?.completedAt ? Math.floor((now - lastBackup.completedAt.getTime()) / 86400000) : null;
+
+  const factors: { label: string; delta: number }[] = [];
+  let score = 100;
+
+  if (crashCount > 0) {
+    const delta = -Math.min(crashCount * 15, 60);
+    factors.push({ label: `${crashCount} crash${crashCount > 1 ? 'es' : ''} in the last 7 days`, delta });
+  }
+  if (optimizeCount > 0) {
+    const delta = -Math.min(optimizeCount * 10, 30);
+    factors.push({ label: `${optimizeCount} auto-optimize trigger${optimizeCount > 1 ? 's' : ''} in the last 7 days (sustained lag)`, delta });
+  }
+  if (daysSinceBackup === null) {
+    factors.push({ label: 'No successful backup yet', delta: -20 });
+  } else if (daysSinceBackup > 7) {
+    factors.push({ label: `Last backup was ${daysSinceBackup} days ago`, delta: -20 });
+  }
+  if (avgCpu24h !== null && avgCpu24h > 85) {
+    factors.push({ label: `Sustained high CPU over the last 24h (avg ${avgCpu24h.toFixed(0)}%)`, delta: -10 });
+  }
+  if (['INSTALL_FAILED', 'CLONE_FAILED', 'MIGRATION_FAILED'].includes(server.status)) {
+    factors.push({ label: `Server is in a failed state (${server.status})`, delta: -25 });
+  }
+
+  score = Math.max(0, Math.min(100, score + factors.reduce((sum, f) => sum + f.delta, 0)));
+
+  return res.json({
+    score,
+    factors,
+    inputs: { crashCount, optimizeCount, daysSinceBackup, avgCpu24h },
+  });
+});
+
 export default router;

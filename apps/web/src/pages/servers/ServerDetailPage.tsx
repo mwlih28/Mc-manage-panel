@@ -374,6 +374,13 @@ export function ServerDetailPage() {
     refetchInterval: activeTab === 'stats' ? 60000 : false,
   });
 
+  const { data: healthData } = useQuery({
+    queryKey: ['server-health', id],
+    queryFn: () => api.get(`/servers/${id}/health`).then((r) => r.data),
+    enabled: activeTab === 'stats' && !!id,
+    refetchInterval: activeTab === 'stats' ? 60000 : false,
+  });
+
   useEffect(() => {
     if (data?.status) setCurrentStatus(data.status as ServerStatus);
   }, [data?.status]);
@@ -1337,6 +1344,8 @@ export function ServerDetailPage() {
       {/* Stats Tab */}
       {activeTab === 'stats' && (
         <div className="space-y-4">
+          {healthData && <HealthScoreCard score={healthData.score} factors={healthData.factors} /> }
+
           {/* Resource Sparklines */}
           <div className="card card-body">
             <h3 className="text-sm font-semibold text-slate-300 mb-3">Resource Usage (last 2 minutes)</h3>
@@ -2369,6 +2378,50 @@ function InfoRow({ label, value, mono, small }: {
       )}>
         {value}
       </dd>
+    </div>
+  );
+}
+
+function HealthScoreCard({ score, factors }: { score: number; factors: { label: string; delta: number }[] }) {
+  const color = score >= 85 ? 'text-green-400' : score >= 60 ? 'text-yellow-400' : 'text-red-400';
+  const ring = score >= 85 ? '#4ade80' : score >= 60 ? '#facc15' : '#f87171';
+  const label = score >= 85 ? 'Healthy' : score >= 60 ? 'Needs attention' : 'At risk';
+  const circumference = 2 * Math.PI * 26;
+  const offset = circumference * (1 - score / 100);
+
+  return (
+    <div className="card card-body flex items-center gap-5 flex-wrap">
+      <div className="relative shrink-0" style={{ width: 64, height: 64 }}>
+        <svg width="64" height="64" viewBox="0 0 64 64">
+          <circle cx="32" cy="32" r="26" fill="none" stroke="#1e293b" strokeWidth="6" />
+          <circle
+            cx="32" cy="32" r="26" fill="none" stroke={ring} strokeWidth="6" strokeLinecap="round"
+            strokeDasharray={circumference} strokeDashoffset={offset}
+            transform="rotate(-90 32 32)" style={{ transition: 'stroke-dashoffset 0.6s ease' }}
+          />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className={cn('text-base font-bold', color)}>{score}</span>
+        </div>
+      </div>
+      <div className="flex-1 min-w-[200px]">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-slate-100">Health Score</h3>
+          <span className={cn('text-xs font-medium', color)}>{label}</span>
+        </div>
+        {factors.length === 0 ? (
+          <p className="text-xs text-slate-500 mt-1">No issues detected in the last 7 days — crashes, lag spikes, and backup freshness all look good.</p>
+        ) : (
+          <ul className="mt-1.5 space-y-0.5">
+            {factors.map((f, i) => (
+              <li key={i} className="text-xs text-slate-500 flex items-center gap-1.5">
+                <span className="text-red-400 font-mono w-8 shrink-0">{f.delta}</span>
+                {f.label}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }
