@@ -74,6 +74,74 @@ function persistStatSample(uuid: string, entry: StatsEntry): void {
   }
 }
 
+// ── Auto-optimize: sustained CPU/memory pressure is the most common cause
+// of "ping dalgalanması" (tick lag) regardless of which server software is
+// running, so it's used as the universal trigger instead of trying to
+// parse `/tps` output — that only exists on some server types and would
+// silently do nothing on Bedrock/Vanilla/Forge, which is worse than not
+// having the feature at all.
+const CPU_TRIGGER_PCT = 90;
+const MEMORY_TRIGGER_PCT = 95;
+const SUSTAINED_WINDOW_MS = 60 * 1000;
+const OPTIMIZE_COOLDOWN_MS = 5 * 60 * 1000;
+const cpuSampleHistory = new Map<string, { value: number; at: number }[]>();
+const lastOptimizeAt = new Map<string, number>();
+
+function checkAutoOptimize(nodeId: string, uuid: string, entry: StatsEntry): void {
+  const now = Date.now();
+  const hist = (cpuSampleHistory.get(uuid) ?? []).filter((s) => now - s.at < SUSTAINED_WINDOW_MS);
+  hist.push({ value: entry.cpuAbsolute, at: now });
+  cpuSampleHistory.set(uuid, hist);
+
+  // Require samples spanning most of the window before judging it "sustained"
+  // rather than a momentary spike (e.g. a single chunk-gen burst).
+  if (hist.length < 5 || now - hist[0].at < SUSTAINED_WINDOW_MS * 0.8) return;
+
+  const avgCpu = hist.reduce((sum, s) => sum + s.value, 0) / hist.length;
+  const memPct = entry.memoryLimitBytes > 0 ? (entry.memoryBytes / entry.memoryLimitBytes) * 100 : 0;
+  const cpuTriggered = avgCpu > CPU_TRIGGER_PCT;
+  const memTriggered = memPct > MEMORY_TRIGGER_PCT;
+  if (!cpuTriggered && !memTriggered) return;
+
+  const lastRun = lastOptimizeAt.get(uuid) ?? 0;
+  if (now - lastRun < OPTIMIZE_COOLDOWN_MS) return;
+  lastOptimizeAt.set(uuid, now);
+
+  (async () => {
+    const server = await prisma.server.findFirst({
+      where: { uuid },
+      include: { egg: { select: { name: true, startup: true } } },
+    });
+    if (!server || !server.autoOptimizeEnabled) return;
+
+    const isBedrock = server.egg.name.toLowerCase().includes('bedrock') || server.egg.startup.includes('bedrock_server');
+    let action = 'flagged for review (no safe auto-command for this server type)';
+    if (!isBedrock) {
+      try {
+        sendCommandToWings(nodeId, uuid, '/kill @e[type=item]');
+        action = 'cleared dropped-item lag (/kill @e[type=item])';
+      } catch (err) {
+        action = `attempted item cleanup but Wings is unreachable (${(err as Error).message})`;
+      }
+    }
+
+    await prisma.activity.create({
+      data: {
+        serverId: server.id,
+        event: 'server:auto-optimize',
+        properties: JSON.stringify({
+          reason: cpuTriggered ? 'high_cpu' : 'high_memory',
+          avgCpuPercent: Math.round(avgCpu),
+          memoryPercent: Math.round(memPct),
+          action,
+        }),
+      },
+    }).catch((err: Error) => logger.warn(`Failed to log auto-optimize activity for ${uuid}: ${err.message}`));
+
+    logger.info(`Auto-optimize triggered for ${uuid}: cpu=${avgCpu.toFixed(1)}% mem=${memPct.toFixed(1)}% -> ${action}`);
+  })();
+}
+
 export function pushConsoleBuffer(uuid: string, line: ConsoleLine): void {
   const buf = consoleBuffer.get(uuid) ?? [];
   buf.push(line);
@@ -169,6 +237,7 @@ export function getOrConnectWings(node: NodeInfo, io: SocketServer): Socket {
       if (sbuf.length > MAX_STATS_BUFFER) sbuf.shift();
       statsBuffer.set(uuid, sbuf);
       persistStatSample(uuid, statsEntry);
+      checkAutoOptimize(node.id, uuid, statsEntry);
 
       relayData = {
         uuid,

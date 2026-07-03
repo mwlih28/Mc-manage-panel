@@ -283,7 +283,7 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   }
 
   if (isAdmin) {
-    const { memory, swap, disk, io, cpu, startup, image, suspended, userId, allocationId, backupLimit, databaseLimit, crashDetectionEnabled } = req.body;
+    const { memory, swap, disk, io, cpu, startup, image, suspended, userId, allocationId, backupLimit, databaseLimit, crashDetectionEnabled, autoOptimizeEnabled } = req.body;
     if (memory) updateData.memory = parseInt(memory);
     if (swap !== undefined) updateData.swap = parseInt(swap);
     if (disk) updateData.disk = parseInt(disk);
@@ -295,6 +295,7 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     if (backupLimit !== undefined) updateData.backupLimit = parseInt(backupLimit);
     if (databaseLimit !== undefined) updateData.databaseLimit = parseInt(databaseLimit);
     if (typeof crashDetectionEnabled === 'boolean') updateData.crashDetectionEnabled = crashDetectionEnabled;
+    if (typeof autoOptimizeEnabled === 'boolean') updateData.autoOptimizeEnabled = autoOptimizeEnabled;
 
     // Owner change
     if (userId && userId !== server.userId) {

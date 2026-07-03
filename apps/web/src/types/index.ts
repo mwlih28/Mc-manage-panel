@@ -131,6 +131,7 @@ export interface Server {
   allocationLimit: number;
   backupLimit: number;
   crashDetectionEnabled: boolean;
+  autoOptimizeEnabled: boolean;
   createdAt: string;
   updatedAt: string;
   user?: Pick<User, 'id' | 'email' | 'username'>;

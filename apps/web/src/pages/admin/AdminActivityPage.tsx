@@ -1,13 +1,26 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Activity, CheckCircle, XCircle, Server, Shield } from 'lucide-react';
+import { Activity, CheckCircle, XCircle, Server, Shield, Gauge } from 'lucide-react';
 import api from '@/lib/axios';
 import { ActivityLog } from '@/types';
 import { formatDateTime } from '@/lib/utils';
 import { Spinner } from '@/components/ui/Spinner';
 
+function PropertiesSummary({ properties }: { properties: string }) {
+  let parsed: Record<string, unknown> = {};
+  try { parsed = JSON.parse(properties); } catch { /* not JSON, ignore */ }
+  const entries = Object.entries(parsed).filter(([, v]) => v !== null && v !== undefined && v !== '');
+  if (entries.length === 0) return null;
+  return (
+    <p className="text-xs text-slate-500 mt-0.5">
+      {entries.map(([k, v]) => `${k}: ${v}`).join(' · ')}
+    </p>
+  );
+}
+
 function getEventIcon(event: string) {
   if (event.startsWith('auth:')) return <Shield size={14} className="text-blue-400" />;
+  if (event === 'server:auto-optimize') return <Gauge size={14} className="text-cyan-400" />;
   if (event.startsWith('server:power')) return <Activity size={14} className="text-yellow-400" />;
   if (event.includes('delete')) return <XCircle size={14} className="text-red-400" />;
   if (event.includes('create')) return <CheckCircle size={14} className="text-green-400" />;
@@ -16,6 +29,7 @@ function getEventIcon(event: string) {
 
 function getEventColor(event: string): string {
   if (event.startsWith('auth:')) return 'bg-blue-500/10 border-blue-500/20';
+  if (event === 'server:auto-optimize') return 'bg-cyan-500/10 border-cyan-500/20';
   if (event.includes('delete')) return 'bg-red-500/10 border-red-500/20';
   if (event.includes('create')) return 'bg-green-500/10 border-green-500/20';
   return 'bg-dark-900 border-dark-800';
@@ -60,6 +74,7 @@ export function AdminActivityPage() {
                 {activity.ip && (
                   <p className="text-xs text-slate-500 mt-0.5">from {activity.ip}</p>
                 )}
+                <PropertiesSummary properties={activity.properties} />
               </div>
               <time className="text-xs text-slate-500 shrink-0">
                 {formatDateTime(activity.timestamp)}

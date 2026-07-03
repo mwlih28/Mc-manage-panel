@@ -263,9 +263,11 @@ app.get('/api/servers/:uuid/players/all', (_req, res) => {
 });
 
 let startedAt = Date.now();
+// Set MOCK_HIGH_CPU=1 to simulate a lag spike for testing the panel's
+// auto-optimize trigger without needing a real overloaded container.
 function currentResources() {
   const t = (Date.now() - startedAt) / 1000;
-  const cpu = 14 + Math.abs(Math.sin(t / 6)) * 18;
+  const cpu = process.env.MOCK_HIGH_CPU ? 95 : 14 + Math.abs(Math.sin(t / 6)) * 18;
   const mem = MEMORY_LIMIT * (0.42 + Math.abs(Math.sin(t / 15)) * 0.15);
   return {
     cpu_absolute: Number(cpu.toFixed(1)),

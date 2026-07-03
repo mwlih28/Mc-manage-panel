@@ -475,6 +475,7 @@ function EditServerModal({ server, onClose, onSuccess }: { server: Server; onClo
     backupLimit: String(srv.backupLimit ?? 0),
   });
   const [crashDetectionEnabled, setCrashDetectionEnabled] = useState(server.crashDetectionEnabled ?? true);
+  const [autoOptimizeEnabled, setAutoOptimizeEnabled] = useState(server.autoOptimizeEnabled ?? true);
   const [startup, setStartup] = useState({
     image: srv.image || 'ghcr.io/pterodactyl/yolks:java_21',
     startupCmd: srv.startup || '',
@@ -657,6 +658,20 @@ function EditServerModal({ server, onClose, onSuccess }: { server: Server; onClo
               </span>
             </span>
           </label>
+          <label className="flex items-start gap-3 p-3 rounded-lg border border-dark-700 bg-dark-800/40 cursor-pointer">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={autoOptimizeEnabled}
+              onChange={(e) => setAutoOptimizeEnabled(e.target.checked)}
+            />
+            <span>
+              <span className="block text-sm text-slate-200">Auto-optimize on lag spikes</span>
+              <span className="block text-xs text-slate-500 mt-0.5">
+                If CPU stays above 90% (or memory above 95%) for a sustained minute, the panel automatically clears dropped-item lag and logs what it did to Activity. At most once every 5 minutes.
+              </span>
+            </span>
+          </label>
           <div className="flex gap-3 pt-2">
             <button className="btn-secondary flex-1" onClick={onClose}>Cancel</button>
             <button className="btn-primary flex-1" disabled={isSaving} onClick={() => save({
@@ -665,6 +680,7 @@ function EditServerModal({ server, onClose, onSuccess }: { server: Server; onClo
               cpu: resources.cpu,
               backupLimit: resources.backupLimit,
               crashDetectionEnabled,
+              autoOptimizeEnabled,
             })}>
               {isSaving ? <Spinner size="sm" /> : 'Save'}
             </button>
