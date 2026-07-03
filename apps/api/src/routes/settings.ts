@@ -23,7 +23,7 @@ const PROVIDER_KEY_SETTING: Record<string, string> = {
 // Keys safe to expose without authentication (sidebar/login branding, public
 // feature flags). Everything else (SMTP creds, AI provider keys) is stripped
 // out below unless the request comes from a logged-in admin.
-const PUBLIC_KEYS = new Set(['app.name', 'app.title', 'app.logo', 'app.description', 'features.aiTools', 'ai.provider', 'ai.configured', 'curseforge.configured']);
+const PUBLIC_KEYS = new Set(['app.name', 'app.title', 'app.logo', 'app.description', 'app.version', 'features.aiTools', 'ai.provider', 'ai.configured', 'curseforge.configured']);
 
 router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
@@ -33,6 +33,9 @@ router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
     const providerKey = PROVIDER_KEY_SETTING[settings['ai.provider']] || 'ai.openaiKey';
     settings['ai.configured'] = settings[providerKey] ? 'true' : 'false';
     settings['curseforge.configured'] = settings['curseforge.apiKey'] ? 'true' : 'false';
+    // Sourced from the deployed .env, not the DB — install/update-panel.sh
+    // keep PANEL_VERSION in sync with the actual release tag on every run.
+    settings['app.version'] = process.env.PANEL_VERSION || '1.0.0';
 
     if (req.user?.role !== 'ADMIN') {
       for (const key of Object.keys(settings)) {

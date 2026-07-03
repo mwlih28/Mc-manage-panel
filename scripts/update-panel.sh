@@ -79,6 +79,14 @@ info "Updating: ${CURRENT_COMMIT} → ${NEW_COMMIT}"
 git -C "$PANEL_DIR" reset --hard FETCH_HEAD --quiet
 success "Code updated"
 
+# ── Keep the displayed panel version in sync with what's actually deployed
+ENV_FILE="${PANEL_DIR}/apps/api/.env"
+if grep -q '^PANEL_VERSION=' "$ENV_FILE" 2>/dev/null; then
+  sed -i "s/^PANEL_VERSION=.*/PANEL_VERSION=${BRANCH}/" "$ENV_FILE"
+else
+  echo "PANEL_VERSION=${BRANCH}" >> "$ENV_FILE"
+fi
+
 # ── Backup database before schema changes ─────────────────────────────
 step "Backing up database"
 PG() { cd /tmp && sudo -u postgres "$@"; cd - >/dev/null; }

@@ -766,24 +766,6 @@ echo "TShock installed."`;
 
   console.log('Eggs created/updated');
 
-  // Create settings
-  const settings = [
-    { key: 'app:name', value: 'Kretase' },
-    { key: 'app:url', value: 'http://localhost:3001' },
-    { key: 'app:version', value: '1.0.0' },
-    { key: 'recaptcha:enabled', value: 'false' },
-    { key: 'mail:driver', value: 'smtp' },
-  ];
-
-  for (const setting of settings) {
-    await prisma.setting.upsert({
-      where: { key: setting.key },
-      update: { value: setting.value },
-      create: setting,
-    });
-  }
-  console.log('Settings created');
-
   console.log('\nSeed complete!');
   console.log('Admin login: admin@example.com / Admin123!');
   console.log('User login: user@example.com / User123!');

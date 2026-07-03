@@ -233,7 +233,7 @@ JWT_REFRESH_EXPIRES_IN=7d
 CORS_ORIGIN=http://${PANEL_DOMAIN}
 APP_NAME=Kretase
 APP_URL=http://${PANEL_DOMAIN}
-PANEL_VERSION=1.0.0
+PANEL_VERSION=${BRANCH}
 ENV
 chmod 600 "${PANEL_DIR}/apps/api/.env"
 success ".env written"

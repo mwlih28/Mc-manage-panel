@@ -7,6 +7,14 @@ import api from '@/lib/axios';
 import toast from 'react-hot-toast';
 import { useQuery } from '@tanstack/react-query';
 
+// PANEL_VERSION is the release tag install/update-panel.sh resolved at
+// deploy time (e.g. "v1.2.0"), or "main" when running an untagged checkout
+// — only prefix with "v" when it actually looks like a version number.
+function formatPanelVersion(version?: string): string {
+  if (!version) return '';
+  return /^v?\d/.test(version) ? `v${version.replace(/^v/, '')}` : version;
+}
+
 export function Sidebar() {
   const { t } = useTranslation();
   const { user, logout } = useAuthStore();
@@ -32,6 +40,10 @@ export function Sidebar() {
   const siteName = settings?.['app.name'] || 'Kretase';
   const logoUrl = settings?.['app.logo'];
   const aiToolsEnabled = settings?.['features.aiTools'] !== 'false';
+  // Sourced from PANEL_VERSION in .env, which install/update-panel.sh keep
+  // in sync with the actual release tag deployed — not a hardcoded string
+  // that would silently go stale after every update.
+  const panelVersion = settings?.['app.version'];
 
   const handleLogout = async () => {
     try { await api.post('/auth/logout'); } catch { /* ignore */ }
@@ -50,7 +62,7 @@ export function Sidebar() {
         <img src={logoUrl || '/brand/kretase-logo-128.png'} alt="logo" className="h-8 w-8 rounded-lg object-contain shrink-0" />
         <div className="min-w-0">
           <p className="text-sm font-semibold text-white truncate leading-tight">{siteName}</p>
-          <p className="text-[9px] text-zinc-600 font-mono">v1.0.0</p>
+          <p className="text-[9px] text-zinc-600 font-mono">{formatPanelVersion(panelVersion)}</p>
         </div>
       </div>
 
