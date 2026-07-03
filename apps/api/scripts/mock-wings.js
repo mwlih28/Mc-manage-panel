@@ -67,6 +67,36 @@ app.get('/api/servers/:uuid/players', (_req, res) => {
   res.json({ players: ONLINE_PLAYERS, max: 20 });
 });
 
+// Sample NBT-shaped inventory for visually testing the inventory grid UI.
+app.get('/api/servers/:uuid/players/:playerUuid/inventory', (_req, res) => {
+  res.json({
+    inventory: [
+      { slot: 0, id: 'diamond_sword', count: 1 },
+      { slot: 1, id: 'bow', count: 1 },
+      { slot: 8, id: 'shield', count: 1 },
+      { slot: 9, id: 'oak_planks', count: 64 },
+      { slot: 10, id: 'cobblestone', count: 64 },
+      { slot: 11, id: 'torch', count: 32 },
+      { slot: 12, id: 'cooked_beef', count: 12 },
+      { slot: 13, id: 'golden_apple', count: 3 },
+      { slot: 14, id: 'ender_pearl', count: 6 },
+      { slot: 20, id: 'diamond', count: 5 },
+      { slot: 21, id: 'emerald', count: 2 },
+      { slot: 27, id: 'enchanted_book', count: 1 },
+      { slot: 28, id: 'potion', count: 2 },
+      { slot: 36, id: 'netherite_boots', count: 1 },
+      { slot: 37, id: 'diamond_leggings', count: 1 },
+      { slot: 38, id: 'iron_chestplate', count: 1 },
+      { slot: 39, id: 'netherite_helmet', count: 1 },
+    ],
+    enderChest: [
+      { slot: 0, id: 'shulker_box', count: 1 },
+      { slot: 1, id: 'totem_of_undying', count: 1 },
+      { slot: 5, id: 'nether_star', count: 1 },
+    ],
+  });
+});
+
 app.get('/api/servers/:uuid/players/all', (_req, res) => {
   res.json({
     players: ONLINE_PLAYERS.map((p, i) => ({

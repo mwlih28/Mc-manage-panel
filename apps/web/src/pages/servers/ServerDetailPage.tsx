@@ -1958,28 +1958,62 @@ function itemAbbr(id: string): string {
   return id.split('_').map(w => w[0]?.toUpperCase() ?? '').join('').slice(0, 3);
 }
 
-function MCSlot({ item, onDelete }: { item?: NbtItem; onDelete?: (slot: number) => void }) {
+// Community-mirrored copy of Mojang's own item textures, keyed by the plain
+// (no "minecraft:" prefix) item id — the same id format Wings already
+// returns for inventory NBT. Falls back to a color-coded initial badge
+// (getItemStyle) for anything that 404s, e.g. modded items.
+const MC_ICON_BASE = 'https://mcasset.cloud/1.21.4/assets/minecraft/textures/item';
+
+function MCItemIcon({ id, size = 28 }: { id: string; size?: number }) {
+  const { bg, fg } = getItemStyle(id);
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <div
+        className="w-full h-full rounded-sm flex items-center justify-center"
+        style={{ background: bg }}
+      >
+        <span className="text-[7px] font-bold select-none" style={{ color: fg }}>{itemAbbr(id)}</span>
+      </div>
+    );
+  }
+  return (
+    <img
+      src={`${MC_ICON_BASE}/${id}.png`}
+      alt={id}
+      width={size}
+      height={size}
+      className="select-none pointer-events-none"
+      style={{ imageRendering: 'pixelated' }}
+      draggable={false}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+function MCSlot({ item, onDelete, emptyIcon }: { item?: NbtItem; onDelete?: (slot: number) => void; emptyIcon?: string }) {
   if (!item) {
     return (
       <div
-        className="w-9 h-9 rounded-sm flex-shrink-0"
+        className="w-10 h-10 rounded-sm flex-shrink-0 flex items-center justify-center"
         style={{ background: '#1a2030', border: '1px solid #0d1520', boxShadow: 'inset 1px 1px 0 rgba(0,0,0,0.6), inset -1px -1px 0 rgba(255,255,255,0.04)' }}
-      />
+      >
+        {emptyIcon && <div className="w-6 h-6 opacity-30"><MCItemIcon id={emptyIcon} size={24} /></div>}
+      </div>
     );
   }
-  const { bg, fg } = getItemStyle(item.id);
   return (
     <div
       className="relative group flex-shrink-0 cursor-default"
       title={`${item.id.replace(/_/g, ' ')} ×${item.count}  [slot ${item.slot}]`}
     >
       <div
-        className="w-9 h-9 rounded-sm flex items-center justify-center relative overflow-hidden"
-        style={{ background: bg, border: `1px solid ${fg}30`, boxShadow: 'inset 1px 1px 0 rgba(255,255,255,0.07), inset -1px -1px 0 rgba(0,0,0,0.5)' }}
+        className="w-10 h-10 rounded-sm flex items-center justify-center relative overflow-hidden transition-colors group-hover:bg-white/[0.08]"
+        style={{ background: '#1a2030', border: '1px solid #2a3550', boxShadow: 'inset 1px 1px 0 rgba(255,255,255,0.07), inset -1px -1px 0 rgba(0,0,0,0.5)' }}
       >
-        <span className="text-[7px] font-bold select-none" style={{ color: fg }}>{itemAbbr(item.id)}</span>
+        <MCItemIcon id={item.id} size={28} />
         {item.count > 1 && (
-          <span className="absolute bottom-0 right-0.5 text-[8px] font-bold leading-none select-none"
+          <span className="absolute bottom-0 right-0.5 text-[9px] font-bold leading-none select-none"
             style={{ color: '#fff', textShadow: '1px 1px 0 #000, -0.5px -0.5px 0 #000' }}>
             {item.count}
           </span>
@@ -2028,8 +2062,8 @@ function MCInventoryGrid({ items, isEnderChest = false, onDelete }: {
   }
 
   // Main inventory: armor (36-39) + main (9-35) + hotbar (0-8)
-  const armorSlots  = [39, 38, 37, 36]; // helmet → boots
-  const armorLabels = ['⛑', '🦺', '👗', '👢'];
+  const armorSlots = [39, 38, 37, 36]; // helmet → boots
+  const armorEmptyIcons = ['empty_armor_slot_helmet', 'empty_armor_slot_chestplate', 'empty_armor_slot_leggings', 'empty_armor_slot_boots'];
   const usedMain = items.filter(i => i.slot >= 0 && i.slot <= 39).length;
 
   return (
@@ -2042,19 +2076,10 @@ function MCInventoryGrid({ items, isEnderChest = false, onDelete }: {
         style={{ background: '#0d1520', border: '2px solid #1e3050' }}>
 
         {/* Armor column */}
-        <div className="flex gap-0.5 mb-0.5">
-          {armorSlots.map((s, i) => {
-            const item = slotMap.get(s);
-            return item
-              ? <MCSlot key={s} item={item} onDelete={onDelete} />
-              : (
-                <div key={s} className="w-9 h-9 rounded-sm flex items-center justify-center flex-shrink-0"
-                  title={`Armor slot ${s} (empty)`}
-                  style={{ background: '#131f30', border: '1px solid #1e3050', opacity: 0.5 }}>
-                  <span className="text-sm select-none">{armorLabels[i]}</span>
-                </div>
-              );
-          })}
+        <div className="flex gap-0.5 mb-0.5 items-center">
+          {armorSlots.map((s, i) => (
+            <MCSlot key={s} item={slotMap.get(s)} onDelete={onDelete} emptyIcon={armorEmptyIcons[i]} />
+          ))}
           <div className="ml-1 text-[9px] text-slate-600 self-center leading-tight">armor</div>
         </div>
 
