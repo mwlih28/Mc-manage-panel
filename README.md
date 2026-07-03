@@ -14,6 +14,8 @@ Server migration & cloning, one-click modpack installs, crash auto-restart, auto
 ![Stars](https://img.shields.io/github/stars/mwlih28/mc-manage-panel?style=flat)
 ![Last Commit](https://img.shields.io/github/last-commit/mwlih28/mc-manage-panel)
 
+> 🔥 **Real-world performance:** a Minecraft 1.20.1 server with simulation-distance 32 runs smoothly on just **1 CPU core and 1.5GB RAM** — Aikar's JVM flags and Kretase's built-in auto-optimization do the heavy lifting out of the box.
+
 > ⚠️ **This project is under active development.** Core features work, but expect rough edges, breaking changes, and missing polish. Not yet recommended for production use without testing in your own environment first. Feedback and bug reports are very welcome.
 
 Manage Minecraft and other game servers from a web UI — with a Wings daemon on each node, real-time console, resource monitoring, and full admin controls.
