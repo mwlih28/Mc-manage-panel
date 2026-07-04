@@ -629,33 +629,37 @@ echo "Fabric installed."`;
     },
   });
 
-  const RUST_INSTALL = `#!/bin/bash
+  // ghcr.io/parkervcp/installers:debian does NOT ship a `steamcmd` binary on
+  // PATH — every earlier version of these scripts assumed it did and failed
+  // with "steamcmd: command not found". Verified against pelican-eggs'
+  // actual, currently-working install script: SteamCMD has to be downloaded
+  // and extracted by the script itself, then invoked as ./steamcmd.sh. Also
+  // stages the 32/64-bit steamclient.so libs some engines need at runtime
+  // (harmless — `|| true` — for engines/app IDs that don't ship one).
+  function steamCmdInstall(gameLabel: string, appId: number): string {
+    return `#!/bin/bash
 set -e
-cd /mnt/server
-echo "Installing Rust via SteamCMD..."
-steamcmd +force_install_dir /mnt/server +login anonymous +app_update 258550 validate +quit
-echo "Rust server installed."`;
+cd /tmp
+mkdir -p /mnt/server/steamcmd
+curl -sSL -o steamcmd.tar.gz https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz
+tar -xzvf steamcmd.tar.gz -C /mnt/server/steamcmd
+mkdir -p /mnt/server/steamapps
+cd /mnt/server/steamcmd
+chown -R root:root /mnt
+export HOME=/mnt/server
+echo "Installing ${gameLabel} via SteamCMD..."
+./steamcmd.sh +force_install_dir /mnt/server +login anonymous +app_update ${appId} validate +quit
+mkdir -p /mnt/server/.steam/sdk32
+cp -v linux32/steamclient.so ../.steam/sdk32/steamclient.so 2>/dev/null || true
+mkdir -p /mnt/server/.steam/sdk64
+cp -v linux64/steamclient.so ../.steam/sdk64/steamclient.so 2>/dev/null || true
+echo "${gameLabel} installed."`;
+  }
 
-  const GMOD_INSTALL = `#!/bin/bash
-set -e
-cd /mnt/server
-echo "Installing Garry's Mod via SteamCMD..."
-steamcmd +force_install_dir /mnt/server +login anonymous +app_update 4020 validate +quit
-echo "Garry's Mod installed."`;
-
-  const CS2_INSTALL = `#!/bin/bash
-set -e
-cd /mnt/server
-echo "Installing CS2 via SteamCMD..."
-steamcmd +force_install_dir /mnt/server +login anonymous +app_update 730 validate +quit
-echo "CS2 dedicated server installed."`;
-
-  const ARK_INSTALL = `#!/bin/bash
-set -e
-cd /mnt/server
-echo "Installing ARK via SteamCMD..."
-steamcmd +force_install_dir /mnt/server +login anonymous +app_update 376030 validate +quit
-echo "ARK server installed."`;
+  const RUST_INSTALL = steamCmdInstall('Rust', 258550);
+  const GMOD_INSTALL = steamCmdInstall("Garry's Mod", 4020);
+  const CS2_INSTALL = steamCmdInstall('CS2', 730);
+  const ARK_INSTALL = steamCmdInstall('ARK', 376030);
 
   // Same class of bug as the Velocity install script fixed earlier this
   // project: shelling out to python3 to parse GitHub's release JSON, which
