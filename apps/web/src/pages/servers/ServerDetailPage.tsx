@@ -1018,13 +1018,23 @@ export function ServerDetailPage() {
       {/* Console Tab */}
       {activeTab === 'console' && (
         <div className="flex gap-4">
-          <div className="card flex-1 min-w-0">
+          <div className="card flex-1 min-w-0 overflow-hidden">
+            <div className="flex items-center gap-1.5 px-4 py-2.5 border-b border-dark-800" style={{ background: '#0e1116' }}>
+              <span className="w-2.5 h-2.5 rounded-full bg-red-500/70" />
+              <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/70" />
+              <span className="w-2.5 h-2.5 rounded-full bg-green-500/70" />
+              <span className="ml-2 text-[11px] font-mono text-slate-500">console</span>
+              <span className={`ml-auto h-1.5 w-1.5 rounded-full ${getServerStatusDot(currentStatus)}`} />
+            </div>
             <div
-              className="rounded-t-xl p-4 h-96 overflow-y-auto font-mono text-xs scrollbar-none"
+              className="p-4 h-96 overflow-y-auto font-mono text-xs scrollbar-none"
               style={{ background: '#0b0f14' }}
             >
               {consoleLines.length === 0 ? (
-                <p className="text-slate-600 italic">Waiting for output...</p>
+                <div className="h-full flex flex-col items-center justify-center text-slate-700 gap-2">
+                  <Terminal size={28} className="opacity-40" />
+                  <p className="italic">Waiting for output...</p>
+                </div>
               ) : (
                 consoleLines.map((line, i) => {
                   const text = (line.data || '').replace(/\x1b\[[0-9;]*[mGKHF]/g, '').replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');

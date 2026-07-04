@@ -57,11 +57,17 @@ export function Sidebar() {
   return (
     <aside
       className="fixed inset-y-0 left-0 z-40 w-60 flex flex-col"
-      style={{ background: '#0a0a0c', borderRight: '1px solid #1e1e22' }}
+      style={{ background: '#0B0C0E', borderRight: '1px solid #1C1E22' }}
     >
       {/* Logo */}
-      <div className="flex items-center gap-3 px-4 py-4" style={{ borderBottom: '1px solid #1e1e22' }}>
-        <img src={logoUrl || '/brand/kretase-logo-128.png'} alt="logo" className="h-8 w-8 rounded-lg object-contain shrink-0" />
+      <div className="flex items-center gap-3 px-4 py-4" style={{ borderBottom: '1px solid #1C1E22' }}>
+        <div className="relative shrink-0">
+          <div
+            className="absolute inset-0 rounded-lg blur-md opacity-40"
+            style={{ background: 'radial-gradient(circle, rgba(34,168,120,0.6) 0%, rgba(34,168,120,0) 70%)' }}
+          />
+          <img src={logoUrl || '/brand/kretase-logo-128.png'} alt="logo" className="relative h-8 w-8 rounded-lg object-contain" />
+        </div>
         <div className="min-w-0">
           <p className="text-sm font-semibold text-white truncate leading-tight">{siteName}</p>
           <p className="text-[9px] text-zinc-600 font-mono">{formatPanelVersion(panelVersion)}</p>
