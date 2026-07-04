@@ -11,6 +11,8 @@ for (const key of REQUIRED_ENV) {
 
 import express from 'express';
 import http from 'http';
+import fs from 'fs';
+import path from 'path';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
@@ -68,6 +70,26 @@ app.use(morgan('dev', { stream: { write: (msg) => logger.http(msg.trim()) } }));
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', version: process.env.PANEL_VERSION || '1.0.0', timestamp: new Date().toISOString() });
 });
+
+// Branded install-script endpoints — serves the same scripts/*.sh files from
+// this deployment's own checkout, so `curl https://get.kretase.com/panel`
+// works like Pterodactyl's installer without ever touching github.com.
+// Meant to be reached via a dedicated subdomain (e.g. get.kretase.com)
+// pointed at this API, but harmless to expose on the main domain too since
+// the scripts are already fully public on GitHub.
+const SCRIPTS_DIR = path.join(__dirname, '..', '..', '..', 'scripts');
+function serveInstallScript(fileName: string) {
+  return (_req: express.Request, res: express.Response) => {
+    const scriptPath = path.join(SCRIPTS_DIR, fileName);
+    if (!fs.existsSync(scriptPath)) return res.status(404).send('Script not found');
+    res.setHeader('Content-Type', 'text/x-shellscript; charset=utf-8');
+    res.sendFile(scriptPath);
+  };
+}
+app.get('/panel', serveInstallScript('install-panel.sh'));
+app.get('/wings', serveInstallScript('install-wings.sh'));
+app.get('/update-panel', serveInstallScript('update-panel.sh'));
+app.get('/update-wings', serveInstallScript('update-wings.sh'));
 
 // Templates endpoint
 import serverTemplates from './data/serverTemplates.json';
