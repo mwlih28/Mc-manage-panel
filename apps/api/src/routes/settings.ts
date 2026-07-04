@@ -62,7 +62,7 @@ router.put('/', authenticate, requireAdmin, async (req: AuthRequest, res: Respon
   }
   const allowed = [
     'app.name', 'app.title', 'app.logo', 'app.description',
-    'smtp.host', 'smtp.port', 'smtp.user', 'smtp.pass', 'smtp.from', 'smtp.owner_email',
+    'smtp.host', 'smtp.port', 'smtp.user', 'smtp.pass', 'smtp.from',
     'features.aiTools', 'ai.provider', 'ai.openaiKey', 'ai.geminiKey', 'ai.anthropicKey',
     'curseforge.apiKey',
   ];

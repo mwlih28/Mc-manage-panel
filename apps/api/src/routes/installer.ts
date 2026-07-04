@@ -1,20 +1,19 @@
 import { Router, Response } from 'express';
-import { prisma } from '../utils/prisma';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import { AuthRequest } from '../types';
 import { sendUpdateNotification } from '../services/emailService';
 
 const router = Router();
 
-// POST /api/v1/installer/test-smtp — admin only: send test email to owner
-router.post('/test-smtp', authenticate, requireAdmin, async (_req: AuthRequest, res: Response) => {
-  const ownerEmail = await prisma.setting.findUnique({ where: { key: 'smtp.owner_email' } }).then(r => r?.value || '');
-  if (!ownerEmail) {
-    return res.status(400).json({ message: 'No owner email configured. Set smtp.owner_email in Settings.' });
-  }
-  const ok = await sendUpdateNotification(ownerEmail, 'TEST — SMTP is working!').catch(() => false);
+// POST /api/v1/installer/test-smtp — admin only: send a test email to
+// whichever admin clicked the button, using the panel SMTP config they
+// just entered (not yet saved to the Setting table at this point, so this
+// exercises whatever is currently persisted).
+router.post('/test-smtp', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
+  const to = req.user!.email;
+  const ok = await sendUpdateNotification(to, 'TEST — SMTP is working!').catch(() => false);
   if (!ok) return res.status(500).json({ message: 'SMTP send failed — check host/port/credentials.' });
-  return res.json({ message: `Test email sent to ${ownerEmail}.` });
+  return res.json({ message: `Test email sent to ${to}.` });
 });
 
 export default router;

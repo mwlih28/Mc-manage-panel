@@ -36,7 +36,6 @@ export function AdminSettingsPage() {
     'smtp.user': '',
     'smtp.pass': '',
     'smtp.from': '',
-    'smtp.owner_email': '',
     'features.aiTools': 'true',
     'ai.provider': 'openai',
     'ai.openaiKey': '',
@@ -59,7 +58,6 @@ export function AdminSettingsPage() {
         'smtp.user':        data['smtp.user']         || '',
         'smtp.pass':        data['smtp.pass']         || '',
         'smtp.from':        data['smtp.from']         || '',
-        'smtp.owner_email': data['smtp.owner_email']  || '',
         'features.aiTools': data['features.aiTools']  || 'true',
         'ai.provider':      data['ai.provider']        || 'openai',
         'ai.openaiKey':     data['ai.openaiKey']       || '',
@@ -379,16 +377,6 @@ export function AdminSettingsPage() {
               placeholder="Kretase <noreply@kretase.com>"
             />
             <p className="text-xs text-zinc-600 mt-1">Shown in the "From" field of outgoing emails.</p>
-          </div>
-          <div>
-            <label className="label">Your Notification Email</label>
-            <input
-              className="input"
-              value={form['smtp.owner_email']}
-              onChange={e => setForm(f => ({ ...f, 'smtp.owner_email': e.target.value }))}
-              placeholder="you@yourdomain.com"
-            />
-            <p className="text-xs text-zinc-600 mt-1">You'll get a notification here whenever someone installs the panel.</p>
           </div>
         </div>
       </div>
