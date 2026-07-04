@@ -101,7 +101,7 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     include: {
       user: { select: { id: true, email: true, username: true } },
       node: { select: { id: true, name: true, fqdn: true, scheme: true, daemonPort: true } },
-      egg: { include: { variables: true } },
+      egg: { include: { variables: true, nest: true } },
       allocation: true,
       _count: { select: { backups: true, databases: true } },
     },
@@ -946,7 +946,7 @@ router.post('/:id/power', authenticate, async (req: AuthRequest, res: Response) 
       id: req.params.id,
       ...(isAdmin ? {} : { userId: req.user!.id }),
     },
-    include: { node: true, egg: true },
+    include: { node: true, egg: { include: { nest: true } } },
   });
 
   if (!server) return res.status(404).json({ message: 'Server not found' });
@@ -956,8 +956,14 @@ router.post('/:id/power', authenticate, async (req: AuthRequest, res: Response) 
     return res.status(422).json({ message: 'Invalid power action' });
   }
 
+  // The Minecraft EULA only applies to Minecraft-family eggs — non-Minecraft
+  // games (CS2, Rust, ARK, GMod, TShock, ...) have no such requirement and
+  // must never be gated on `eulaAccepted`. Bedrock is a Minecraft-nest egg
+  // but is excluded too, matching the rest of the codebase's existing choice
+  // not to enforce EULA acceptance for it.
+  const isMinecraftEgg = server.egg.nest?.name === 'Minecraft';
   const isBedrockEgg = server.egg.name.toLowerCase().includes('bedrock') || server.egg.startup.includes('bedrock_server');
-  if (action === 'start' && !isBedrockEgg && !server.eulaAccepted) {
+  if (action === 'start' && isMinecraftEgg && !isBedrockEgg && !server.eulaAccepted) {
     return res.status(409).json({ message: 'EULA_NOT_ACCEPTED', code: 'EULA_NOT_ACCEPTED' });
   }
 

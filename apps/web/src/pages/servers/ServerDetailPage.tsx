@@ -749,7 +749,7 @@ export function ServerDetailPage() {
 
   const sendPower = (action: string) => {
     if (!socketRef.current) return;
-    if (action === 'start' && !isBedrock && !data?.eulaAccepted) {
+    if (action === 'start' && isMinecraftEgg && !isBedrock && !data?.eulaAccepted) {
       setShowEulaModal(true);
       return;
     }
@@ -814,6 +814,11 @@ export function ServerDetailPage() {
     } catch { /* ignore */ }
     return data?.egg?.name?.toLowerCase().includes('bedrock') ?? false;
   })();
+
+  // Minecraft-only tabs/behavior (EULA gate, mods/plugins/worlds/map/leaderboard)
+  // must not show up for non-Minecraft eggs like CS2, Rust, ARK, GMod, TShock.
+  const isMinecraftEgg = data?.egg?.nest?.name === 'Minecraft';
+  const MINECRAFT_ONLY_TABS: Tab[] = ['plugins', 'mods', 'modpacks', 'versions', 'worlds', 'map', 'leaderboard'];
 
   const serverMcVersion: string | undefined = (() => {
     try {
@@ -981,10 +986,15 @@ export function ServerDetailPage() {
       {/* Tabs */}
       <div className="border-b border-dark-800 overflow-x-auto">
         <div className="flex items-center gap-1 min-w-max">
-          {TAB_GROUPS.map((group, gi) => (
+          {TAB_GROUPS.map((group, gi) => {
+            const visibleTabs = isMinecraftEgg
+              ? group.tabs
+              : group.tabs.filter(({ id }) => !MINECRAFT_ONLY_TABS.includes(id));
+            if (visibleTabs.length === 0) return null;
+            return (
             <div key={group.label} className="flex items-center gap-1">
               {gi > 0 && <span className="mx-1.5 h-5 w-px bg-dark-700" />}
-              {group.tabs.map(({ id: tab, label, icon: Icon }) => (
+              {visibleTabs.map(({ id: tab, label, icon: Icon }) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
@@ -1000,7 +1010,8 @@ export function ServerDetailPage() {
                 </button>
               ))}
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 

@@ -138,12 +138,15 @@ export function initSocketServer(httpServer: HttpServer, corsOrigin: string): So
       const isAdmin = socket.data.user?.role === 'ADMIN';
       const server = await prisma.server.findFirst({
         where: { id: serverId, ...(isAdmin ? {} : { userId: socket.data.user?.id }) },
-        include: { node: true, egg: true },
+        include: { node: true, egg: { include: { nest: true } } },
       });
       if (!server) return;
 
+      // See the matching check in routes/servers.ts POST /:id/power — the
+      // EULA gate must only apply to Minecraft-family eggs, not every egg.
+      const isMinecraftEgg = server.egg.nest?.name === 'Minecraft';
       const isBedrockEgg = server.egg.name.toLowerCase().includes('bedrock') || server.egg.startup.includes('bedrock_server');
-      if (action === 'start' && !isBedrockEgg && !server.eulaAccepted) {
+      if (action === 'start' && isMinecraftEgg && !isBedrockEgg && !server.eulaAccepted) {
         socket.emit('error', 'EULA_NOT_ACCEPTED');
         return;
       }

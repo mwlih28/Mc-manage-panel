@@ -145,7 +145,7 @@ export interface Server {
   updatedAt: string;
   user?: Pick<User, 'id' | 'email' | 'username'>;
   node?: Pick<Node, 'id' | 'name' | 'fqdn' | 'scheme' | 'daemonPort'>;
-  egg?: Pick<Egg, 'id' | 'name'> & { variables?: EggVariable[] };
+  egg?: Pick<Egg, 'id' | 'name'> & { variables?: EggVariable[]; nest?: Nest };
   allocation?: Allocation;
   _count?: { backups: number; databases: number };
 }
