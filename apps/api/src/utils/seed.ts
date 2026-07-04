@@ -95,7 +95,7 @@ async function main() {
     update: {},
     create: {
       uuid: '00000000-0000-0000-0000-000000000001',
-      author: 'support@pterodactyl.io',
+      author: 'support@kretase.com',
       name: 'Minecraft',
       description: 'Minecraft - the classical game',
     },
@@ -154,7 +154,7 @@ echo "Paper $MC_VER installed."`;
     create: {
       uuid: '00000000-0000-0000-0000-000000000002',
       nestId: minecraftNest.id,
-      author: 'support@pterodactyl.io',
+      author: 'support@kretase.com',
       name: 'Paper',
       description: 'High performance Minecraft server based on Spigot',
       dockerImage: 'ghcr.io/pterodactyl/yolks:java_21',
@@ -299,7 +299,7 @@ echo "Velocity $VELOCITY_VER installed."`;
     create: {
       uuid: '00000000-0000-0000-0000-000000000004',
       nestId: minecraftNest.id,
-      author: 'support@pterodactyl.io',
+      author: 'support@kretase.com',
       name: 'Vanilla Minecraft',
       description: 'Standard Mojang vanilla server',
       dockerImage: 'ghcr.io/pterodactyl/yolks:java_21',
@@ -320,7 +320,7 @@ echo "Velocity $VELOCITY_VER installed."`;
     create: {
       uuid: '00000000-0000-0000-0000-000000000005',
       nestId: minecraftNest.id,
-      author: 'support@pterodactyl.io',
+      author: 'support@kretase.com',
       name: 'BungeeCord',
       description: 'Minecraft proxy server by md-5',
       dockerImage: 'ghcr.io/pterodactyl/yolks:java_21',
@@ -359,7 +359,7 @@ echo "Velocity $VELOCITY_VER installed."`;
     create: {
       uuid: '00000000-0000-0000-0000-000000000006',
       nestId: minecraftNest.id,
-      author: 'support@pterodactyl.io',
+      author: 'support@kretase.com',
       name: 'Velocity',
       description: 'High performance Minecraft proxy by PaperMC',
       dockerImage: 'ghcr.io/pterodactyl/yolks:java_21',
@@ -478,7 +478,7 @@ echo "Bedrock Server \${BDS_VER} installed successfully."`;
     create: {
       uuid: '00000000-0000-0000-0000-000000000008',
       nestId: minecraftNest.id,
-      author: 'support@pterodactyl.io',
+      author: 'support@kretase.com',
       name: 'Minecraft Bedrock',
       description: 'Minecraft Bedrock Edition Dedicated Server (BDS)',
       dockerImage: 'debian:bookworm-slim',
@@ -575,7 +575,7 @@ echo "Fabric installed."`;
     create: {
       uuid: '00000000-0000-0000-0000-000000000009',
       nestId: minecraftNest.id,
-      author: 'support@pterodactyl.io',
+      author: 'support@kretase.com',
       name: 'Fabric',
       description: 'Modded Minecraft server using the Fabric mod loader',
       dockerImage: 'ghcr.io/pterodactyl/yolks:java_21',
@@ -623,7 +623,7 @@ echo "Fabric installed."`;
     update: {},
     create: {
       uuid: '00000000-0000-0000-0001-000000000001',
-      author: 'support@pterodactyl.io',
+      author: 'support@kretase.com',
       name: 'Game Servers',
       description: 'Non-Minecraft game servers',
     },
@@ -683,6 +683,26 @@ echo "TShock installed."`;
   // adapted from.
   const STEAM_INSTALLER = 'ghcr.io/parkervcp/installers:debian';
 
+  // Runtime images (what the server actually RUNS in, as opposed to the
+  // installer above). Cross-checked against pelican-eggs' currently-published
+  // egg configs — ghcr.io/pterodactyl/games only ships fivem/source/rust/
+  // hytale/conan_exiles, and using the generic "source" tag for every non-
+  // Minecraft game (including ARK, which isn't Source engine at all, and
+  // CS2, which needs the newer SteamRT3 "sniper" runtime, not the classic
+  // "source"/SteamRT1 one) meant these containers were missing the specific
+  // shared libraries each game actually needs and would fail or hang on
+  // launch even once the install step succeeded.
+  const RUST_IMAGE = 'ghcr.io/parkervcp/games:rust';
+  const SOURCE_IMAGE = 'ghcr.io/parkervcp/games:source';
+  const CS2_IMAGE = 'ghcr.io/parkervcp/steamcmd:sniper';
+  const ARK_IMAGE = 'ghcr.io/parkervcp/steamcmd:debian';
+
+  // CS2 requires LD_LIBRARY_PATH pointed at its own bundled steamrt libs —
+  // without it the binary fails to find its Source 2 runtime libraries even
+  // on the correct "sniper" image. Matches pelican-eggs' verified-working
+  // startup command.
+  const CS2_STARTUP = 'LD_LIBRARY_PATH=$HOME/game/bin/linuxsteamrt64:$LD_LIBRARY_PATH ./game/bin/linuxsteamrt64/cs2 -dedicated -port {{SERVER_PORT}} +map {{DEFAULT_MAP}} -maxplayers {{MAX_PLAYERS}} +sv_setsteamaccount {{STEAM_ACC}}';
+
   async function upsertEggVariable(id: string, eggId: string, name: string, envVariable: string, defaultValue: string, description: string, userEditable = true) {
     await prisma.eggVariable.upsert({
       where: { id },
@@ -694,14 +714,14 @@ echo "TShock installed."`;
   // Rust
   const rustEgg = await prisma.egg.upsert({
     where: { uuid: '00000000-0000-0000-0001-000000000001' },
-    update: { scriptInstall: RUST_INSTALL, scriptContainer: STEAM_INSTALLER },
+    update: { scriptInstall: RUST_INSTALL, scriptContainer: STEAM_INSTALLER, dockerImage: RUST_IMAGE, author: 'support@kretase.com' },
     create: {
       uuid: '00000000-0000-0000-0001-000000000001',
       nestId: gamesNest.id,
-      author: 'support@pterodactyl.io',
+      author: 'support@kretase.com',
       name: 'Rust',
       description: 'Rust survival game server (requires SteamCMD)',
-      dockerImage: 'ghcr.io/pterodactyl/games:rust',
+      dockerImage: RUST_IMAGE,
       startup: './RustDedicated -batchmode +server.ip 0.0.0.0 +server.port {{SERVER_PORT}} +server.queryport {{QUERY_PORT}} +rcon.ip 0.0.0.0 +rcon.port {{RCON_PORT}} +rcon.password "{{RCON_PASSWORD}}" +server.maxplayers {{MAX_PLAYERS}} +server.hostname "{{SERVER_NAME}}" +server.identity "{{SERVER_IDENT}}" +server.seed {{SERVER_SEED}} +server.worldsize {{WORLD_SIZE}} -logfile /dev/stdout',
       configStop: 'quit',
       scriptInstall: RUST_INSTALL,
@@ -717,15 +737,15 @@ echo "TShock installed."`;
   // Garry's Mod
   const gmodEgg = await prisma.egg.upsert({
     where: { uuid: '00000000-0000-0000-0001-000000000002' },
-    update: { scriptInstall: GMOD_INSTALL, scriptContainer: STEAM_INSTALLER },
+    update: { scriptInstall: GMOD_INSTALL, scriptContainer: STEAM_INSTALLER, dockerImage: SOURCE_IMAGE, author: 'support@kretase.com' },
     create: {
       uuid: '00000000-0000-0000-0001-000000000002',
       nestId: gamesNest.id,
-      author: 'support@pterodactyl.io',
+      author: 'support@kretase.com',
       name: "Garry's Mod",
       description: 'Source Engine sandbox game',
-      dockerImage: 'ghcr.io/pterodactyl/games:source',
-      startup: './srcds_run -game garrysmod -console -port {{SERVER_PORT}} +maxplayers {{MAX_PLAYERS}} +map {{DEFAULT_MAP}} -strictportbind -norestart',
+      dockerImage: SOURCE_IMAGE,
+      startup: './srcds_run -game garrysmod -console -port {{SERVER_PORT}} +ip 0.0.0.0 +maxplayers {{MAX_PLAYERS}} +map {{DEFAULT_MAP}} -strictportbind -norestart +sv_setsteamaccount {{STEAM_ACC}}',
       configStop: 'quit',
       scriptInstall: GMOD_INSTALL,
       scriptContainer: STEAM_INSTALLER,
@@ -733,19 +753,20 @@ echo "TShock installed."`;
   });
   await upsertEggVariable('gmod-max-players', gmodEgg.id, 'Max Players', 'MAX_PLAYERS', '16', 'Maximum concurrent players.');
   await upsertEggVariable('gmod-default-map', gmodEgg.id, 'Default Map', 'DEFAULT_MAP', 'gm_construct', 'Map to load on startup.');
+  await upsertEggVariable('gmod-steam-acc', gmodEgg.id, 'Game Server Login Token', 'STEAM_ACC', '', 'Optional GSLT from https://steamcommunity.com/dev/managegameservers — needed for public server-list visibility, not required to run.');
 
   // CS2
   const cs2Egg = await prisma.egg.upsert({
     where: { uuid: '00000000-0000-0000-0001-000000000003' },
-    update: { scriptInstall: CS2_INSTALL, scriptContainer: STEAM_INSTALLER },
+    update: { scriptInstall: CS2_INSTALL, scriptContainer: STEAM_INSTALLER, dockerImage: CS2_IMAGE, startup: CS2_STARTUP, author: 'support@kretase.com' },
     create: {
       uuid: '00000000-0000-0000-0001-000000000003',
       nestId: gamesNest.id,
-      author: 'support@pterodactyl.io',
+      author: 'support@kretase.com',
       name: 'Counter-Strike 2',
       description: 'CS2 dedicated server',
-      dockerImage: 'ghcr.io/pterodactyl/games:source',
-      startup: './game/bin/linuxsteamrt64/cs2 -dedicated -console -port {{SERVER_PORT}} +map {{DEFAULT_MAP}} +maxplayers_override {{MAX_PLAYERS}} +sv_setsteamaccount {{STEAM_ACC}}',
+      dockerImage: CS2_IMAGE,
+      startup: CS2_STARTUP,
       configStop: 'quit',
       scriptInstall: CS2_INSTALL,
       scriptContainer: STEAM_INSTALLER,
@@ -758,14 +779,14 @@ echo "TShock installed."`;
   // ARK: Survival Evolved
   const arkEgg = await prisma.egg.upsert({
     where: { uuid: '00000000-0000-0000-0001-000000000004' },
-    update: { scriptInstall: ARK_INSTALL, scriptContainer: STEAM_INSTALLER },
+    update: { scriptInstall: ARK_INSTALL, scriptContainer: STEAM_INSTALLER, dockerImage: ARK_IMAGE, author: 'support@kretase.com' },
     create: {
       uuid: '00000000-0000-0000-0001-000000000004',
       nestId: gamesNest.id,
-      author: 'support@pterodactyl.io',
+      author: 'support@kretase.com',
       name: 'ARK: Survival Evolved',
       description: 'ARK dedicated server',
-      dockerImage: 'ghcr.io/pterodactyl/games:source',
+      dockerImage: ARK_IMAGE,
       startup: './ShooterGame/Binaries/Linux/ShooterGameServer {{MAP}}?listen?ServerPassword={{SERVER_PASSWORD}}?ServerAdminPassword={{ADMIN_PASSWORD}}?RCONEnabled=True?RCONPort={{RCON_PORT}} -port={{SERVER_PORT}} -queryport={{QUERY_PORT}} -NoBattlEye',
       configStop: 'DoExit',
       scriptInstall: ARK_INSTALL,
@@ -779,11 +800,11 @@ echo "TShock installed."`;
   // Terraria / TShock
   const tshockEgg = await prisma.egg.upsert({
     where: { uuid: '00000000-0000-0000-0001-000000000005' },
-    update: { scriptInstall: TSHOCK_INSTALL, scriptContainer: 'ghcr.io/pterodactyl/installers:alpine' },
+    update: { scriptInstall: TSHOCK_INSTALL, scriptContainer: 'ghcr.io/pterodactyl/installers:alpine', author: 'support@kretase.com' },
     create: {
       uuid: '00000000-0000-0000-0001-000000000005',
       nestId: gamesNest.id,
-      author: 'support@pterodactyl.io',
+      author: 'support@kretase.com',
       name: 'Terraria (TShock)',
       description: 'Terraria server with TShock plugin API',
       dockerImage: 'ghcr.io/pterodactyl/yolks:dotnet_6',
