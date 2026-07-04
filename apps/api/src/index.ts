@@ -46,6 +46,7 @@ import aiRoutes from './routes/ai';
 import curseforgeRoutes from './routes/curseforge';
 import modrinthRoutes from './routes/modrinth';
 import publicRoutes from './routes/public';
+import apiKeyRoutes from './routes/apiKeys';
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -124,6 +125,7 @@ api.use('/ai', aiRoutes);
 api.use('/curseforge', curseforgeRoutes);
 api.use('/modrinth', modrinthRoutes);
 api.use('/public', publicRoutes);
+api.use('/api-keys', apiKeyRoutes);
 
 app.use('/api/v1', api);
 

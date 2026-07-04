@@ -2,6 +2,7 @@ import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../types';
 import { verifyAccessToken } from '../utils/jwt';
 import { prisma } from '../utils/prisma';
+import { API_KEY_PREFIX, ApiKeyScope, hasScope, verifyApiKey } from '../utils/apiKeys';
 
 export async function authenticate(req: AuthRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
@@ -9,6 +10,19 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
 
   if (!token) {
     return res.status(401).json({ message: 'Authentication required' });
+  }
+
+  // Admin API keys (Authorization: Bearer kre_<identifier>.<secret>) are a
+  // separate credential type from session JWTs — route to key verification
+  // instead of trying (and failing) to decode it as a JWT.
+  if (token.startsWith(API_KEY_PREFIX)) {
+    const result = await verifyApiKey(token);
+    if (!result) {
+      return res.status(401).json({ message: 'Invalid or expired API key' });
+    }
+    req.user = result.user;
+    req.apiKeyScopes = result.permissions;
+    return next();
   }
 
   try {
@@ -39,6 +53,20 @@ export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction
     return res.status(403).json({ message: 'Admin access required' });
   }
   next();
+}
+
+// Gates a route behind a specific API key scope. Only meaningful for
+// requests authenticated via an admin API key (req.apiKeyScopes set) — a
+// normal session-authenticated admin already has full rights for their
+// role and passes through untouched, since session logins aren't scoped.
+export function requireScope(scope: ApiKeyScope) {
+  return (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (!req.apiKeyScopes) return next();
+    if (!hasScope(req.apiKeyScopes, scope)) {
+      return res.status(403).json({ message: `API key is missing required scope: ${scope}` });
+    }
+    next();
+  };
 }
 
 export function optionalAuth(req: AuthRequest, _res: Response, next: NextFunction) {

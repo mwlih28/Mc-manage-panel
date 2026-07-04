@@ -29,6 +29,7 @@ const AdminServersPage   = lazy(() => import('@/pages/admin/AdminServersPage').t
 const AdminEggsPage      = lazy(() => import('@/pages/admin/AdminEggsPage').then(m => ({ default: m.AdminEggsPage })));
 const AdminActivityPage  = lazy(() => import('@/pages/admin/AdminActivityPage').then(m => ({ default: m.AdminActivityPage })));
 const AdminSettingsPage  = lazy(() => import('@/pages/admin/AdminSettingsPage').then(m => ({ default: m.AdminSettingsPage })));
+const AdminApiKeysPage   = lazy(() => import('@/pages/admin/AdminApiKeysPage').then(m => ({ default: m.AdminApiKeysPage })));
 const PublicStatusPage   = lazy(() => import('@/pages/PublicStatusPage').then(m => ({ default: m.PublicStatusPage })));
 
 function RouteFallback() {
@@ -89,6 +90,7 @@ export default function App() {
             <Route path="/admin/nodes" element={<AdminNodesPage />} />
             <Route path="/admin/eggs" element={<AdminEggsPage />} />
             <Route path="/admin/activity" element={<AdminActivityPage />} />
+            <Route path="/admin/api-keys" element={<AdminApiKeysPage />} />
             <Route path="/admin/settings" element={<AdminSettingsPage />} />
           </Route>
         </Route>

@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import { v4 as uuidv4 } from 'uuid';
 import { prisma } from '../utils/prisma';
-import { authenticate, requireAdmin } from '../middleware/auth';
+import { authenticate, requireAdmin, requireScope } from '../middleware/auth';
 import { AuthRequest } from '../types';
 
 const router = Router();
@@ -30,7 +30,7 @@ router.get('/setup/:code', async (req: AuthRequest, res: Response) => {
 });
 
 // GET /nodes
-router.get('/', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.get('/', authenticate, requireAdmin, requireScope('nodes:read'), async (req: AuthRequest, res: Response) => {
   const page = parseInt(req.query.page as string) || 1;
   const perPage = parseInt(req.query.perPage as string) || 20;
 
@@ -53,7 +53,7 @@ router.get('/', authenticate, requireAdmin, async (req: AuthRequest, res: Respon
 });
 
 // GET /nodes/:id
-router.get('/:id', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.get('/:id', authenticate, requireAdmin, requireScope('nodes:read'), async (req: AuthRequest, res: Response) => {
   const node = await prisma.node.findUnique({
     where: { id: req.params.id },
     include: {
@@ -71,6 +71,7 @@ router.post(
   '/',
   authenticate,
   requireAdmin,
+  requireScope('nodes:write'),
   [
     body('name').notEmpty().trim(),
     body('fqdn').notEmpty().trim(),
@@ -130,7 +131,7 @@ router.post('/:id/regenerate-setup-token', authenticate, requireAdmin, async (re
 });
 
 // PATCH /nodes/:id
-router.patch('/:id', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.patch('/:id', authenticate, requireAdmin, requireScope('nodes:write'), async (req: AuthRequest, res: Response) => {
   const {
     name, description, fqdn, scheme, port, daemonPort, daemonSftp,
     memory, memoryOverallocate, disk, diskOverallocate, maintenanceMode, gameSubdomain,
@@ -159,7 +160,7 @@ router.patch('/:id', authenticate, requireAdmin, async (req: AuthRequest, res: R
 });
 
 // DELETE /nodes/:id
-router.delete('/:id', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.delete('/:id', authenticate, requireAdmin, requireScope('nodes:write'), async (req: AuthRequest, res: Response) => {
   const serverCount = await prisma.server.count({ where: { nodeId: req.params.id } });
   if (serverCount > 0) {
     return res.status(400).json({ message: 'Cannot delete node with active servers' });

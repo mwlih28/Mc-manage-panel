@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { prisma } from '../utils/prisma';
-import { authenticate, requireAdmin } from '../middleware/auth';
+import { authenticate, requireAdmin, requireScope } from '../middleware/auth';
 import { AuthRequest } from '../types';
 
 const router = Router();
@@ -28,7 +28,7 @@ router.get('/nests/:nestId/eggs', authenticate, requireAdmin, async (req: AuthRe
 });
 
 // GET /eggs
-router.get('/', authenticate, requireAdmin, async (_req: AuthRequest, res: Response) => {
+router.get('/', authenticate, requireAdmin, requireScope('eggs:read'), async (_req: AuthRequest, res: Response) => {
   const eggs = await prisma.egg.findMany({
     include: {
       nest: { select: { id: true, name: true } },
@@ -41,7 +41,7 @@ router.get('/', authenticate, requireAdmin, async (_req: AuthRequest, res: Respo
 });
 
 // POST /eggs
-router.post('/', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.post('/', authenticate, requireAdmin, requireScope('eggs:write'), async (req: AuthRequest, res: Response) => {
   const {
     nestId, nestName, name, description, dockerImage, startup,
     configStop, scriptInstall, variables,
@@ -100,7 +100,7 @@ router.post('/', authenticate, requireAdmin, async (req: AuthRequest, res: Respo
 });
 
 // PUT /eggs/:id
-router.put('/:id', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.put('/:id', authenticate, requireAdmin, requireScope('eggs:write'), async (req: AuthRequest, res: Response) => {
   try {
     const egg = await prisma.egg.findUnique({ where: { id: req.params.id } });
     if (!egg) return res.status(404).json({ message: 'Egg not found' });
@@ -128,7 +128,7 @@ router.put('/:id', authenticate, requireAdmin, async (req: AuthRequest, res: Res
 });
 
 // DELETE /eggs/:id
-router.delete('/:id', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.delete('/:id', authenticate, requireAdmin, requireScope('eggs:write'), async (req: AuthRequest, res: Response) => {
   const egg = await prisma.egg.findUnique({ where: { id: req.params.id }, include: { _count: { select: { servers: true } } } });
   if (!egg) return res.status(404).json({ message: 'Egg not found' });
   if (egg._count.servers > 0) return res.status(400).json({ message: 'Cannot delete egg with active servers' });
@@ -137,7 +137,7 @@ router.delete('/:id', authenticate, requireAdmin, async (req: AuthRequest, res: 
 });
 
 // GET /eggs/:id
-router.get('/:id', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.get('/:id', authenticate, requireAdmin, requireScope('eggs:read'), async (req: AuthRequest, res: Response) => {
   const egg = await prisma.egg.findUnique({
     where: { id: req.params.id },
     include: {

@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { User, Lock, Key, ShieldCheck, Mail, ShieldAlert, ArrowRight } from 'lucide-react';
+import { User, Lock, ShieldCheck, ShieldAlert, ArrowRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import api from '@/lib/axios';
 import { useAuthStore } from '@/store/authStore';
@@ -27,23 +27,6 @@ export function AccountPage() {
   const [twoFaCode, setTwoFaCode] = useState('');
   const [twoFaDisableCode, setTwoFaDisableCode] = useState('');
   const [twoFaLoading, setTwoFaLoading] = useState(false);
-
-  // ── SMTP state ───────────────────────────────────────────────────────────────
-  const [smtpForm, setSmtpForm] = useState({ host: '', port: '587', user: '', pass: '', from: '' });
-  const [smtpLoading, setSmtpLoading] = useState(false);
-  const [smtpTesting, setSmtpTesting] = useState(false);
-
-  useEffect(() => {
-    api.get('/users/profile/smtp').then(({ data }) => {
-      setSmtpForm({
-        host: data.host || '',
-        port: String(data.port || 587),
-        user: data.user || '',
-        pass: '',
-        from: data.from || '',
-      });
-    }).catch(() => {});
-  }, []);
 
   const profileMutation = useMutation({
     mutationFn: (data: typeof profileForm) => api.patch('/users/profile/me', data),
@@ -126,32 +109,6 @@ export function AccountPage() {
       toast.error(error.response?.data?.message || 'Invalid code');
     } finally {
       setTwoFaLoading(false);
-    }
-  };
-
-  // ── SMTP handlers ─────────────────────────────────────────────────────────────
-  const saveSmtp = async () => {
-    setSmtpLoading(true);
-    try {
-      await api.put('/users/profile/smtp', smtpForm);
-      toast.success(t('account.smtpSaved'));
-    } catch {
-      toast.error(t('account.smtpSaveFailed'));
-    } finally {
-      setSmtpLoading(false);
-    }
-  };
-
-  const testSmtp = async () => {
-    setSmtpTesting(true);
-    try {
-      const { data } = await api.post('/users/profile/smtp/test');
-      toast.success(data.message || 'Test email sent');
-    } catch (err: unknown) {
-      const error = err as { response?: { data?: { message?: string } } };
-      toast.error(error.response?.data?.message || t('account.smtpTestFailed'));
-    } finally {
-      setSmtpTesting(false);
     }
   };
 
@@ -381,90 +338,6 @@ export function AccountPage() {
         </div>
       </div>
 
-      {/* SMTP Settings */}
-      <div className="card">
-        <div className="card-header flex items-center gap-2">
-          <Mail size={14} className="text-zinc-400" />
-          <h2 className="text-sm font-semibold text-zinc-100">{t('account.smtpSettings')}</h2>
-        </div>
-        <div className="p-6 space-y-4">
-          <p className="text-sm text-zinc-400">{t('account.smtpSub')}</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label">{t('account.smtpHost')}</label>
-              <input
-                className="input"
-                placeholder="smtp.example.com"
-                value={smtpForm.host}
-                onChange={e => setSmtpForm(f => ({ ...f, host: e.target.value }))}
-              />
-            </div>
-            <div>
-              <label className="label">{t('account.port')}</label>
-              <input
-                className="input"
-                placeholder="587"
-                value={smtpForm.port}
-                onChange={e => setSmtpForm(f => ({ ...f, port: e.target.value }))}
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label">{t('account.username')}</label>
-              <input
-                className="input"
-                placeholder="user@example.com"
-                value={smtpForm.user}
-                onChange={e => setSmtpForm(f => ({ ...f, user: e.target.value }))}
-              />
-            </div>
-            <div>
-              <label className="label">{t('login.password')}</label>
-              <input
-                type="password"
-                className="input"
-                placeholder="••••••••"
-                value={smtpForm.pass}
-                onChange={e => setSmtpForm(f => ({ ...f, pass: e.target.value }))}
-              />
-            </div>
-          </div>
-          <div>
-            <label className="label">{t('account.fromAddress')}</label>
-            <input
-              className="input"
-              placeholder="noreply@example.com"
-              value={smtpForm.from}
-              onChange={e => setSmtpForm(f => ({ ...f, from: e.target.value }))}
-            />
-          </div>
-          <div className="flex gap-2">
-            <button className="btn-primary btn-sm" onClick={saveSmtp} disabled={smtpLoading}>
-              {smtpLoading ? <Spinner size="sm" /> : t('account.saveSmtp')}
-            </button>
-            <button className="btn-secondary btn-sm" onClick={testSmtp} disabled={smtpTesting}>
-              {smtpTesting ? <Spinner size="sm" /> : t('account.sendTestEmail')}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* API Key section */}
-      <div className="card">
-        <div className="card-header flex items-center gap-2">
-          <Key size={14} className="text-zinc-400" />
-          <h2 className="text-sm font-semibold text-zinc-100">{t('account.apiKeys')}</h2>
-        </div>
-        <div className="card-body">
-          <p className="text-sm text-zinc-400 mb-3">
-            {t('account.apiKeysSub')}
-          </p>
-          <button className="btn-secondary btn-sm">
-            <Key size={14} /> {t('account.createApiKey')}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

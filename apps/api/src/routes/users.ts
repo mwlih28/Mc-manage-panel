@@ -3,7 +3,7 @@ import { body, validationResult } from 'express-validator';
 import bcrypt from 'bcryptjs';
 import rateLimit from 'express-rate-limit';
 import { prisma } from '../utils/prisma';
-import { authenticate, requireAdmin } from '../middleware/auth';
+import { authenticate, requireAdmin, requireScope } from '../middleware/auth';
 import { AuthRequest } from '../types';
 import { generateSecret, verify, generateURI } from 'otplib';
 import QRCode from 'qrcode';
@@ -21,7 +21,7 @@ const totpLimiter = rateLimit({
 });
 
 // GET /users - Admin only
-router.get('/', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.get('/', authenticate, requireAdmin, requireScope('users:read'), async (req: AuthRequest, res: Response) => {
   const page = parseInt(req.query.page as string) || 1;
   const perPage = parseInt(req.query.perPage as string) || 20;
   const search = req.query.search as string;
@@ -66,7 +66,7 @@ router.get('/', authenticate, requireAdmin, async (req: AuthRequest, res: Respon
 });
 
 // GET /users/:id
-router.get('/:id', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.get('/:id', authenticate, requireAdmin, requireScope('users:read'), async (req: AuthRequest, res: Response) => {
   const user = await prisma.user.findUnique({
     where: { id: req.params.id },
     select: {
@@ -96,6 +96,7 @@ router.post(
   '/',
   authenticate,
   requireAdmin,
+  requireScope('users:write'),
   [
     body('email').isEmail().normalizeEmail(),
     body('username').isLength({ min: 3, max: 20 }),
@@ -133,6 +134,7 @@ router.patch(
   '/:id',
   authenticate,
   requireAdmin,
+  requireScope('users:write'),
   async (req: AuthRequest, res: Response) => {
     const { firstName, lastName, email, role, rootAdmin, password } = req.body;
 
@@ -158,7 +160,7 @@ router.patch(
 );
 
 // DELETE /users/:id
-router.delete('/:id', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.delete('/:id', authenticate, requireAdmin, requireScope('users:write'), async (req: AuthRequest, res: Response) => {
   if (req.user!.id === req.params.id) {
     return res.status(400).json({ message: 'Cannot delete your own account' });
   }
@@ -248,54 +250,6 @@ router.delete('/profile/2fa', authenticate, totpLimiter, async (req: AuthRequest
 
   await prisma.user.update({ where: { id: user.id }, data: { twoFactor: false, twoFactorSecret: null } });
   return res.json({ message: '2FA disabled' });
-});
-
-// ── SMTP config ───────────────────────────────────────────────────────────────
-router.get('/profile/smtp', authenticate, async (req: AuthRequest, res: Response) => {
-  const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
-  if (!user) return res.status(404).json({ message: 'Not found' });
-  return res.json({
-    host: user.smtpHost ?? '',
-    port: user.smtpPort ?? 587,
-    user: user.smtpUser ?? '',
-    from: user.smtpFrom ?? '',
-    configured: !!user.smtpHost,
-  });
-});
-
-router.put('/profile/smtp', authenticate, async (req: AuthRequest, res: Response) => {
-  const { host, port, user: smtpUser, pass, from } = req.body;
-  const data: Record<string, unknown> = {};
-  if (host !== undefined) data.smtpHost = host || null;
-  if (port !== undefined) data.smtpPort = port ? Number(port) : null;
-  if (smtpUser !== undefined) data.smtpUser = smtpUser || null;
-  if (pass !== undefined && pass !== '') data.smtpPass = pass;
-  if (from !== undefined) data.smtpFrom = from || null;
-  await prisma.user.update({ where: { id: req.user!.id }, data });
-  return res.json({ message: 'SMTP settings saved' });
-});
-
-router.post('/profile/smtp/test', authenticate, async (req: AuthRequest, res: Response) => {
-  const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
-  if (!user?.smtpHost) return res.status(400).json({ message: 'SMTP not configured' });
-  try {
-    const nodemailer = await import('nodemailer');
-    const transporter = nodemailer.createTransport({
-      host: user.smtpHost,
-      port: user.smtpPort ?? 587,
-      secure: (user.smtpPort ?? 587) === 465,
-      auth: user.smtpUser && user.smtpPass ? { user: user.smtpUser, pass: user.smtpPass } : undefined,
-    });
-    await transporter.sendMail({
-      from: user.smtpFrom || user.smtpUser || 'noreply@example.com',
-      to: user.email,
-      subject: 'Kretase - SMTP Test',
-      text: 'Your SMTP configuration is working correctly.',
-    });
-    return res.json({ message: `Test email sent to ${user.email}` });
-  } catch (err) {
-    return res.status(500).json({ message: (err as Error).message });
-  }
 });
 
 export default router;

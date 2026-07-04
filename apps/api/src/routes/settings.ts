@@ -2,8 +2,16 @@ import { Router, Response } from 'express';
 import { prisma } from '../utils/prisma';
 import { authenticate, requireAdmin, optionalAuth } from '../middleware/auth';
 import { AuthRequest } from '../types';
+import { checkForUpdate } from '../services/updateCheck';
 
 const router = Router();
+
+// GET /settings/update-check — admin only. Compares the running panel
+// version against the latest published GitHub release.
+router.get('/update-check', authenticate, requireAdmin, async (_req: AuthRequest, res: Response) => {
+  const result = await checkForUpdate();
+  return res.json(result);
+});
 
 const DEFAULTS: Record<string, string> = {
   'app.name': 'Kretase',

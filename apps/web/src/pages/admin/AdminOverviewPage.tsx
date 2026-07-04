@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
-import { Users, Server, Cpu, Activity, CheckCircle, XCircle } from 'lucide-react';
+import { Users, Server, Cpu, Activity, CheckCircle, XCircle, Rocket, ExternalLink } from 'lucide-react';
 import api from '@/lib/axios';
 import { ActivityLog } from '@/types';
 import { formatRelativeTime } from '@/lib/utils';
 import { Spinner } from '@/components/ui/Spinner';
+import { useUpdateCheck } from '@/hooks/useUpdateCheck';
 
 export function AdminOverviewPage() {
   const { data, isLoading } = useQuery({
@@ -11,6 +12,7 @@ export function AdminOverviewPage() {
     queryFn: () => api.get('/stats').then((r) => r.data.data),
     refetchInterval: 10000,
   });
+  const { data: updateCheck } = useUpdateCheck();
 
   if (isLoading) return (
     <div className="flex justify-center py-20"><Spinner size="lg" /></div>
@@ -40,6 +42,33 @@ export function AdminOverviewPage() {
         <h1 className="text-2xl font-bold text-slate-100">Admin Overview</h1>
         <p className="text-slate-400 text-sm mt-1">Panel statistics and activity</p>
       </div>
+
+      {updateCheck?.updateAvailable && (
+        <div className="card p-4 flex items-center gap-3 border-panel-500/30 bg-panel-500/[0.06]">
+          <div className="w-9 h-9 rounded-lg shrink-0 flex items-center justify-center bg-panel-500/15 text-panel-400">
+            <Rocket size={18} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-white">
+              Update available — {updateCheck.latestVersion}
+            </p>
+            <p className="text-xs text-slate-400 mt-0.5">
+              You're running {updateCheck.currentVersion}. Update with{' '}
+              <code className="font-mono text-panel-300">bash &lt;(curl -fsSL https://get.kretase.com/update-panel)</code>
+            </p>
+          </div>
+          {updateCheck.releaseUrl && (
+            <a
+              href={updateCheck.releaseUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-secondary btn-sm shrink-0"
+            >
+              Changelog <ExternalLink size={12} />
+            </a>
+          )}
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

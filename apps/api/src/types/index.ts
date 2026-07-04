@@ -3,6 +3,11 @@ import { User } from '@prisma/client';
 
 export interface AuthRequest extends Request {
   user?: User;
+  // Set only when the request was authenticated via an admin API key
+  // (Authorization: Bearer kre_<identifier>.<secret>) instead of a normal
+  // session JWT. undefined for session-authenticated requests, which
+  // already carry full rights for their role and skip scope checks.
+  apiKeyScopes?: string[];
 }
 
 export interface JwtPayload {

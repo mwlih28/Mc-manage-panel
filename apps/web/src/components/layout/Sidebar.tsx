@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import api from '@/lib/axios';
 import toast from 'react-hot-toast';
 import { useQuery } from '@tanstack/react-query';
+import { useUpdateCheck } from '@/hooks/useUpdateCheck';
 
 // PANEL_VERSION is the release tag install/update-panel.sh resolved at
 // deploy time (e.g. "v1.2.0"), or "main" when running an untagged checkout
@@ -44,6 +45,7 @@ export function Sidebar() {
   // in sync with the actual release tag deployed — not a hardcoded string
   // that would silently go stale after every update.
   const panelVersion = settings?.['app.version'];
+  const { data: updateCheck } = useUpdateCheck();
 
   const handleLogout = async () => {
     try { await api.post('/auth/logout'); } catch { /* ignore */ }
@@ -129,7 +131,11 @@ export function Sidebar() {
                 >
                   <Shield size={14} />
                   <span>{t('sidebar.adminPanel')}</span>
-                  <span className="ml-auto text-[9px] text-zinc-700">↗</span>
+                  {updateCheck?.updateAvailable ? (
+                    <span className="ml-auto h-1.5 w-1.5 rounded-full bg-panel-400 animate-pulse" title={`Update available: ${updateCheck.latestVersion}`} />
+                  ) : (
+                    <span className="ml-auto text-[9px] text-zinc-700">↗</span>
+                  )}
                 </a>
               </li>
             </ul>

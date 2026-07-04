@@ -25,8 +25,8 @@ const authLimiter = rateLimit({
 });
 
 function safeUser(user: Record<string, unknown>) {
-  const { password, twoFactorSecret, smtpPass, ...rest } = user;
-  void password; void twoFactorSecret; void smtpPass;
+  const { password, twoFactorSecret, ...rest } = user;
+  void password; void twoFactorSecret;
   return rest;
 }
 

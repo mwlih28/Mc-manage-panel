@@ -3,7 +3,7 @@ import { body, validationResult } from 'express-validator';
 import { v4 as uuidv4 } from 'uuid';
 import axios from 'axios';
 import { prisma } from '../utils/prisma';
-import { authenticate, requireAdmin } from '../middleware/auth';
+import { authenticate, requireAdmin, requireScope } from '../middleware/auth';
 import { AuthRequest } from '../types';
 import { sendPowerAction, sendCommand as wingsSendCommand, createServerOnNode, getServerResources, buildWingsConfig } from '../services/wingsClient';
 import { fetchPaperVersions, fetchPaperBuildDetails } from '../services/paperApi';
@@ -51,7 +51,7 @@ function hasPathTraversal(value: unknown): boolean {
 }
 
 // GET /servers - Admin sees all, user sees own
-router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/', authenticate, requireScope('servers:read'), async (req: AuthRequest, res: Response) => {
   const page = parseInt(req.query.page as string) || 1;
   const perPage = parseInt(req.query.perPage as string) || 20;
   const search = req.query.search as string;
@@ -90,7 +90,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
 });
 
 // GET /servers/:id
-router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:id', authenticate, requireScope('servers:read'), async (req: AuthRequest, res: Response) => {
   const isAdmin = req.user!.role === 'ADMIN';
 
   const server = await prisma.server.findFirst({
@@ -116,6 +116,7 @@ router.post(
   '/',
   authenticate,
   requireAdmin,
+  requireScope('servers:write'),
   [
     body('name').notEmpty().trim(),
     body('userId').notEmpty(),
@@ -272,7 +273,7 @@ router.post(
 );
 
 // PATCH /servers/:id
-router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
+router.patch('/:id', authenticate, requireScope('servers:write'), async (req: AuthRequest, res: Response) => {
   const isAdmin = req.user!.role === 'ADMIN';
 
   const server = await prisma.server.findFirst({
@@ -913,7 +914,7 @@ router.post('/:id/clone', authenticate, requireAdmin, async (req: AuthRequest, r
 });
 
 // DELETE /servers/:id
-router.delete('/:id', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.delete('/:id', authenticate, requireAdmin, requireScope('servers:write'), async (req: AuthRequest, res: Response) => {
   const server = await prisma.server.findUnique({ where: { id: req.params.id } });
   if (!server) return res.status(404).json({ message: 'Server not found' });
 
