@@ -13,6 +13,8 @@ Server migration & cloning, one-click modpack installs, crash auto-restart, auto
 ![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen)
 ![Stars](https://img.shields.io/github/stars/mwlih28/mc-manage-panel?style=flat)
 ![Last Commit](https://img.shields.io/github/last-commit/mwlih28/mc-manage-panel)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13482/badge)](https://www.bestpractices.dev/projects/13482)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/mwlih28/Mc-manage-panel/badge)](https://securityscorecards.dev/viewer/?uri=github.com/mwlih28/Mc-manage-panel)
 
 > 🔥 **Real-world performance:** a Minecraft 1.20.1 server with simulation-distance 32 runs smoothly on just **1 CPU core and 1.5GB RAM** — Aikar's JVM flags and Kretase's built-in auto-optimization do the heavy lifting out of the box.
 
