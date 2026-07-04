@@ -16,12 +16,21 @@ warn()    { echo -e "  ${YELLOW}⚠${NC} $*"; }
 error()   { echo -e "\n  ${RED}✖ ERROR:${NC} $*\n" >&2; exit 1; }
 step()    { echo -e "\n${BOLD}${BLUE}┌─ $* ${NC}"; }
 
-PANEL_DIR="/var/www/kretase"
-PANEL_USER="mcpanel"
+PANEL_DIR="${PANEL_DIR:-/var/www/kretase}"
+PANEL_USER="${PANEL_USER:-mcpanel}"
+PANEL_SERVICE="${PANEL_SERVICE:-kretase}"
 DB_NAME="mcpanel"
 DB_USER="mcpanel"
 
 [[ $EUID -ne 0 ]] && error "Run as root: sudo bash $0"
+
+# Installs from before the Kretase rebrand used /var/www/mc-panel and a
+# "mc-panel" systemd service instead of today's defaults.
+if [[ ! -d "${PANEL_DIR}/.git" && -d "/var/www/mc-panel/.git" ]]; then
+  PANEL_DIR="/var/www/mc-panel"
+  [[ "$PANEL_SERVICE" == "kretase" ]] && PANEL_SERVICE="mc-panel"
+  info "Detected a pre-rebrand install — using ${PANEL_DIR} (service: ${PANEL_SERVICE})"
+fi
 
 echo -e "\n${BOLD}"
 echo "  ╔═══════════════════════════════════════════════════╗"
@@ -40,9 +49,9 @@ read -rp "  Are you sure you want to uninstall? Type 'yes' to confirm: " CONFIRM
 
 # ── Stop & remove systemd service ────────────────────────────────────
 step "Removing systemd service"
-systemctl stop kretase 2>/dev/null || true
-systemctl disable kretase 2>/dev/null || true
-rm -f /etc/systemd/system/kretase.service
+systemctl stop "$PANEL_SERVICE" 2>/dev/null || true
+systemctl disable "$PANEL_SERVICE" 2>/dev/null || true
+rm -f "/etc/systemd/system/${PANEL_SERVICE}.service"
 systemctl daemon-reload
 success "Service removed"
 

@@ -16,8 +16,9 @@ warn()    { echo -e "  ${YELLOW}⚠${NC} $*"; }
 error()   { echo -e "\n  ${RED}✖ ERROR:${NC} $*\n" >&2; exit 1; }
 step()    { echo -e "\n${BOLD}${BLUE}┌─ $* ${NC}"; }
 
-PANEL_DIR="/var/www/kretase"
-PANEL_USER="mcpanel"
+PANEL_DIR="${PANEL_DIR:-/var/www/kretase}"
+PANEL_USER="${PANEL_USER:-mcpanel}"
+PANEL_SERVICE="${PANEL_SERVICE:-kretase}"
 REPO_API="https://api.github.com/repos/mwlih28/mc-manage-panel"
 BRANCH="main"
 LOGFILE="/var/log/kretase-update.log"
@@ -41,7 +42,18 @@ echo "  ╚═══════════════════════
 echo -e "${NC}"
 
 [[ $EUID -ne 0 ]] && error "Run as root: sudo bash $0"
-[[ -d "${PANEL_DIR}/.git" ]] || error "Panel not found at ${PANEL_DIR}. Run the installer first."
+
+# Installs from before the Kretase rebrand used /var/www/mc-panel and a
+# "mc-panel" systemd service instead of today's defaults. Auto-detect so
+# those installs can still update via this same script, without needing
+# PANEL_DIR/PANEL_SERVICE set manually.
+if [[ ! -d "${PANEL_DIR}/.git" && -d "/var/www/mc-panel/.git" ]]; then
+  PANEL_DIR="/var/www/mc-panel"
+  [[ "$PANEL_SERVICE" == "kretase" ]] && PANEL_SERVICE="mc-panel"
+  info "Detected a pre-rebrand install — using ${PANEL_DIR} (service: ${PANEL_SERVICE})"
+fi
+
+[[ -d "${PANEL_DIR}/.git" ]] || error "Panel not found at ${PANEL_DIR}. Run the installer first, or set PANEL_DIR=/your/path before running this script."
 [[ -f "${PANEL_DIR}/apps/api/.env" ]] || error ".env not found — panel may not be properly installed."
 
 PRISMA_BIN="${PANEL_DIR}/node_modules/.bin/prisma"
@@ -132,7 +144,7 @@ success "Schema up to date"
 step "Restarting service"
 chown -R "${PANEL_USER}:${PANEL_USER}" "$PANEL_DIR"
 chmod 750 "${PANEL_DIR}/apps/api/dist"
-systemctl restart kretase
+systemctl restart "$PANEL_SERVICE"
 
 # Wait for API (up to 20s)
 API_READY=false
@@ -142,7 +154,7 @@ for i in {1..20}; do
   fi
   sleep 1
 done
-$API_READY && success "API is up" || warn "API health check failed — check: journalctl -u kretase -n 50"
+$API_READY && success "API is up" || warn "API health check failed — check: journalctl -u ${PANEL_SERVICE} -n 50"
 
 echo ""
 echo -e "${GREEN}${BOLD}"
@@ -154,7 +166,7 @@ echo -e "  ${BOLD}Updated:${NC}   ${CURRENT_COMMIT} → ${NEW_COMMIT}"
 echo -e "  ${BOLD}DB backup:${NC} ${BACKUP_FILE}"
 echo -e "  ${BOLD}Log:${NC}       ${LOGFILE}"
 echo ""
-echo -e "  ${BOLD}Service:${NC}   systemctl status kretase"
+echo -e "  ${BOLD}Service:${NC}   systemctl status ${PANEL_SERVICE}"
 echo ""
 echo -e "  ${YELLOW}Reminder:${NC} panel updates sometimes add new Wings routes/features."
 echo -e "  Run this on each node too: ${CYAN}bash <(curl -fsSL https://get.kretase.com/update-wings)${NC}"
