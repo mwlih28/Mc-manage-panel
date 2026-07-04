@@ -15,6 +15,7 @@ import fs from 'fs';
 import path from 'path';
 import cors from 'cors';
 import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import compression from 'compression';
@@ -54,9 +55,45 @@ const httpServer = http.createServer(app);
 const PORT = parseInt(process.env.PORT || '3001', 10);
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
 
+// We always run behind the nginx reverse proxy in production. Without this,
+// Express sees every request as coming from nginx's own IP (127.0.0.1) —
+// req.ip is wrong for every login/audit-log entry, and express-rate-limit
+// throttles the whole site as a single client instead of per real visitor.
+app.set('trust proxy', 1);
+
 // Security & middleware
-app.use(helmet({ contentSecurityPolicy: false }));
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      // React is bundled with no inline <script>, so no 'unsafe-inline' needed here.
+      scriptSrc: ["'self'"],
+      // Tailwind's compiled CSS is a single stylesheet, but React sets some
+      // inline style attributes at runtime — style-src-attr covers those
+      // without weakening script-src.
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+      // Admin-set panel logo can be any external URL.
+      imgSrc: ["'self'", 'data:', 'https:'],
+      // Browser only ever talks to this same origin (REST + WebSocket) —
+      // tightened so a successful XSS can't exfiltrate data to arbitrary hosts.
+      connectSrc: ["'self'", 'wss:'],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      frameAncestors: ["'none'"],
+    },
+  },
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
 app.use(compression());
+// Coarse, app-wide backstop — the auth/2FA/public routes already have their
+// own tighter, endpoint-specific limiters for brute-force protection.
+app.use(rateLimit({
+  windowMs: 60 * 1000,
+  limit: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+}));
 app.use(cors({
   origin: CORS_ORIGIN,
   credentials: true,

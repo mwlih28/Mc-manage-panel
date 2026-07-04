@@ -535,6 +535,23 @@ fi
 
 # ── Nginx ─────────────────────────────────────────────────────────────
 step "Configuring Nginx"
+
+# Security headers for the pages nginx serves directly (index.html, JS/CSS
+# bundles). The API process sets its own equivalent headers via helmet for
+# /api/ responses, but those never touch the static HTML — this snippet is
+# what actually protects the rendered panel page. HSTS is safe to send even
+# before certbot adds HTTPS: browsers ignore Strict-Transport-Security on
+# plain-HTTP responses per spec, so it does nothing until the cert exists.
+mkdir -p /etc/nginx/snippets
+cat > /etc/nginx/snippets/kretase-security.conf <<'SNIPPET'
+add_header X-Content-Type-Options "nosniff" always;
+add_header X-Frame-Options "DENY" always;
+add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+add_header Strict-Transport-Security "max-age=15552000; includeSubDomains" always;
+add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' wss:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'" always;
+SNIPPET
+
 cat > /etc/nginx/sites-available/kretase <<NGINX
 server {
     listen 80;
@@ -555,11 +572,13 @@ server {
     location / {
         try_files \$uri \$uri/ /index.html;
         add_header Cache-Control "no-cache, no-store, must-revalidate";
+        include /etc/nginx/snippets/kretase-security.conf;
     }
 
     location /assets/ {
         expires 1y;
         add_header Cache-Control "public, immutable";
+        include /etc/nginx/snippets/kretase-security.conf;
     }
 
     location /api/ {

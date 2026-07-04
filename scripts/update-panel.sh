@@ -156,6 +156,30 @@ for i in {1..20}; do
 done
 $API_READY && success "API is up" || warn "API health check failed — check: journalctl -u ${PANEL_SERVICE} -n 50"
 
+# ── Nginx security headers ─────────────────────────────────────────────
+# Refreshes the shared header snippet on every update (new installs get it
+# via install-panel.sh already). We only rewrite this standalone snippet
+# file — never the site config itself, since that's often hand-edited or
+# certbot-modified and a blind rewrite here previously caused a real outage.
+if command -v nginx >/dev/null 2>&1; then
+  step "Nginx security headers"
+  mkdir -p /etc/nginx/snippets
+  cat > /etc/nginx/snippets/kretase-security.conf <<'SNIPPET'
+add_header X-Content-Type-Options "nosniff" always;
+add_header X-Frame-Options "DENY" always;
+add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+add_header Strict-Transport-Security "max-age=15552000; includeSubDomains" always;
+add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' wss:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'" always;
+SNIPPET
+  if grep -rq "kretase-security.conf" /etc/nginx/sites-available/ 2>/dev/null; then
+    nginx -t && systemctl reload nginx && success "Security headers refreshed"
+  else
+    warn "Site config doesn't include the security headers snippet yet. Add this line inside your 'location /' and 'location /assets/' blocks in /etc/nginx/sites-available/${PANEL_SERVICE}, then run: nginx -t && systemctl reload nginx"
+    echo -e "      ${CYAN}include /etc/nginx/snippets/kretase-security.conf;${NC}"
+  fi
+fi
+
 echo ""
 echo -e "${GREEN}${BOLD}"
 echo "  ╔═══════════════════════════════════════════════════╗"
