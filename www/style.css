@@ -593,6 +593,22 @@ nav.scrolled {
 
 .feat-card p { font-size: 14px; color: var(--muted); line-height: 1.65; }
 
+.security-badges {
+  margin-top: 48px;
+  padding-top: 40px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+.security-badges p { font-size: 14px; color: var(--muted); margin-bottom: 16px; }
+.security-badges-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.security-badges-row img { display: block; border-radius: 4px; }
+
 .feat-demo.console-demo {
   background: #0d1117;
   border: 1px solid var(--border);

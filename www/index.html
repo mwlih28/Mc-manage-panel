@@ -28,6 +28,7 @@
         <a href="#about">About</a>
         <a href="#features">Features</a>
         <a href="#how-it-works">How it works</a>
+        <a href="#security">Security</a>
         <a href="#community">Community</a>
         <a href="https://github.com/mwlih28/mc-manage-panel" target="_blank">Docs</a>
       </div>
@@ -46,6 +47,7 @@
       <a href="#about">About</a>
       <a href="#features">Features</a>
       <a href="#how-it-works">How it works</a>
+      <a href="#security">Security</a>
       <a href="#community">Community</a>
       <a href="https://github.com/mwlih28/mc-manage-panel" target="_blank">Docs</a>
       <a href="https://github.com/mwlih28/mc-manage-panel" target="_blank">GitHub</a>
@@ -473,6 +475,68 @@
             </div>
           </div>
         </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECURITY -->
+  <section class="section section-alt" id="security">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-tag">Security</div>
+        <h2>Security isn't a checkbox —<br/>it's built in</h2>
+        <p class="section-sub">No paid audit badge to point at yet — we're a young project. What we do have is real, verifiable engineering: automated scanning on every commit, and a public track record you can check yourself.</p>
+      </div>
+      <div class="features-grid">
+        <div class="feat-card">
+          <div class="feat-icon-wrap rose">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </div>
+          <h3>Encrypted Passwords</h3>
+          <p>Every password and API key secret is hashed with bcrypt (cost factor 12) — never stored, logged, or transmitted in plain text.</p>
+        </div>
+        <div class="feat-card">
+          <div class="feat-icon-wrap indigo">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><circle cx="12" cy="16" r="1.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+          </div>
+          <h3>Two-Factor Authentication</h3>
+          <p>Optional TOTP-based 2FA on every account, checked with any standard authenticator app.</p>
+        </div>
+        <div class="feat-card">
+          <div class="feat-icon-wrap amber">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+          </div>
+          <h3>Scoped API Keys</h3>
+          <p>Admin-only, least-privilege API keys with per-key permissions and expiry — never one all-powerful token.</p>
+        </div>
+        <div class="feat-card">
+          <div class="feat-icon-wrap teal">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7v6c0 5.55 3.84 10.74 10 12 6.16-1.26 10-6.45 10-12V7l-10-5z"/><path d="M9 12l2 2 4-4"/></svg>
+          </div>
+          <h3>Hardened by Default</h3>
+          <p>Content-Security-Policy, HSTS, and rate-limited login/2FA endpoints ship out of the box — no config needed.</p>
+        </div>
+        <div class="feat-card">
+          <div class="feat-icon-wrap sky">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/><path d="M8 11l2 2 4-4"/></svg>
+          </div>
+          <h3>Automated Vulnerability Scanning</h3>
+          <p>CodeQL static analysis and Dependabot dependency alerts run on every commit — not just before a release.</p>
+        </div>
+        <div class="feat-card">
+          <div class="feat-icon-wrap purple">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          </div>
+          <h3>Public Disclosure Process</h3>
+          <p>Found a bug? Report it privately via GitHub Security Advisories — see <a href="https://github.com/mwlih28/mc-manage-panel/blob/main/SECURITY.md" target="_blank" style="color:inherit;text-decoration:underline">SECURITY.md</a> for the full process.</p>
+        </div>
+      </div>
+      <div class="security-badges">
+        <p>Independently verified — click through to see the live, third-party results:</p>
+        <div class="security-badges-row">
+          <a href="https://www.bestpractices.dev/projects/13482" target="_blank"><img src="https://www.bestpractices.dev/projects/13482/badge" alt="OpenSSF Best Practices badge" height="20" /></a>
+          <a href="https://securityscorecards.dev/viewer/?uri=github.com/mwlih28/Mc-manage-panel" target="_blank"><img src="https://api.securityscorecards.dev/projects/github.com/mwlih28/Mc-manage-panel/badge" alt="OpenSSF Scorecard badge" height="20" /></a>
+        </div>
       </div>
     </div>
   </section>
