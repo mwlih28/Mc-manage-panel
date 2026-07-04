@@ -873,12 +873,12 @@ export function ServerDetailPage() {
       </div>
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="relative">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="relative shrink-0">
             <div className={`h-3 w-3 rounded-full ${getServerStatusDot(currentStatus)}`} />
           </div>
-          <div>
+          <div className="min-w-0">
             <h1 className="text-xl font-bold text-slate-100">{data.name}</h1>
             <div className="flex items-center gap-2 mt-0.5 flex-wrap">
               <span className="text-xs font-mono text-slate-500">{data.uuidShort}</span>
@@ -912,7 +912,7 @@ export function ServerDetailPage() {
         </div>
 
         {/* Power controls */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
           <button
             className="btn-success btn-sm"
             onClick={() => sendPower('start')}

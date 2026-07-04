@@ -149,7 +149,7 @@ export function AccountPage() {
         <div className="card-body">
           {/* Avatar */}
           <div className="flex items-center gap-4 mb-6">
-            <div className="h-14 w-14 rounded-xl bg-white/[0.06] border border-white/[0.08] flex items-center justify-center text-white text-xl font-bold">
+            <div className="h-14 w-14 rounded-xl bg-panel-500/15 border border-panel-500/25 flex items-center justify-center text-panel-300 text-xl font-bold">
               {user?.firstName?.[0]}{user?.lastName?.[0]}
             </div>
             <div>

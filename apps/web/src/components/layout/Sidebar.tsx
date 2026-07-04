@@ -149,7 +149,7 @@ export function Sidebar() {
           className="flex items-center gap-2.5 px-3 py-2 rounded-lg cursor-pointer transition-colors hover:bg-white/[0.04]"
           onClick={() => navigate('/account')}
         >
-          <div className="h-7 w-7 rounded-full bg-white/[0.08] border border-white/[0.08] flex items-center justify-center text-white text-[10px] font-bold shrink-0">
+          <div className="h-7 w-7 rounded-full bg-panel-500/15 border border-panel-500/25 flex items-center justify-center text-panel-300 text-[10px] font-bold shrink-0">
             {user?.firstName?.[0]}{user?.lastName?.[0]}
           </div>
           <div className="flex-1 min-w-0">

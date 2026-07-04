@@ -91,8 +91,8 @@ export function LoginPage() {
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center p-4"
-      style={{ background: '#0a0a0c' }}
+      className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden"
+      style={{ background: '#0B0C0E' }}
     >
       {/* Subtle grid */}
       <div
@@ -100,6 +100,17 @@ export function LoginPage() {
         style={{
           backgroundImage: 'linear-gradient(#fff 1px,transparent 1px),linear-gradient(90deg,#fff 1px,transparent 1px)',
           backgroundSize: '48px 48px',
+        }}
+      />
+
+      {/* Soft accent glow anchored behind the card — gives the page a focal
+          point instead of a flat card floating in empty space. */}
+      <div
+        className="absolute pointer-events-none"
+        style={{
+          width: 720, height: 720,
+          background: 'radial-gradient(circle, rgba(34,168,120,0.16) 0%, rgba(34,168,120,0) 70%)',
+          top: '50%', left: '50%', transform: 'translate(-50%, -55%)',
         }}
       />
 
@@ -112,7 +123,7 @@ export function LoginPage() {
         </div>
 
         {/* Card */}
-        <div className="rounded-2xl p-8" style={{ background: '#111113', border: '1px solid #1e1e22' }}>
+        <div className="rounded-2xl p-8" style={{ background: 'rgba(19,20,23,0.9)', border: '1px solid #1C1E22', backdropFilter: 'blur(8px)', boxShadow: '0 24px 60px -20px rgba(0,0,0,0.5)' }}>
           {!requiresTwoFactor ? (
             <>
               <h2 className="text-sm font-semibold text-zinc-200 mb-6">{t('login.signInTitle')}</h2>
