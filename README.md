@@ -56,7 +56,7 @@ Pterodactyl is a great project, but it comes with real tradeoffs. Here's where t
 ### 1 — Install the Panel (on your panel server)
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/install-panel.sh)
+bash <(curl -fsSL https://get.kretase.com/panel)
 ```
 
 The script will ask for:
@@ -71,7 +71,7 @@ After it finishes, open your domain in a browser and sign in.
 Run this on **every server** that will host game servers:
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/install-wings.sh)
+bash <(curl -fsSL https://get.kretase.com/wings)
 ```
 
 The script will ask for:
@@ -172,10 +172,10 @@ The **Panel** is the web UI + API, installed once.
 
 ```bash
 # On the panel server:
-bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/update-panel.sh)
+bash <(curl -fsSL https://get.kretase.com/update-panel)
 
 # On each Wings node:
-bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/update-wings.sh)
+bash <(curl -fsSL https://get.kretase.com/update-wings)
 ```
 
 Both scripts back up what needs backing up, pull the latest code, rebuild, and restart — your `.env`, `config.yml`, and database are left untouched. Run the Wings updater on every node after updating the panel, since panel releases sometimes ship new Wings-side functionality.

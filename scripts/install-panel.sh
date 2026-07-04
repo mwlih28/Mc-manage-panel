@@ -3,7 +3,7 @@
 # Supported: Ubuntu 20.04 / 22.04 / 24.04, Debian 11 / 12
 #
 # One-liner install:
-#   bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/install-panel.sh)
+#   bash <(curl -fsSL https://get.kretase.com/panel)
 
 set -euo pipefail
 
@@ -722,15 +722,15 @@ echo "    systemctl restart kretase"
 echo "    journalctl -u kretase -f"
 echo ""
 echo -e "  ${BOLD}Management:${NC}"
-echo -e "  Update panel:    ${CYAN}bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/update-panel.sh)${NC}"
-echo -e "  Update Wings:    ${CYAN}bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/update-wings.sh)${NC}  (run on each node)"
-echo -e "  Uninstall panel: ${CYAN}bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/uninstall-panel.sh)${NC}"
+echo -e "  Update panel:    ${CYAN}bash <(curl -fsSL https://get.kretase.com/update-panel)${NC}"
+echo -e "  Update Wings:    ${CYAN}bash <(curl -fsSL https://get.kretase.com/update-wings)${NC}  (run on each node)"
+echo -e "  Uninstall panel: ${CYAN}bash <(curl -fsSL https://get.kretase.com/uninstall-panel)${NC}"
 echo ""
 echo -e "  ${BOLD}Next steps:${NC}"
 echo "  1. Open ${SCHEME}://${PANEL_DOMAIN} and sign in"
 echo "  2. Admin → Nodes → New Node (add a game server)"
 echo "  3. On each game server run:"
 echo ""
-echo -e "  ${CYAN}bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/install-wings.sh)${NC}"
+echo -e "  ${CYAN}bash <(curl -fsSL https://get.kretase.com/wings)${NC}"
 echo ""
 echo "──── Install finished: $(date) ────"

@@ -3,7 +3,7 @@
 # Supported: Ubuntu 20.04 / 22.04 / 24.04, Debian 11 / 12
 #
 # One-liner install:
-#   bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/install-wings.sh)
+#   bash <(curl -fsSL https://get.kretase.com/wings)
 #
 # Run this on each GAME SERVER (node) — NOT on your panel server.
 
@@ -444,7 +444,7 @@ echo "    systemctl restart mc-wings"
 echo "    journalctl -u mc-wings -f"
 echo ""
 echo -e "  ${BOLD}Update Wings later:${NC}"
-echo -e "  ${CYAN}bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/update-wings.sh)${NC}"
+echo -e "  ${CYAN}bash <(curl -fsSL https://get.kretase.com/update-wings)${NC}"
 echo ""
 echo -e "  ${BOLD}Next steps in your panel:${NC}"
 echo "  1. Go to Admin → Nodes → your node → Edit"

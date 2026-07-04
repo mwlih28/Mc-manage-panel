@@ -3,7 +3,7 @@
 # Removes the panel cleanly. Optionally keeps or drops the database.
 #
 # Usage:
-#   bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/uninstall-panel.sh)
+#   bash <(curl -fsSL https://get.kretase.com/uninstall-panel)
 
 set -euo pipefail
 
@@ -96,5 +96,5 @@ if [[ "${KEEP_DB,,}" != "n" ]]; then
 fi
 echo ""
 echo "  To reinstall:"
-echo -e "  ${CYAN}bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/install-panel.sh)${NC}"
+echo -e "  ${CYAN}bash <(curl -fsSL https://get.kretase.com/panel)${NC}"
 echo ""

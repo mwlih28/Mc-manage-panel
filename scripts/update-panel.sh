@@ -3,7 +3,7 @@
 # Updates code, rebuilds, restarts — does NOT touch database data or .env
 #
 # Usage:
-#   bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/update-panel.sh)
+#   bash <(curl -fsSL https://get.kretase.com/update-panel)
 
 set -euo pipefail
 
@@ -157,6 +157,6 @@ echo ""
 echo -e "  ${BOLD}Service:${NC}   systemctl status kretase"
 echo ""
 echo -e "  ${YELLOW}Reminder:${NC} panel updates sometimes add new Wings routes/features."
-echo -e "  Run this on each node too: ${CYAN}bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/update-wings.sh)${NC}"
+echo -e "  Run this on each node too: ${CYAN}bash <(curl -fsSL https://get.kretase.com/update-wings)${NC}"
 echo ""
 echo "──── Update finished: $(date) ────"

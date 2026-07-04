@@ -3,7 +3,7 @@
 # Updates Wings code, rebuilds, restarts. Config (config.yml) is untouched.
 #
 # Usage:
-#   bash <(curl -fsSL https://raw.githubusercontent.com/mwlih28/mc-manage-panel/main/scripts/update-wings.sh)
+#   bash <(curl -fsSL https://get.kretase.com/update-wings)
 #
 # Run this on each GAME SERVER (node) running Wings.
 

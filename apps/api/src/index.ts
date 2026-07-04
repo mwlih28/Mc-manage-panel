@@ -90,6 +90,7 @@ app.get('/panel', serveInstallScript('install-panel.sh'));
 app.get('/wings', serveInstallScript('install-wings.sh'));
 app.get('/update-panel', serveInstallScript('update-panel.sh'));
 app.get('/update-wings', serveInstallScript('update-wings.sh'));
+app.get('/uninstall-panel', serveInstallScript('uninstall-panel.sh'));
 
 // Templates endpoint
 import serverTemplates from './data/serverTemplates.json';
