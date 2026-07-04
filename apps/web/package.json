@@ -1,6 +1,7 @@
 {
   "name": "@mc-panel/web",
   "version": "1.2.0",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "scripts": {
