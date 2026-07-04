@@ -158,11 +158,13 @@ router.post(
     try {
       server = await prisma.$transaction(async (tx) => {
         let finalAllocationId = allocationId;
+        let finalPort: number;
         if (finalAllocationId) {
           const requested = await tx.allocation.findUnique({ where: { id: finalAllocationId } });
           if (!requested) throw new Error('ALLOCATION_NOT_FOUND');
           if (requested.assigned) throw new Error('ALLOCATION_IN_USE');
           await tx.allocation.update({ where: { id: finalAllocationId }, data: { assigned: true } });
+          finalPort = requested.port;
         } else {
           const freeAlloc = await tx.allocation.findFirst({
             where: { nodeId, assigned: false },
@@ -171,6 +173,7 @@ router.post(
           if (freeAlloc) {
             await tx.allocation.update({ where: { id: freeAlloc.id }, data: { assigned: true } });
             finalAllocationId = freeAlloc.id;
+            finalPort = freeAlloc.port;
           } else {
             // Auto-generate the next available port starting from 25565
             const highest = await tx.allocation.findFirst({
@@ -184,6 +187,7 @@ router.post(
               data: { nodeId, ip: nodeRecord?.fqdn || '0.0.0.0', port: nextPort, assigned: true },
             });
             finalAllocationId = created.id;
+            finalPort = created.port;
           }
         }
 
@@ -204,8 +208,18 @@ router.post(
               // Always seed the two variables the JVM startup template depends on
               SERVER_MEMORY: String(parseInt(memory)),
               SERVER_JARFILE: 'server.jar',
+              // Unique-per-server identity string some non-Minecraft eggs
+              // (e.g. Rust) use for their save-folder name — a shared/blank
+              // default would make multiple servers collide.
+              SERVER_IDENT: generateShortUuid(),
               ...Object.fromEntries((egg.variables || []).map(v => [v.envVariable, v.defaultValue])),
               ...(env || {}),
+              // Forced last and never overridable: Docker's port binding and
+              // every egg's startup command must agree with the port this
+              // server was actually allocated, never a guessed/stale value.
+              SERVER_PORT: String(finalPort),
+              QUERY_PORT: String(finalPort + 1),
+              RCON_PORT: String(finalPort + 2),
             }),
             databaseLimit: parseInt(databaseLimit) || 0,
             allocationLimit: parseInt(allocationLimit) || 0,
@@ -382,6 +396,7 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     // Allocation change — claim the new allocation and free the old one
     // atomically so a concurrent request can't grab the same port in between.
     if (allocationId && allocationId !== server.allocationId) {
+      let newAllocPort = 0;
       try {
         await prisma.$transaction(async (tx) => {
           const newAlloc = await tx.allocation.findUnique({ where: { id: allocationId } });
@@ -391,6 +406,7 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
             await tx.allocation.update({ where: { id: server.allocationId }, data: { assigned: false } });
           }
           await tx.allocation.update({ where: { id: allocationId }, data: { assigned: true } });
+          newAllocPort = newAlloc.port;
         });
       } catch (err) {
         const msg = (err as Error).message;
@@ -399,6 +415,16 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
         throw err;
       }
       updateData.allocationId = allocationId;
+
+      // Keep the env-derived ports in sync — Docker's port binding and the
+      // egg's startup command both read these, so a stale value here would
+      // silently keep the server listening on its old port.
+      let currentEnv: Record<string, string> = {};
+      try { currentEnv = JSON.parse(server.env as string) || {}; } catch { /* start fresh */ }
+      currentEnv.SERVER_PORT = String(newAllocPort);
+      currentEnv.QUERY_PORT = String(newAllocPort + 1);
+      currentEnv.RCON_PORT = String(newAllocPort + 2);
+      updateData.env = JSON.stringify(currentEnv);
     }
   }
 
@@ -614,6 +640,7 @@ router.post('/:id/migrate', authenticate, requireAdmin, async (req: AuthRequest,
   if (!targetNode) return res.status(422).json({ message: 'Target node not found' });
 
   let finalAllocationId: string;
+  let finalPort = 0;
   try {
     finalAllocationId = await prisma.$transaction(async (tx) => {
       if (allocationId) {
@@ -621,6 +648,7 @@ router.post('/:id/migrate', authenticate, requireAdmin, async (req: AuthRequest,
         if (!requested || requested.nodeId !== targetNodeId) throw new Error('ALLOCATION_INVALID');
         if (requested.assigned) throw new Error('ALLOCATION_IN_USE');
         await tx.allocation.update({ where: { id: allocationId }, data: { assigned: true } });
+        finalPort = requested.port;
         return allocationId;
       }
       const freeAlloc = await tx.allocation.findFirst({
@@ -629,6 +657,7 @@ router.post('/:id/migrate', authenticate, requireAdmin, async (req: AuthRequest,
       });
       if (!freeAlloc) throw new Error('NO_FREE_ALLOCATION');
       await tx.allocation.update({ where: { id: freeAlloc.id }, data: { assigned: true } });
+      finalPort = freeAlloc.port;
       return freeAlloc.id;
     });
   } catch (err) {
@@ -638,6 +667,17 @@ router.post('/:id/migrate', authenticate, requireAdmin, async (req: AuthRequest,
     if (msg === 'ALLOCATION_INVALID') return res.status(422).json({ message: 'Allocation does not belong to the target node' });
     throw err;
   }
+
+  // The target allocation's port may differ from the source's — keep the
+  // env-derived ports (which Docker's binding and the egg's startup command
+  // both read) in sync, or the migrated server would keep listening on its
+  // old port number after landing on a new one.
+  let migratedEnv: Record<string, string> = {};
+  try { migratedEnv = JSON.parse(server.env as string) || {}; } catch { /* start fresh */ }
+  migratedEnv.SERVER_PORT = String(finalPort);
+  migratedEnv.QUERY_PORT = String(finalPort + 1);
+  migratedEnv.RCON_PORT = String(finalPort + 2);
+  const migratedEnvJson = JSON.stringify(migratedEnv);
 
   const sourceNode = server.node;
   const oldAllocationId = server.allocationId;
@@ -678,7 +718,7 @@ router.post('/:id/migrate', authenticate, requireAdmin, async (req: AuthRequest,
     await sourceClient.post(`/servers/${server.uuid}/backups`, { backupUuid: migrationUuid, ignoredFiles: [] });
 
     logger.info(`Migration: registering ${server.uuid} on ${targetNode.name}`);
-    await destClient.post('/servers', buildWingsConfig(server as Parameters<typeof buildWingsConfig>[0]));
+    await destClient.post('/servers', buildWingsConfig({ ...server, env: migratedEnvJson } as Parameters<typeof buildWingsConfig>[0]));
 
     logger.info(`Migration: transferring snapshot for ${server.uuid}`);
     const download = await sourceClient.get(`/servers/${server.uuid}/backups/${migrationUuid}/download`, {
@@ -696,7 +736,7 @@ router.post('/:id/migrate', authenticate, requireAdmin, async (req: AuthRequest,
     await prisma.$transaction(async (tx) => {
       await tx.server.update({
         where: { id: server.id },
-        data: { nodeId: targetNodeId, allocationId: finalAllocationId, status: 'OFFLINE' },
+        data: { nodeId: targetNodeId, allocationId: finalAllocationId, status: 'OFFLINE', env: migratedEnvJson },
       });
       if (oldAllocationId) {
         await tx.allocation.update({ where: { id: oldAllocationId }, data: { assigned: false } });
@@ -748,6 +788,7 @@ router.post('/:id/clone', authenticate, requireAdmin, async (req: AuthRequest, r
   if (!destNode) return res.status(422).json({ message: 'Target node not found' });
 
   let finalAllocationId: string;
+  let finalPort = 0;
   try {
     finalAllocationId = await prisma.$transaction(async (tx) => {
       if (allocationId) {
@@ -755,6 +796,7 @@ router.post('/:id/clone', authenticate, requireAdmin, async (req: AuthRequest, r
         if (!requested || requested.nodeId !== destNodeId) throw new Error('ALLOCATION_INVALID');
         if (requested.assigned) throw new Error('ALLOCATION_IN_USE');
         await tx.allocation.update({ where: { id: allocationId }, data: { assigned: true } });
+        finalPort = requested.port;
         return allocationId;
       }
       const freeAlloc = await tx.allocation.findFirst({
@@ -763,6 +805,7 @@ router.post('/:id/clone', authenticate, requireAdmin, async (req: AuthRequest, r
       });
       if (!freeAlloc) throw new Error('NO_FREE_ALLOCATION');
       await tx.allocation.update({ where: { id: freeAlloc.id }, data: { assigned: true } });
+      finalPort = freeAlloc.port;
       return freeAlloc.id;
     });
   } catch (err) {
@@ -772,6 +815,15 @@ router.post('/:id/clone', authenticate, requireAdmin, async (req: AuthRequest, r
     if (msg === 'ALLOCATION_INVALID') return res.status(422).json({ message: 'Allocation does not belong to the target node' });
     throw err;
   }
+
+  // The clone's allocation is its own, separate from the source's — keep
+  // the env-derived ports in sync or it would try to bind/listen on the
+  // source's old port instead of the one it was actually given.
+  let cloneEnv: Record<string, string> = {};
+  try { cloneEnv = JSON.parse(source.env as string) || {}; } catch { /* start fresh */ }
+  cloneEnv.SERVER_PORT = String(finalPort);
+  cloneEnv.QUERY_PORT = String(finalPort + 1);
+  cloneEnv.RCON_PORT = String(finalPort + 2);
 
   const clone = await prisma.server.create({
     data: {
@@ -790,7 +842,7 @@ router.post('/:id/clone', authenticate, requireAdmin, async (req: AuthRequest, r
       cpu: source.cpu,
       startup: source.startup,
       image: source.image,
-      env: source.env,
+      env: JSON.stringify(cloneEnv),
       eulaAccepted: source.eulaAccepted,
       databaseLimit: source.databaseLimit,
       allocationLimit: source.allocationLimit,

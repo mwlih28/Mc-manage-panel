@@ -657,27 +657,44 @@ echo "Installing ARK via SteamCMD..."
 steamcmd +force_install_dir /mnt/server +login anonymous +app_update 376030 validate +quit
 echo "ARK server installed."`;
 
+  // Same class of bug as the Velocity install script fixed earlier this
+  // project: shelling out to python3 to parse GitHub's release JSON, which
+  // the alpine installer image doesn't reliably have. grep/sed only.
   const TSHOCK_INSTALL = `#!/bin/bash
 set -e
 cd /mnt/server
+command -v unzip >/dev/null 2>&1 || apk add --no-cache unzip >/dev/null 2>&1 || true
 echo "Fetching latest TShock release..."
-TSHOCK_URL=$(curl -sSL https://api.github.com/repos/Pryaxis/TShock/releases/latest | python3 -c "
-import sys, json
-d = json.load(sys.stdin)
-urls = [a['browser_download_url'] for a in d['assets'] if 'TShock' in a['name'] and a['name'].endswith('.zip')]
-print(urls[0] if urls else '')
-" 2>/dev/null || echo "")
+TSHOCK_JSON=$(curl -sSL -H "User-Agent: Kretase-Installer/1.0" https://api.github.com/repos/Pryaxis/TShock/releases/latest)
+TSHOCK_URL=$(echo "$TSHOCK_JSON" | grep -o '"browser_download_url": *"[^"]*TShock[^"]*\\.zip"' | head -1 | sed 's/.*"\\(https[^"]*\\)"/\\1/')
 [ -z "$TSHOCK_URL" ] && { echo "Could not find TShock download URL"; exit 1; }
+echo "Downloading: $TSHOCK_URL"
 curl -sSL -o tshock.zip "$TSHOCK_URL"
 unzip -o tshock.zip
 rm -f tshock.zip
 chmod +x TShock.Server 2>/dev/null || true
 echo "TShock installed."`;
 
+  // SteamCMD-based installs need a container with steamcmd actually in it —
+  // ghcr.io/pterodactyl/installers only ships source/debian/alpine (no
+  // "steam" tag exists), so every SteamCMD egg below was failing at the
+  // install step with an image-pull error. ghcr.io/parkervcp/installers:debian
+  // is the real, community-proven image used for this by the eggs it was
+  // adapted from.
+  const STEAM_INSTALLER = 'ghcr.io/parkervcp/installers:debian';
+
+  async function upsertEggVariable(id: string, eggId: string, name: string, envVariable: string, defaultValue: string, description: string, userEditable = true) {
+    await prisma.eggVariable.upsert({
+      where: { id },
+      update: { defaultValue },
+      create: { id, eggId, name, envVariable, defaultValue, description, userViewable: true, userEditable },
+    });
+  }
+
   // Rust
-  await prisma.egg.upsert({
+  const rustEgg = await prisma.egg.upsert({
     where: { uuid: '00000000-0000-0000-0001-000000000001' },
-    update: { scriptInstall: RUST_INSTALL, scriptContainer: 'ghcr.io/pterodactyl/installers:steam' },
+    update: { scriptInstall: RUST_INSTALL, scriptContainer: STEAM_INSTALLER },
     create: {
       uuid: '00000000-0000-0000-0001-000000000001',
       nestId: gamesNest.id,
@@ -688,14 +705,19 @@ echo "TShock installed."`;
       startup: './RustDedicated -batchmode +server.ip 0.0.0.0 +server.port {{SERVER_PORT}} +server.queryport {{QUERY_PORT}} +rcon.ip 0.0.0.0 +rcon.port {{RCON_PORT}} +rcon.password "{{RCON_PASSWORD}}" +server.maxplayers {{MAX_PLAYERS}} +server.hostname "{{SERVER_NAME}}" +server.identity "{{SERVER_IDENT}}" +server.seed {{SERVER_SEED}} +server.worldsize {{WORLD_SIZE}} -logfile /dev/stdout',
       configStop: 'quit',
       scriptInstall: RUST_INSTALL,
-      scriptContainer: 'ghcr.io/pterodactyl/installers:steam',
+      scriptContainer: STEAM_INSTALLER,
     },
   });
+  await upsertEggVariable('rust-rcon-password', rustEgg.id, 'RCON Password', 'RCON_PASSWORD', 'ChangeMe123', 'Password for remote console access — change this before going public.');
+  await upsertEggVariable('rust-max-players', rustEgg.id, 'Max Players', 'MAX_PLAYERS', '50', 'Maximum concurrent players.');
+  await upsertEggVariable('rust-server-name', rustEgg.id, 'Server Name', 'SERVER_NAME', 'A Kretase-powered Rust Server', 'Name shown in the server browser.');
+  await upsertEggVariable('rust-seed', rustEgg.id, 'World Seed', 'SERVER_SEED', '12345', 'Map generation seed.');
+  await upsertEggVariable('rust-world-size', rustEgg.id, 'World Size', 'WORLD_SIZE', '3000', 'Map size — 3000-4000 is typical.');
 
   // Garry's Mod
-  await prisma.egg.upsert({
+  const gmodEgg = await prisma.egg.upsert({
     where: { uuid: '00000000-0000-0000-0001-000000000002' },
-    update: { scriptInstall: GMOD_INSTALL, scriptContainer: 'ghcr.io/pterodactyl/installers:steam' },
+    update: { scriptInstall: GMOD_INSTALL, scriptContainer: STEAM_INSTALLER },
     create: {
       uuid: '00000000-0000-0000-0001-000000000002',
       nestId: gamesNest.id,
@@ -706,14 +728,16 @@ echo "TShock installed."`;
       startup: './srcds_run -game garrysmod -console -port {{SERVER_PORT}} +maxplayers {{MAX_PLAYERS}} +map {{DEFAULT_MAP}} -strictportbind -norestart',
       configStop: 'quit',
       scriptInstall: GMOD_INSTALL,
-      scriptContainer: 'ghcr.io/pterodactyl/installers:steam',
+      scriptContainer: STEAM_INSTALLER,
     },
   });
+  await upsertEggVariable('gmod-max-players', gmodEgg.id, 'Max Players', 'MAX_PLAYERS', '16', 'Maximum concurrent players.');
+  await upsertEggVariable('gmod-default-map', gmodEgg.id, 'Default Map', 'DEFAULT_MAP', 'gm_construct', 'Map to load on startup.');
 
   // CS2
-  await prisma.egg.upsert({
+  const cs2Egg = await prisma.egg.upsert({
     where: { uuid: '00000000-0000-0000-0001-000000000003' },
-    update: { scriptInstall: CS2_INSTALL, scriptContainer: 'ghcr.io/pterodactyl/installers:steam' },
+    update: { scriptInstall: CS2_INSTALL, scriptContainer: STEAM_INSTALLER },
     create: {
       uuid: '00000000-0000-0000-0001-000000000003',
       nestId: gamesNest.id,
@@ -724,14 +748,17 @@ echo "TShock installed."`;
       startup: './game/bin/linuxsteamrt64/cs2 -dedicated -console -port {{SERVER_PORT}} +map {{DEFAULT_MAP}} +maxplayers_override {{MAX_PLAYERS}} +sv_setsteamaccount {{STEAM_ACC}}',
       configStop: 'quit',
       scriptInstall: CS2_INSTALL,
-      scriptContainer: 'ghcr.io/pterodactyl/installers:steam',
+      scriptContainer: STEAM_INSTALLER,
     },
   });
+  await upsertEggVariable('cs2-default-map', cs2Egg.id, 'Default Map', 'DEFAULT_MAP', 'de_dust2', 'Map to load on startup.');
+  await upsertEggVariable('cs2-max-players', cs2Egg.id, 'Max Players', 'MAX_PLAYERS', '10', 'Maximum concurrent players.');
+  await upsertEggVariable('cs2-steam-acc', cs2Egg.id, 'Game Server Login Token', 'STEAM_ACC', '', 'Optional GSLT from https://steamcommunity.com/dev/managegameservers — needed for public server-list visibility, not required to run.');
 
   // ARK: Survival Evolved
-  await prisma.egg.upsert({
+  const arkEgg = await prisma.egg.upsert({
     where: { uuid: '00000000-0000-0000-0001-000000000004' },
-    update: { scriptInstall: ARK_INSTALL, scriptContainer: 'ghcr.io/pterodactyl/installers:steam' },
+    update: { scriptInstall: ARK_INSTALL, scriptContainer: STEAM_INSTALLER },
     create: {
       uuid: '00000000-0000-0000-0001-000000000004',
       nestId: gamesNest.id,
@@ -742,12 +769,15 @@ echo "TShock installed."`;
       startup: './ShooterGame/Binaries/Linux/ShooterGameServer {{MAP}}?listen?ServerPassword={{SERVER_PASSWORD}}?ServerAdminPassword={{ADMIN_PASSWORD}}?RCONEnabled=True?RCONPort={{RCON_PORT}} -port={{SERVER_PORT}} -queryport={{QUERY_PORT}} -NoBattlEye',
       configStop: 'DoExit',
       scriptInstall: ARK_INSTALL,
-      scriptContainer: 'ghcr.io/pterodactyl/installers:steam',
+      scriptContainer: STEAM_INSTALLER,
     },
   });
+  await upsertEggVariable('ark-map', arkEgg.id, 'Map', 'MAP', 'TheIsland', 'Map to load — TheIsland, TheCenter, Ragnarok, ScorchedEarth_P, Aberration_P, Extinction, and more.');
+  await upsertEggVariable('ark-server-password', arkEgg.id, 'Server Password', 'SERVER_PASSWORD', '', 'Optional password players must enter to join.');
+  await upsertEggVariable('ark-admin-password', arkEgg.id, 'Admin Password', 'ADMIN_PASSWORD', 'PleaseChangeMe', 'Password for in-game admin commands — change this before going public.');
 
   // Terraria / TShock
-  await prisma.egg.upsert({
+  const tshockEgg = await prisma.egg.upsert({
     where: { uuid: '00000000-0000-0000-0001-000000000005' },
     update: { scriptInstall: TSHOCK_INSTALL, scriptContainer: 'ghcr.io/pterodactyl/installers:alpine' },
     create: {
@@ -763,6 +793,9 @@ echo "TShock installed."`;
       scriptContainer: 'ghcr.io/pterodactyl/installers:alpine',
     },
   });
+  await upsertEggVariable('tshock-max-players', tshockEgg.id, 'Max Players', 'MAX_PLAYERS', '8', 'Maximum concurrent players.');
+  await upsertEggVariable('tshock-world-name', tshockEgg.id, 'World Name', 'WORLD_NAME', 'world', 'Name of the world file (without .wld).');
+  await upsertEggVariable('tshock-world-size', tshockEgg.id, 'World Size', 'WORLD_SIZE', '1', '1 = small, 2 = medium, 3 = large. Only used the first time the world is created.');
 
   console.log('Eggs created/updated');
 
