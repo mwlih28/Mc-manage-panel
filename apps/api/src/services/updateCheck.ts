@@ -17,7 +17,7 @@ interface UpdateCheckResult {
 let cache: { result: UpdateCheckResult; fetchedAt: number } | null = null;
 const CACHE_TTL_MS = 60 * 60 * 1000;
 
-function parseVersion(v: string): number[] | null {
+export function parseVersion(v: string): number[] | null {
   const match = v.trim().replace(/^v/i, '').match(/^(\d+)\.(\d+)\.(\d+)/);
   if (!match) return null;
   return [parseInt(match[1], 10), parseInt(match[2], 10), parseInt(match[3], 10)];
@@ -26,7 +26,7 @@ function parseVersion(v: string): number[] | null {
 // Returns true only if `latest` is strictly greater than `current` — a
 // dev build running ahead of the last tagged release (e.g. on a feature
 // branch) must never be flagged as "outdated".
-function isNewer(current: string, latest: string): boolean {
+export function isNewer(current: string, latest: string): boolean {
   const a = parseVersion(current);
   const b = parseVersion(latest);
   if (!a || !b) return current.trim() !== latest.trim();

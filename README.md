@@ -311,6 +311,8 @@ Contributions are welcome. Here's the flow:
 
 For bug reports, include your OS, Node version, and relevant logs. For feature requests, explain the use case.
 
+**Testing:** new functionality should come with tests where practical (`npm test` in `apps/api` or `apps/web`, both run via [Vitest](https://vitest.dev)). CI runs the full suite — type-check, tests, and build — on every pull request.
+
 ---
 
 ## VIRUSTOTAL

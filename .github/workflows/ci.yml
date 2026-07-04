@@ -41,6 +41,14 @@ jobs:
         working-directory: apps/web
         run: npx tsc --noEmit
 
+      - name: Test API
+        working-directory: apps/api
+        run: npm test
+
+      - name: Test Web
+        working-directory: apps/web
+        run: npm test
+
   build:
     name: Build Docker Images
     runs-on: ubuntu-latest
