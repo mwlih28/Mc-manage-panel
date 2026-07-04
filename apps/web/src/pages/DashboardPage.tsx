@@ -50,25 +50,21 @@ export function DashboardPage() {
           icon={<Server size={22} />}
           label="Total Servers"
           value={overview?.totalServers || 0}
-          accent="#6366f1"
         />
         <StatCard
           icon={<Activity size={22} />}
           label="Running"
           value={running}
-          accent="#10b981"
         />
         <StatCard
           icon={<HardDrive size={22} />}
           label="Total RAM"
           value={formatBytes(servers.reduce((a, s) => a + (s.memory || 0) * 1048576, 0))}
-          accent="#3b82f6"
         />
         <StatCard
           icon={<Cpu size={22} />}
           label="Total Disk"
           value={formatBytes(servers.reduce((a, s) => a + (s.disk || 0) * 1048576, 0))}
-          accent="#f59e0b"
         />
       </div>
 
@@ -126,28 +122,18 @@ export function DashboardPage() {
   );
 }
 
-function StatCard({ icon, label, value, accent }: {
-  icon: React.ReactNode; label: string; value: string | number; accent: string;
+function StatCard({ icon, label, value }: {
+  icon: React.ReactNode; label: string; value: string | number;
 }) {
   return (
-    <div
-      className="card p-5 flex items-start gap-4 relative overflow-hidden"
-      style={{ background: `linear-gradient(135deg, rgba(255,255,255,0.03) 0%, ${accent}08 100%)` }}
-    >
-      <div
-        className="w-10 h-10 rounded-xl shrink-0 flex items-center justify-center"
-        style={{ background: `${accent}1a`, border: `1px solid ${accent}25` }}
-      >
-        <span style={{ color: accent }}>{icon}</span>
+    <div className="card p-5 flex items-start gap-4">
+      <div className="w-10 h-10 rounded-xl shrink-0 flex items-center justify-center bg-panel-500/10 border border-panel-500/20 text-panel-400">
+        {icon}
       </div>
       <div>
         <p className="text-xs text-slate-500 font-medium">{label}</p>
         <p className="text-2xl font-bold text-white mt-0.5 leading-none">{value}</p>
       </div>
-      <div
-        className="absolute right-0 top-0 w-24 h-24 rounded-full opacity-5 -translate-y-8 translate-x-8"
-        style={{ background: accent }}
-      />
     </div>
   );
 }

@@ -79,7 +79,7 @@ export function Sidebar() {
                   className={({ isActive }) => cn(
                     'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-100',
                     isActive
-                      ? 'text-white bg-white/[0.06] border-l-2 border-white'
+                      ? 'text-white bg-panel-500/[0.12] border-l-2 border-panel-500'
                       : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.03] border-l-2 border-transparent'
                   )}
                 >
@@ -102,7 +102,7 @@ export function Sidebar() {
                     className={({ isActive }) => cn(
                       'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-100',
                       isActive
-                        ? 'text-white bg-white/[0.06] border-l-2 border-white'
+                        ? 'text-white bg-panel-500/[0.12] border-l-2 border-panel-500'
                         : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.03] border-l-2 border-transparent'
                     )}
                   >

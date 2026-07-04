@@ -11,8 +11,8 @@
   }
 
   body {
-    background: #0a0a0c;
-    color: #e8e8e8;
+    background: #0B0C0E;
+    color: #EDEDEF;
     font-family: 'Inter', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -20,8 +20,8 @@
 
   ::-webkit-scrollbar { width: 4px; height: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: #2a2a2e; border-radius: 99px; }
-  ::-webkit-scrollbar-thumb:hover { background: #3a3a3e; }
+  ::-webkit-scrollbar-thumb { background: #26282D; border-radius: 99px; }
+  ::-webkit-scrollbar-thumb:hover { background: #33363C; }
 }
 
 @layer components {
@@ -33,10 +33,11 @@
   }
 
   .btn-primary {
-    @apply btn bg-white text-black;
+    @apply btn text-white;
+    background: #22A878;
   }
   .btn-primary:hover:not(:disabled) {
-    @apply bg-zinc-100;
+    background: #2BC98C;
   }
 
   .btn-secondary {
@@ -73,13 +74,13 @@
   /* ── Cards ──────────────────────────────────────────────────────────── */
   .card {
     @apply rounded-xl;
-    background: #111113;
-    border: 1px solid #1e1e22;
+    background: #131417;
+    border: 1px solid #1C1E22;
   }
 
   .card-header {
     @apply px-6 py-4;
-    border-bottom: 1px solid #1e1e22;
+    border-bottom: 1px solid #1C1E22;
   }
 
   .card-body { @apply p-6; }
@@ -88,12 +89,12 @@
   .input {
     @apply w-full px-3 py-2 rounded-lg text-zinc-100 placeholder-zinc-600 text-sm
            transition-colors bg-transparent;
-    border: 1px solid #2a2a2e;
+    border: 1px solid #26282D;
   }
   .input:focus {
     @apply outline-none;
-    border-color: #555;
-    box-shadow: 0 0 0 3px rgba(255,255,255,0.04);
+    border-color: #22A878;
+    box-shadow: 0 0 0 3px rgba(34,168,120,0.14);
   }
 
   .label { @apply block text-sm font-medium text-zinc-400 mb-1.5; }
@@ -102,11 +103,11 @@
   .badge {
     @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
   }
-  .badge-green  { @apply badge; background: rgba(34,197,94,0.1);   color: #4ade80; }
-  .badge-red    { @apply badge; background: rgba(239,68,68,0.1);   color: #f87171; }
-  .badge-yellow { @apply badge; background: rgba(234,179,8,0.1);   color: #fbbf24; }
-  .badge-blue   { @apply badge; background: rgba(59,130,246,0.1);  color: #60a5fa; }
-  .badge-gray   { @apply badge; background: rgba(255,255,255,0.05); color: #888; }
+  .badge-green  { @apply badge; background: rgba(34,168,120,0.12); color: #3EC896; }
+  .badge-red    { @apply badge; background: rgba(229,72,77,0.12);  color: #F27074; }
+  .badge-yellow { @apply badge; background: rgba(229,160,0,0.12);  color: #F0B93D; }
+  .badge-blue   { @apply badge; background: rgba(59,130,246,0.12); color: #60a5fa; }
+  .badge-gray   { @apply badge; background: rgba(255,255,255,0.05); color: #9A9CA3; }
 
   /* ── Tables ─────────────────────────────────────────────────────────── */
   .table-container { @apply w-full overflow-x-auto; }
@@ -124,7 +125,7 @@
     border-left: 2px solid transparent;
   }
   .sidebar-item:hover  { background: rgba(255,255,255,0.03); }
-  .sidebar-item.active { @apply text-white; background: rgba(255,255,255,0.06); border-left-color: #fff; }
+  .sidebar-item.active { @apply text-white; background: rgba(34,168,120,0.12); border-left-color: #22A878; }
 
   /* ── Progress ────────────────────────────────────────────────────────── */
   .progress-bar {
