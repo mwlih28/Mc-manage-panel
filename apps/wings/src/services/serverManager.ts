@@ -530,12 +530,21 @@ class ServerManager extends EventEmitter {
 
   async reinstallServer(uuid: string, externalConfig?: ServerConfig): Promise<void> {
     const server = this.servers.get(uuid);
-    const config = server?.config ?? externalConfig;
+    // Prefer the panel's freshly-sent config over whatever Wings already has
+    // cached in memory — a reinstall exists specifically to pick up egg
+    // changes (image, install script, startup, variables) made since the
+    // server was first loaded, so the stale in-memory copy must never win.
+    const config = externalConfig ?? server?.config;
     if (!config) throw new Error('Server not found — provide config in request body');
 
     // Load into memory if not already there so status updates work
     if (!server && externalConfig) {
       await this.loadServer(externalConfig).catch(() => {});
+    } else if (server && externalConfig) {
+      // Keep the cache in sync so a subsequent plain Start (which only ever
+      // reads server.config, with no way to pass fresh config of its own)
+      // also uses the corrected values instead of reverting to the old ones.
+      server.config = externalConfig;
     }
 
     if (server?.status && server.status !== 'offline') {
