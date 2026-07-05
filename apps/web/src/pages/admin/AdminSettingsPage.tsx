@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, Globe, Image, Type, FileText, Mail, Send, Eye, EyeOff, Zap, Sparkles, Mountain } from 'lucide-react';
+import { Save, Globe, Image, Type, FileText, Mail, Send, Eye, EyeOff, Zap, Sparkles, Mountain, Paintbrush } from 'lucide-react';
 import api from '@/lib/axios';
 import toast from 'react-hot-toast';
 import { Spinner } from '@/components/ui/Spinner';
@@ -42,6 +42,8 @@ export function AdminSettingsPage() {
     'ai.geminiKey': '',
     'ai.anthropicKey': '',
     'curseforge.apiKey': '',
+    'theme.customCss': '',
+    'whitelabel.hidePoweredBy': 'false',
   });
   const [showKey, setShowKey] = useState<Record<string, boolean>>({});
   const queryClient = useQueryClient();
@@ -64,6 +66,8 @@ export function AdminSettingsPage() {
         'ai.geminiKey':     data['ai.geminiKey']       || '',
         'ai.anthropicKey':  data['ai.anthropicKey']    || '',
         'curseforge.apiKey': data['curseforge.apiKey'] || '',
+        'theme.customCss': data['theme.customCss'] || '',
+        'whitelabel.hidePoweredBy': data['whitelabel.hidePoweredBy'] || 'false',
       });
     }).finally(() => setLoading(false));
   }, []);
@@ -168,6 +172,45 @@ export function AdminSettingsPage() {
               )}
             </div>
             <p className="text-xs text-zinc-600 mt-1">URL of your logo image. Shown in the sidebar and login page.</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Theme / White-label */}
+      <div className="card">
+        <div className="card-header">
+          <h2 className="text-sm font-semibold text-zinc-100 flex items-center gap-2"><Paintbrush size={14} />Theme</h2>
+          <p className="text-xs text-zinc-500 mt-0.5">White-label the panel's look — applies to the whole app, including the login page.</p>
+        </div>
+        <div className="p-6 space-y-5">
+          <label className="flex items-center justify-between gap-4 cursor-pointer">
+            <div>
+              <p className="text-sm font-medium text-zinc-200">Hide "Powered by Kretase"</p>
+              <p className="text-xs text-zinc-500 mt-0.5">
+                Removes the attribution line from public server status pages.
+              </p>
+            </div>
+            <input
+              type="checkbox"
+              checked={form['whitelabel.hidePoweredBy'] === 'true'}
+              onChange={e => setForm(f => ({ ...f, 'whitelabel.hidePoweredBy': e.target.checked ? 'true' : 'false' }))}
+              className="shrink-0 w-9 h-5 accent-panel-500"
+            />
+          </label>
+
+          <div>
+            <label className="label">Custom CSS</label>
+            <textarea
+              className="input font-mono text-xs min-h-[160px] resize-y"
+              value={form['theme.customCss']}
+              onChange={e => setForm(f => ({ ...f, 'theme.customCss': e.target.value }))}
+              placeholder={'.btn-primary {\n  background: #ff6b00;\n}'}
+              spellCheck={false}
+            />
+            <p className="text-xs text-zinc-600 mt-1">
+              Injected as a raw {'<style>'} tag across the whole panel and login page. Use it to override colors, fonts,
+              or any other visual detail to match your brand. Up to 20,000 characters.
+            </p>
           </div>
         </div>
       </div>

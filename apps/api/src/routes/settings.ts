@@ -20,6 +20,8 @@ const DEFAULTS: Record<string, string> = {
   'app.description': 'High-performance game server management',
   'features.aiTools': 'true',
   'ai.provider': 'openai',
+  'theme.customCss': '',
+  'whitelabel.hidePoweredBy': 'false',
 };
 
 const PROVIDER_KEY_SETTING: Record<string, string> = {
@@ -31,7 +33,7 @@ const PROVIDER_KEY_SETTING: Record<string, string> = {
 // Keys safe to expose without authentication (sidebar/login branding, public
 // feature flags). Everything else (SMTP creds, AI provider keys) is stripped
 // out below unless the request comes from a logged-in admin.
-const PUBLIC_KEYS = new Set(['app.name', 'app.title', 'app.logo', 'app.description', 'app.version', 'features.aiTools', 'ai.provider', 'ai.configured', 'curseforge.configured']);
+const PUBLIC_KEYS = new Set(['app.name', 'app.title', 'app.logo', 'app.description', 'app.version', 'features.aiTools', 'ai.provider', 'ai.configured', 'curseforge.configured', 'theme.customCss', 'whitelabel.hidePoweredBy']);
 
 router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
@@ -65,11 +67,23 @@ router.put('/', authenticate, requireAdmin, async (req: AuthRequest, res: Respon
     'smtp.host', 'smtp.port', 'smtp.user', 'smtp.pass', 'smtp.from',
     'features.aiTools', 'ai.provider', 'ai.openaiKey', 'ai.geminiKey', 'ai.anthropicKey',
     'curseforge.apiKey',
+    'theme.customCss', 'whitelabel.hidePoweredBy',
   ];
+  if (req.body['theme.customCss'] !== undefined) {
+    const css = req.body['theme.customCss'];
+    if (typeof css !== 'string' || css.length > 20000) {
+      return res.status(422).json({ message: 'Custom CSS must be 20,000 characters or fewer' });
+    }
+  }
   const updates: Array<{ key: string; value: string }> = [];
   for (const key of allowed) {
     if (req.body[key] !== undefined) {
-      updates.push({ key, value: String(req.body[key]) });
+      // Strip anything that could break out of the <style> tag it's rendered
+      // in — still arbitrary CSS after this, just not a script/HTML injection vector.
+      const value = key === 'theme.customCss'
+        ? String(req.body[key]).replace(/<\/style/gi, '')
+        : String(req.body[key]);
+      updates.push({ key, value });
     }
   }
   for (const u of updates) {

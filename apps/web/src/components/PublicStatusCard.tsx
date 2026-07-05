@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Copy, Check, Server as ServerIcon, Wifi, WifiOff, Megaphone } from 'lucide-react';
+import { useSettings } from '@/hooks/useSettings';
 
 export interface PublicStatusCardProps {
   name: string;
@@ -59,6 +60,8 @@ export function PublicStatusCard({
 }: PublicStatusCardProps) {
   const [copied, setCopied] = useState(false);
   const animatedCount = useCountUp(playerCount);
+  const { data: settings } = useSettings();
+  const hidePoweredBy = settings?.['whitelabel.hidePoweredBy'] === 'true';
 
   const copyAddress = () => {
     if (!address) return;
@@ -192,9 +195,11 @@ export function PublicStatusCard({
             )}
           </div>
 
-          <div className="px-6 py-3 bg-black/20 text-center">
-            <p className="text-[11px] text-slate-600">Powered by Kretase</p>
-          </div>
+          {!hidePoweredBy && (
+            <div className="px-6 py-3 bg-black/20 text-center">
+              <p className="text-[11px] text-slate-600">Powered by Kretase</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

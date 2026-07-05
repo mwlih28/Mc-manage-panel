@@ -6,6 +6,7 @@ import { PanelLayout } from '@/components/layout/PanelLayout';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { RequireAuth } from '@/components/layout/RequireAuth';
 import { Spinner } from '@/components/ui/Spinner';
+import { ThemeCssInjector } from '@/components/ThemeCssInjector';
 import api from '@/lib/axios';
 
 // Route-level code splitting — keeps the initial bundle small since most
@@ -62,6 +63,7 @@ export default function App() {
 
   return (
     <Suspense fallback={<RouteFallback />}>
+      <ThemeCssInjector />
       <Routes>
         {/* Public routes */}
         <Route path="/setup" element={<SetupPage />} />
