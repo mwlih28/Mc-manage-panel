@@ -54,6 +54,8 @@ import webhookRoutes from './routes/webhooks';
 import storageRoutes from './routes/storage';
 import migrationRoutes from './routes/migrations';
 import pushRoutes from './routes/push';
+import storeIntegrationRoutes from './routes/storeIntegrations';
+import storeWebhookRoutes from './routes/storeWebhooks';
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -105,7 +107,13 @@ app.use(cors({
   credentials: true,
   methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
 }));
-app.use(express.json({ limit: '10mb' }));
+// Stashes the exact raw bytes alongside the parsed body — needed by the
+// Tebex/CraftingStore webhook receivers, which verify an HMAC signature
+// computed over the raw request body, not the re-serialized JSON object.
+app.use(express.json({
+  limit: '10mb',
+  verify: (req, _res, buf) => { (req as express.Request & { rawBody?: string }).rawBody = buf.toString('utf8'); },
+}));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(morgan('dev', { stream: { write: (msg) => logger.http(msg.trim()) } }));
@@ -135,6 +143,21 @@ app.get('/wings', serveInstallScript('install-wings.sh'));
 app.get('/update-panel', serveInstallScript('update-panel.sh'));
 app.get('/update-wings', serveInstallScript('update-wings.sh'));
 app.get('/uninstall-panel', serveInstallScript('uninstall-panel.sh'));
+
+// Downloadable WHMCS/Blesta provisioning modules, served from this
+// deployment's own checkout so admins can grab them straight from the
+// panel instead of hunting through the GitHub repo.
+const INTEGRATIONS_DIR = path.join(__dirname, '..', '..', '..', 'integrations');
+app.get('/integrations/whmcs', (_req, res) => {
+  const filePath = path.join(INTEGRATIONS_DIR, 'whmcs', 'kretase', 'kretase.php');
+  if (!fs.existsSync(filePath)) return res.status(404).send('Module not found');
+  res.download(filePath, 'kretase.php');
+});
+app.get('/integrations/blesta', (_req, res) => {
+  const filePath = path.join(INTEGRATIONS_DIR, 'blesta', 'kretase', 'kretase_module.php');
+  if (!fs.existsSync(filePath)) return res.status(404).send('Module not found');
+  res.download(filePath, 'kretase_module.php');
+});
 
 // Templates endpoint
 import serverTemplates from './data/serverTemplates.json';
@@ -174,6 +197,8 @@ api.use('/webhooks', webhookRoutes);
 api.use('/storage', storageRoutes);
 api.use('/migrations', migrationRoutes);
 api.use('/push', pushRoutes);
+api.use('/store-integrations', storeIntegrationRoutes);
+api.use('/store-webhooks', storeWebhookRoutes);
 
 app.use('/api/v1', api);
 

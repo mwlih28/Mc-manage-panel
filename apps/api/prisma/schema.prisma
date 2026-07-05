@@ -201,6 +201,7 @@ model Server {
   statSamples ServerStatSample[]
   webhooks    Webhook[]
   discordBindings DiscordBinding[]
+  storeIntegrations StoreIntegration[]
 
   @@index([userId])
   @@index([nodeId])
@@ -422,4 +423,26 @@ model PushSubscription {
   createdAt DateTime @default(now())
 
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Tebex/CraftingStore in-game-store integration — the store's own dashboard
+// POSTs a purchase webhook here; matching a configured package id runs a
+// console command on the mapped server (e.g. granting an in-game rank).
+model StoreIntegration {
+  id              String    @id @default(uuid())
+  provider        String    // "tebex" | "craftingstore"
+  name            String
+  serverId        String
+  webhookSecret   String
+  // JSON array of { packageId: string, command: string } — {username} in
+  // command is replaced with the buyer's in-game name from the webhook payload.
+  commandMappings String    @default("[]")
+  enabled         Boolean   @default(true)
+  lastTriggeredAt DateTime?
+  lastStatus      String?
+  lastError       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  server          Server    @relation(fields: [serverId], references: [id], onDelete: Cascade)
 }

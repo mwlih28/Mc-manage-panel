@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Server, Users, Cpu, Package,
-  Activity, Wrench, LogOut, ChevronLeft, KeyRound, Code2, Webhook, ArrowRightLeft
+  Activity, Wrench, LogOut, ChevronLeft, KeyRound, Code2, Webhook, ArrowRightLeft, CreditCard
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { cn } from '@/lib/utils';
@@ -18,6 +18,7 @@ const adminNavItems = [
   { to: '/admin/activity',   icon: Activity,  label: 'Activity' },
   { to: '/admin/webhooks',   icon: Webhook,   label: 'Webhooks' },
   { to: '/admin/migration',  icon: ArrowRightLeft, label: 'Migration' },
+  { to: '/admin/integrations', icon: CreditCard, label: 'Billing & Store' },
   { to: '/admin/api-keys',   icon: KeyRound,  label: 'API Keys' },
   { to: '/admin/api-docs',   icon: Code2,     label: 'API Reference' },
   { to: '/admin/settings',   icon: Wrench,    label: 'Settings' },
