@@ -56,6 +56,7 @@ import migrationRoutes from './routes/migrations';
 import pushRoutes from './routes/push';
 import storeIntegrationRoutes from './routes/storeIntegrations';
 import storeWebhookRoutes from './routes/storeWebhooks';
+import planRoutes from './routes/plans';
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -199,6 +200,7 @@ api.use('/migrations', migrationRoutes);
 api.use('/push', pushRoutes);
 api.use('/store-integrations', storeIntegrationRoutes);
 api.use('/store-webhooks', storeWebhookRoutes);
+api.use('/plans', planRoutes);
 
 app.use('/api/v1', api);
 

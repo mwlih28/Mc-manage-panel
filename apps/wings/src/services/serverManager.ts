@@ -121,6 +121,45 @@ class ServerManager extends EventEmitter {
     logger.info(`Server loaded: ${config.uuid} (${status})`);
   }
 
+  // Applies a resource-limit change without a restart. Always updates the
+  // in-memory config (so the new limits stick on the next natural restart
+  // even if the live docker update below can't apply, e.g. server offline
+  // or a cgroup driver that rejects a live change) and, when a container
+  // exists, pushes Memory/CPU/BlkioWeight to the running container via
+  // Docker's live update API — the same math createContainer() uses so a
+  // plan upgrade behaves identically to a fresh install.
+  async updateBuild(uuid: string, build: Partial<ServerConfig['build']>): Promise<void> {
+    const server = this.servers.get(uuid);
+    if (!server) throw new Error(`Server ${uuid} not found`);
+
+    server.config.build = { ...server.config.build, ...build };
+    const { build: limits } = server.config;
+
+    if (!server.containerId) return;
+
+    try {
+      const heapMb = limits.memory_limit;
+      const containerMb = heapMb + 512;
+      const memBytes = containerMb * 1024 * 1024;
+      const swapBytes = limits.swap > 0 ? (containerMb + limits.swap) * 1024 * 1024 : -1;
+      const cpuQuota = limits.cpu_limit > 0 ? Math.floor(limits.cpu_limit * 1000) : -1;
+
+      const container = getDocker().getContainer(server.containerId);
+      await container.update({
+        Memory: memBytes,
+        MemorySwap: swapBytes,
+        CpuQuota: cpuQuota,
+        CpuPeriod: 100000,
+        BlkioWeight: limits.io_weight,
+      });
+      logger.info(`Live resource update applied for ${uuid}: ${heapMb}MB heap, cpu=${limits.cpu_limit}%`);
+    } catch (err) {
+      // Not fatal — config above is already updated, so the new limits take
+      // effect on the server's next start regardless of this failing.
+      logger.warn(`Live resource update failed for ${uuid} (will apply on next restart): ${(err as Error).message}`);
+    }
+  }
+
   async startServer(uuid: string): Promise<void> {
     const server = this.servers.get(uuid);
     if (!server) throw new Error(`Server ${uuid} not found`);

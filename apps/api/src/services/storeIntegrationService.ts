@@ -1,11 +1,16 @@
 import crypto from 'crypto';
 import { prisma } from '../utils/prisma';
-import { sendCommand } from './wingsClient';
+import { sendCommand, updateServerBuild } from './wingsClient';
 import { logger } from '../utils/logger';
 
 export interface CommandMapping {
   packageId: string;
-  command: string;
+  // Either or both may be set: command runs a console command (e.g. grant a
+  // rank), planId applies a resource-plan upgrade to the server. Neither is
+  // required to be present on its own — a purely resource-upgrade package
+  // needs no command, and a rank-grant package needs no plan.
+  command?: string;
+  planId?: string;
 }
 
 // Tebex signs the raw request body with HMAC-SHA256 using the store's
@@ -66,20 +71,67 @@ export async function handleStorePurchase(integrationId: string, packageId: stri
     return;
   }
 
-  const command = mapping.command.replace(/\{username\}/g, username || 'unknown');
+  if (!mapping.command && !mapping.planId) {
+    await prisma.storeIntegration.update({
+      where: { id: integrationId },
+      data: { lastTriggeredAt: new Date(), lastStatus: 'skipped', lastError: `Mapping for package ${packageId} has neither a command nor a plan` },
+    });
+    return;
+  }
 
   try {
     if (!integration.server.node) throw new Error('Server has no assigned node');
-    await sendCommand(integration.server as Parameters<typeof sendCommand>[0], command);
+
+    if (mapping.command) {
+      const command = mapping.command.replace(/\{username\}/g, username || 'unknown');
+      await sendCommand(integration.server as Parameters<typeof sendCommand>[0], command);
+    }
+
+    if (mapping.planId) {
+      await applyPlanToServer(integration.serverId, mapping.planId);
+    }
+
     await prisma.storeIntegration.update({
       where: { id: integrationId },
       data: { lastTriggeredAt: new Date(), lastStatus: 'success', lastError: null },
     });
   } catch (err) {
-    logger.warn(`Store integration ${integrationId} failed to run command: ${(err as Error).message}`);
+    logger.warn(`Store integration ${integrationId} failed to apply purchase: ${(err as Error).message}`);
     await prisma.storeIntegration.update({
       where: { id: integrationId },
       data: { lastTriggeredAt: new Date(), lastStatus: 'failed', lastError: (err as Error).message.slice(0, 500) },
     });
+  }
+}
+
+// Updates a server's resource limits to match a Plan and, when the node is
+// online, pushes the change live via Wings (no restart required). Throws on
+// failure so the caller's existing lastStatus/lastError bookkeeping covers
+// this the same way it already covers the console-command path.
+export async function applyPlanToServer(serverId: string, planId: string): Promise<void> {
+  const plan = await prisma.plan.findUnique({ where: { id: planId } });
+  if (!plan) throw new Error(`Plan ${planId} not found`);
+
+  const updated = await prisma.server.update({
+    where: { id: serverId },
+    data: {
+      memory: plan.memory, swap: plan.swap, disk: plan.disk, io: plan.io, cpu: plan.cpu,
+      databaseLimit: plan.databaseLimit, allocationLimit: plan.allocationLimit, backupLimit: plan.backupLimit,
+    },
+    include: { node: true },
+  });
+
+  if (updated.node) {
+    // Best-effort — the DB update above is the source of truth (the plan is
+    // applied either way, live now or on the server's next restart), so a
+    // node being offline shouldn't make the whole purchase look "failed".
+    try {
+      await updateServerBuild(updated as Parameters<typeof updateServerBuild>[0], {
+        memory_limit: plan.memory, swap: plan.swap, disk_space: plan.disk,
+        io_weight: plan.io, cpu_limit: plan.cpu,
+      });
+    } catch (err) {
+      logger.warn(`Live build push failed for server ${serverId} after plan upgrade: ${(err as Error).message}`);
+    }
   }
 }

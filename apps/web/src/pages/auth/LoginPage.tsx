@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Navigate, useNavigate, useLocation, Link } from 'react-router-dom';
-import { Eye, EyeOff, ShieldCheck } from 'lucide-react';
+import { Navigate, useNavigate, useLocation, useSearchParams, Link } from 'react-router-dom';
+import { Eye, EyeOff, ShieldCheck, Bot } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/store/authStore';
 import api from '@/lib/axios';
@@ -24,7 +24,37 @@ export function LoginPage() {
   const { setAuth, isAuthenticated } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/dashboard';
+
+  // Discord OAuth hands off failures and "still need 2FA" back to /login via
+  // query params (it can only redirect the browser, not return a fetch
+  // response) — pick those up the same way a password-login 2FA prompt or
+  // error toast would appear.
+  useEffect(() => {
+    const discordError = searchParams.get('error');
+    const discordPendingToken = searchParams.get('pendingToken');
+    if (discordError) {
+      const messages: Record<string, string> = {
+        discord_cancelled: 'Discord login was cancelled.',
+        discord_not_configured: 'Discord login is not configured.',
+        discord_invalid: 'Discord login link expired — please try again.',
+        discord_email_unverified: 'Your Discord account needs a verified email to sign in.',
+        discord_failed: 'Discord login failed. Please try again.',
+      };
+      toast.error(messages[discordError] || 'Discord login failed.');
+      setSearchParams({}, { replace: true });
+    } else if (searchParams.get('requiresTwoFactor') && discordPendingToken) {
+      setPendingToken(discordPendingToken);
+      setRequiresTwoFactor(true);
+      setSearchParams({}, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const DISCORD_LOGIN_URL = import.meta.env.VITE_API_URL
+    ? `${import.meta.env.VITE_API_URL}/api/v1/auth/discord`
+    : '/api/v1/auth/discord';
 
   const { data: settings } = useQuery({
     queryKey: ['site-settings'],
@@ -171,6 +201,23 @@ export function LoginPage() {
                   {isLoading ? <><Spinner size="sm" /> {t('login.signingIn')}</> : t('login.signIn')}
                 </button>
               </form>
+
+              {settings?.['discord.oauth.enabled'] === 'true' && (
+                <>
+                  <div className="flex items-center gap-3 my-5">
+                    <div className="flex-1 h-px bg-zinc-800" />
+                    <span className="text-[10px] uppercase tracking-wider text-zinc-700">or</span>
+                    <div className="flex-1 h-px bg-zinc-800" />
+                  </div>
+                  <a
+                    href={DISCORD_LOGIN_URL}
+                    className="w-full btn-secondary py-2.5 justify-center flex items-center gap-2"
+                  >
+                    <Bot size={15} /> Continue with Discord
+                  </a>
+                </>
+              )}
+
               <p className="text-center text-xs text-zinc-600 mt-5">
                 {t('login.noAccount')}{' '}
                 <Link to="/register" className="text-zinc-400 hover:text-white transition-colors">{t('login.createOne')}</Link>

@@ -22,6 +22,10 @@ model User {
   avatarUrl        String?
   resetToken        String?   @unique
   resetTokenExpiry  DateTime?
+  // Set when the account was created via, or later linked to, Discord OAuth
+  // login. Null for accounts that only ever used email/password.
+  discordId         String?   @unique
+  discordUsername   String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   lastLogin    DateTime?
@@ -317,6 +321,28 @@ model Setting {
   id    String @id @default(uuid())
   key   String @unique
   value String
+}
+
+// A reusable resource template an admin defines once (e.g. "2GB", "Elite")
+// and maps to a store package ID from StoreIntegration.commandMappings
+// (loose JSON, same as the packageId->command mapping already there — a
+// package on Tebex/CraftingStore/WHMCS has no matching row in this DB, so
+// there's nothing to a real foreign key to). Applying a plan on purchase
+// updates the server's build limits and, when the node is online, pushes
+// the change live via Wings' container.update() — no restart required.
+model Plan {
+  id              String   @id @default(uuid())
+  name            String
+  memory          Int
+  swap            Int      @default(0)
+  disk            Int
+  io              Int      @default(500)
+  cpu             Int      @default(0)
+  databaseLimit   Int      @default(0)
+  allocationLimit Int      @default(0)
+  backupLimit     Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 model ServerNote {

@@ -27,6 +27,9 @@ const DEFAULTS: Record<string, string> = {
   'storage.provider': 'none',
   'storage.deleteLocalAfterUpload': 'false',
   'discord.botToken': '',
+  'discord.oauth.enabled': 'false',
+  'discord.oauth.clientId': '',
+  'discord.oauth.clientSecret': '',
 };
 
 const PROVIDER_KEY_SETTING: Record<string, string> = {
@@ -40,7 +43,7 @@ const STORAGE_PROVIDERS = new Set(['none', 's3', 'sftp', 'gdrive']);
 // Keys safe to expose without authentication (sidebar/login branding, public
 // feature flags). Everything else (SMTP creds, AI provider keys) is stripped
 // out below unless the request comes from a logged-in admin.
-const PUBLIC_KEYS = new Set(['app.name', 'app.title', 'app.logo', 'app.description', 'app.version', 'features.aiTools', 'ai.provider', 'ai.configured', 'curseforge.configured', 'theme.customCss', 'whitelabel.hidePoweredBy', 'discord.configured']);
+const PUBLIC_KEYS = new Set(['app.name', 'app.title', 'app.logo', 'app.description', 'app.version', 'features.aiTools', 'ai.provider', 'ai.configured', 'curseforge.configured', 'theme.customCss', 'whitelabel.hidePoweredBy', 'discord.configured', 'discord.oauth.enabled']);
 
 router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
@@ -87,6 +90,7 @@ router.put('/', authenticate, requireAdmin, async (req: AuthRequest, res: Respon
     'storage.sftp.privateKey', 'storage.sftp.basePath',
     'storage.gdrive.serviceAccountJson', 'storage.gdrive.folderId',
     'discord.botToken',
+    'discord.oauth.enabled', 'discord.oauth.clientId', 'discord.oauth.clientSecret',
   ];
   if (req.body['theme.customCss'] !== undefined) {
     const css = req.body['theme.customCss'];

@@ -17,6 +17,7 @@ const RegisterPage       = lazy(() => import('@/pages/auth/RegisterPage').then(m
 const ForgotPasswordPage = lazy(() => import('@/pages/auth/ForgotPasswordPage').then(m => ({ default: m.ForgotPasswordPage })));
 const ResetPasswordPage  = lazy(() => import('@/pages/auth/ResetPasswordPage').then(m => ({ default: m.ResetPasswordPage })));
 const SetupPage          = lazy(() => import('@/pages/auth/SetupPage').then(m => ({ default: m.SetupPage })));
+const DiscordCallbackPage = lazy(() => import('@/pages/auth/DiscordCallbackPage').then(m => ({ default: m.DiscordCallbackPage })));
 const DashboardPage      = lazy(() => import('@/pages/DashboardPage').then(m => ({ default: m.DashboardPage })));
 const ServersPage        = lazy(() => import('@/pages/servers/ServersPage').then(m => ({ default: m.ServersPage })));
 const ServerDetailPage   = lazy(() => import('@/pages/servers/ServerDetailPage').then(m => ({ default: m.ServerDetailPage })));
@@ -70,6 +71,7 @@ export default function App() {
         {/* Public routes */}
         <Route path="/setup" element={<SetupPage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/auth/discord/callback" element={<DiscordCallbackPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />

@@ -5,7 +5,7 @@ import axios from 'axios';
 import { prisma } from '../utils/prisma';
 import { authenticate, requireAdmin, requireScope } from '../middleware/auth';
 import { AuthRequest } from '../types';
-import { sendCommand as wingsSendCommand, createServerOnNode, getServerResources, buildWingsConfig } from '../services/wingsClient';
+import { sendCommand as wingsSendCommand, createServerOnNode, getServerResources, buildWingsConfig, updateServerBuild } from '../services/wingsClient';
 import { fetchPaperVersions, fetchPaperBuildDetails } from '../services/paperApi';
 import { resolveModpackInstall as resolveCurseForgeModpack, matchFilesByFingerprint, CurseForgeFileMatch } from '../services/curseforgeApi';
 import { resolveModpackInstall as resolveModrinthModpack, matchFilesBySha1, ModrinthFileMatch } from '../services/modrinthApi';
@@ -375,6 +375,7 @@ router.patch('/:id', authenticate, requireScope('servers:write'), async (req: Au
     }
   }
 
+  let resourceFieldsChanged = false;
   if (isAdmin) {
     const { memory, swap, disk, io, cpu, startup, image, suspended, userId, allocationId, backupLimit, databaseLimit } = req.body;
     if (memory) updateData.memory = parseInt(memory);
@@ -386,6 +387,7 @@ router.patch('/:id', authenticate, requireScope('servers:write'), async (req: Au
     if (image) updateData.image = image;
     if (typeof suspended === 'boolean') updateData.suspended = suspended;
     if (backupLimit !== undefined) updateData.backupLimit = parseInt(backupLimit);
+    resourceFieldsChanged = memory !== undefined || swap !== undefined || disk !== undefined || io !== undefined || cpu !== undefined;
     if (databaseLimit !== undefined) updateData.databaseLimit = parseInt(databaseLimit);
 
     // Owner change
@@ -448,6 +450,19 @@ router.patch('/:id', authenticate, requireScope('servers:write'), async (req: Au
       properties: JSON.stringify({ suspended: updateData.suspended }),
       ip: req.ip,
     });
+  }
+
+  // Push memory/cpu/disk/io changes to the running container live — best
+  // effort, since the DB is already the source of truth and the new limits
+  // apply on the server's next restart regardless of whether this succeeds.
+  if (resourceFieldsChanged) {
+    const node = await prisma.node.findUnique({ where: { id: updated.nodeId } });
+    if (node) {
+      updateServerBuild({ ...updated, node } as Parameters<typeof updateServerBuild>[0], {
+        memory_limit: updated.memory, swap: updated.swap, disk_space: updated.disk,
+        io_weight: updated.io, cpu_limit: updated.cpu, oom_disabled: updated.oomDisabled,
+      }).catch(err => logger.warn(`Live build update failed for ${updated.id}: ${(err as Error).message}`));
+    }
   }
 
   return res.json({ data: updated });

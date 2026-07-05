@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Plus, Trash2, Pencil, Copy, Eye, EyeOff, RefreshCw, Download, ShoppingCart, X,
+  Plus, Trash2, Pencil, Copy, Eye, EyeOff, RefreshCw, Download, ShoppingCart, X, Gauge,
 } from 'lucide-react';
 import api from '@/lib/axios';
 import { Spinner } from '@/components/ui/Spinner';
@@ -11,7 +11,23 @@ import toast from 'react-hot-toast';
 
 interface CommandMapping {
   packageId: string;
-  command: string;
+  // Either or both — a mapping can run a console command, apply a resource
+  // plan upgrade, or both from a single purchase.
+  command?: string;
+  planId?: string;
+}
+
+interface PlanRow {
+  id: string;
+  name: string;
+  memory: number;
+  swap: number;
+  disk: number;
+  io: number;
+  cpu: number;
+  databaseLimit: number;
+  allocationLimit: number;
+  backupLimit: number;
 }
 
 interface StoreIntegrationRow {
@@ -49,6 +65,11 @@ export function AdminIntegrationsPage() {
     queryFn: () => api.get('/servers', { params: { perPage: 100 } }).then((r) => r.data.data as { id: string; name: string }[]),
   });
 
+  const { data: plansData } = useQuery({
+    queryKey: ['admin-plans'],
+    queryFn: () => api.get('/plans').then((r) => r.data.data as PlanRow[]),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/store-integrations/${id}`),
     onSuccess: () => {
@@ -61,6 +82,7 @@ export function AdminIntegrationsPage() {
 
   const integrations = data || [];
   const servers = serversData || [];
+  const plans = plansData || [];
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -96,6 +118,9 @@ export function AdminIntegrationsPage() {
           </a>
         </div>
       </div>
+
+      {/* Resource Plans */}
+      <PlansSection plans={plans} onChanged={() => queryClient.invalidateQueries({ queryKey: ['admin-plans'] })} />
 
       {/* Tebex / CraftingStore */}
       <div className="flex items-center justify-between">
@@ -165,6 +190,7 @@ export function AdminIntegrationsPage() {
       {(showCreate || editIntegration) && (
         <StoreIntegrationModal
           servers={servers}
+          plans={plans}
           existing={editIntegration}
           onClose={() => { setShowCreate(false); setEditIntegration(null); }}
           onSaved={() => {
@@ -188,8 +214,9 @@ export function AdminIntegrationsPage() {
   );
 }
 
-function StoreIntegrationModal({ servers, existing, onClose, onSaved }: {
+function StoreIntegrationModal({ servers, plans, existing, onClose, onSaved }: {
   servers: { id: string; name: string }[];
+  plans: PlanRow[];
   existing: StoreIntegrationRow | null;
   onClose: () => void;
   onSaved: () => void;
@@ -197,7 +224,7 @@ function StoreIntegrationModal({ servers, existing, onClose, onSaved }: {
   const [name, setName] = useState(existing?.name || '');
   const [provider, setProvider] = useState<'tebex' | 'craftingstore'>(existing?.provider || 'tebex');
   const [serverId, setServerId] = useState(existing?.serverId || '');
-  const [mappings, setMappings] = useState<CommandMapping[]>(existing?.commandMappings?.length ? existing.commandMappings : [{ packageId: '', command: '' }]);
+  const [mappings, setMappings] = useState<CommandMapping[]>(existing?.commandMappings?.length ? existing.commandMappings : [{ packageId: '', command: '', planId: '' }]);
   const [loading, setLoading] = useState(false);
   const [secret, setSecret] = useState<string | null>(null);
   const [showSecret, setShowSecret] = useState(false);
@@ -225,7 +252,9 @@ function StoreIntegrationModal({ servers, existing, onClose, onSaved }: {
   const submit = async () => {
     if (!name.trim()) { toast.error('Name is required'); return; }
     if (!serverId) { toast.error('Pick a server'); return; }
-    const cleanMappings = mappings.filter((m) => m.packageId.trim() && m.command.trim());
+    const cleanMappings = mappings
+      .filter((m) => m.packageId.trim() && (m.command?.trim() || m.planId))
+      .map((m) => ({ packageId: m.packageId.trim(), command: m.command?.trim() || undefined, planId: m.planId || undefined }));
     setLoading(true);
     try {
       const payload = { name: name.trim(), provider, serverId, commandMappings: cleanMappings };
@@ -296,29 +325,218 @@ function StoreIntegrationModal({ servers, existing, onClose, onSaved }: {
         )}
 
         <div>
-          <label className="label">Package → Command Mappings</label>
+          <label className="label">Package → Command / Plan Mappings</label>
           <div className="space-y-2">
             {mappings.map((m, idx) => (
               <div key={idx} className="flex gap-2 items-center">
-                <input className="input font-mono text-xs w-28 shrink-0" placeholder="Package ID" value={m.packageId} onChange={(e) => updateMapping(idx, 'packageId', e.target.value)} />
-                <input className="input font-mono text-xs flex-1 min-w-0" placeholder="lp user {username} parent addtemp vip 30d" value={m.command} onChange={(e) => updateMapping(idx, 'command', e.target.value)} />
+                <input className="input font-mono text-xs w-24 shrink-0" placeholder="Package ID" value={m.packageId} onChange={(e) => updateMapping(idx, 'packageId', e.target.value)} />
+                <input className="input font-mono text-xs flex-1 min-w-0" placeholder="lp user {username} parent addtemp vip 30d" value={m.command || ''} onChange={(e) => updateMapping(idx, 'command', e.target.value)} />
+                <select className="input text-xs w-32 shrink-0" value={m.planId || ''} onChange={(e) => updateMapping(idx, 'planId', e.target.value)}>
+                  <option value="">No plan</option>
+                  {plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
                 <button type="button" className="text-zinc-600 hover:text-red-400 shrink-0" onClick={() => setMappings((prev) => prev.filter((_, i) => i !== idx))}>
                   <X size={14} />
                 </button>
               </div>
             ))}
           </div>
-          <button type="button" className="btn-secondary btn-sm mt-2" onClick={() => setMappings((prev) => [...prev, { packageId: '', command: '' }])}>
+          <button type="button" className="btn-secondary btn-sm mt-2" onClick={() => setMappings((prev) => [...prev, { packageId: '', command: '', planId: '' }])}>
             <Plus size={12} /> Add mapping
           </button>
           <p className="text-[11px] text-zinc-600 mt-2">
-            <code>{'{username}'}</code> in a command is replaced with the buyer's in-game name from the purchase.
+            <code>{'{username}'}</code> in a command is replaced with the buyer's in-game name. Picking a plan upgrades the server's resources (RAM/CPU/disk) live on purchase — command and plan can be combined, or either left empty.
           </p>
         </div>
 
         <div className="flex gap-2 pt-2">
           <button className="btn-primary flex-1" onClick={submit} disabled={loading}>
             {loading ? <Spinner size="sm" /> : existing ? 'Save Changes' : 'Create Integration'}
+          </button>
+          <button className="btn-secondary" onClick={onClose}>Cancel</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// Reusable resource templates (e.g. "2GB", "Elite") that a store purchase
+// can apply to a server — defined once here, then picked from the package
+// mapping dropdown above.
+function PlansSection({ plans, onChanged }: { plans: PlanRow[]; onChanged: () => void }) {
+  const [showCreate, setShowCreate] = useState(false);
+  const [editPlan, setEditPlan] = useState<PlanRow | null>(null);
+  const [deletePlan, setDeletePlan] = useState<PlanRow | null>(null);
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/plans/${id}`),
+    onSuccess: () => { toast.success('Plan deleted'); onChanged(); setDeletePlan(null); },
+    onError: () => toast.error('Failed to delete plan'),
+  });
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h2 className="text-sm font-semibold text-zinc-100">Resource Plans</h2>
+          <p className="text-xs text-zinc-500 mt-0.5">Templates a store purchase can apply — RAM/CPU/disk upgrade on the mapped server, live, no restart needed.</p>
+        </div>
+        <button className="btn-secondary" onClick={() => setShowCreate(true)}>
+          <Plus size={16} /> New Plan
+        </button>
+      </div>
+
+      {plans.length === 0 ? (
+        <div className="card p-8 text-center">
+          <Gauge size={36} className="mx-auto text-slate-600 mb-3" />
+          <p className="text-slate-400 text-sm">No plans yet — create one to map a store package to a resource upgrade.</p>
+        </div>
+      ) : (
+        <div className="card">
+          <div className="table-container">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Memory</th>
+                  <th>Disk</th>
+                  <th>CPU</th>
+                  <th>Databases</th>
+                  <th>Backups</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {plans.map((p) => (
+                  <tr key={p.id}>
+                    <td className="font-medium text-zinc-200">{p.name}</td>
+                    <td className="text-xs text-zinc-500">{p.memory} MB</td>
+                    <td className="text-xs text-zinc-500">{p.disk} MB</td>
+                    <td className="text-xs text-zinc-500">{p.cpu > 0 ? `${p.cpu}%` : 'Unlimited'}</td>
+                    <td className="text-xs text-zinc-500">{p.databaseLimit}</td>
+                    <td className="text-xs text-zinc-500">{p.backupLimit}</td>
+                    <td>
+                      <div className="flex items-center gap-1.5 justify-end">
+                        <button className="btn-secondary btn-sm" onClick={() => setEditPlan(p)} title="Edit">
+                          <Pencil size={13} />
+                        </button>
+                        <button className="btn-danger btn-sm" onClick={() => setDeletePlan(p)} title="Delete">
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {(showCreate || editPlan) && (
+        <PlanModal
+          existing={editPlan}
+          onClose={() => { setShowCreate(false); setEditPlan(null); }}
+          onSaved={() => { setShowCreate(false); setEditPlan(null); onChanged(); }}
+        />
+      )}
+
+      <ConfirmDialog
+        isOpen={!!deletePlan}
+        onClose={() => setDeletePlan(null)}
+        onConfirm={() => deletePlan && deleteMutation.mutate(deletePlan.id)}
+        title="Delete Plan"
+        message={`Delete "${deletePlan?.name}"? Package mappings using it will stop applying it on purchase.`}
+        confirmLabel="Delete"
+        isLoading={deleteMutation.isPending}
+      />
+    </div>
+  );
+}
+
+function PlanModal({ existing, onClose, onSaved }: {
+  existing: PlanRow | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [name, setName] = useState(existing?.name || '');
+  const [memory, setMemory] = useState(String(existing?.memory ?? 2048));
+  const [swap, setSwap] = useState(String(existing?.swap ?? 0));
+  const [disk, setDisk] = useState(String(existing?.disk ?? 5120));
+  const [cpu, setCpu] = useState(String(existing?.cpu ?? 0));
+  const [io, setIo] = useState(String(existing?.io ?? 500));
+  const [databaseLimit, setDatabaseLimit] = useState(String(existing?.databaseLimit ?? 0));
+  const [allocationLimit, setAllocationLimit] = useState(String(existing?.allocationLimit ?? 0));
+  const [backupLimit, setBackupLimit] = useState(String(existing?.backupLimit ?? 0));
+  const [loading, setLoading] = useState(false);
+
+  const submit = async () => {
+    if (!name.trim()) { toast.error('Name is required'); return; }
+    const payload = {
+      name: name.trim(),
+      memory: parseInt(memory, 10), swap: parseInt(swap, 10) || 0, disk: parseInt(disk, 10),
+      cpu: parseInt(cpu, 10) || 0, io: parseInt(io, 10) || 500,
+      databaseLimit: parseInt(databaseLimit, 10) || 0, allocationLimit: parseInt(allocationLimit, 10) || 0,
+      backupLimit: parseInt(backupLimit, 10) || 0,
+    };
+    setLoading(true);
+    try {
+      if (existing) await api.put(`/plans/${existing.id}`, payload);
+      else await api.post('/plans', payload);
+      onSaved();
+      toast.success(existing ? 'Plan updated' : 'Plan created');
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      toast.error(e.response?.data?.message || 'Failed to save plan');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Modal isOpen onClose={onClose} title={existing ? 'Edit Plan' : 'New Plan'} size="md">
+      <div className="p-6 space-y-4">
+        <div>
+          <label className="label">Name</label>
+          <input className="input" placeholder="e.g. 4GB Elite" value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="label">Memory (MB)</label>
+            <input className="input" type="number" min={1} value={memory} onChange={(e) => setMemory(e.target.value)} />
+          </div>
+          <div>
+            <label className="label">Disk (MB)</label>
+            <input className="input" type="number" min={1} value={disk} onChange={(e) => setDisk(e.target.value)} />
+          </div>
+          <div>
+            <label className="label">Swap (MB)</label>
+            <input className="input" type="number" value={swap} onChange={(e) => setSwap(e.target.value)} />
+          </div>
+          <div>
+            <label className="label">CPU % (0 = unlimited)</label>
+            <input className="input" type="number" min={0} value={cpu} onChange={(e) => setCpu(e.target.value)} />
+          </div>
+          <div>
+            <label className="label">Block I/O weight</label>
+            <input className="input" type="number" value={io} onChange={(e) => setIo(e.target.value)} />
+          </div>
+          <div>
+            <label className="label">Databases</label>
+            <input className="input" type="number" min={0} value={databaseLimit} onChange={(e) => setDatabaseLimit(e.target.value)} />
+          </div>
+          <div>
+            <label className="label">Allocations</label>
+            <input className="input" type="number" min={0} value={allocationLimit} onChange={(e) => setAllocationLimit(e.target.value)} />
+          </div>
+          <div>
+            <label className="label">Backups</label>
+            <input className="input" type="number" min={0} value={backupLimit} onChange={(e) => setBackupLimit(e.target.value)} />
+          </div>
+        </div>
+        <div className="flex gap-2 pt-2">
+          <button className="btn-primary flex-1" onClick={submit} disabled={loading}>
+            {loading ? <Spinner size="sm" /> : existing ? 'Save Changes' : 'Create Plan'}
           </button>
           <button className="btn-secondary" onClick={onClose}>Cancel</button>
         </div>

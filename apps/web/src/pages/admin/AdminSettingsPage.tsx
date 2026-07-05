@@ -86,6 +86,9 @@ export function AdminSettingsPage() {
     'storage.gdrive.serviceAccountJson': '',
     'storage.gdrive.folderId': '',
     'discord.botToken': '',
+    'discord.oauth.enabled': 'false',
+    'discord.oauth.clientId': '',
+    'discord.oauth.clientSecret': '',
   });
   const [showKey, setShowKey] = useState<Record<string, boolean>>({});
   const queryClient = useQueryClient();
@@ -128,6 +131,9 @@ export function AdminSettingsPage() {
         'storage.gdrive.serviceAccountJson': data['storage.gdrive.serviceAccountJson'] || '',
         'storage.gdrive.folderId': data['storage.gdrive.folderId'] || '',
         'discord.botToken': data['discord.botToken'] || '',
+        'discord.oauth.enabled': data['discord.oauth.enabled'] || 'false',
+        'discord.oauth.clientId': data['discord.oauth.clientId'] || '',
+        'discord.oauth.clientSecret': data['discord.oauth.clientSecret'] || '',
       });
     }).finally(() => setLoading(false));
   }, []);
@@ -701,6 +707,74 @@ export function AdminSettingsPage() {
             <p>Once invited, a server owner (or admin) generates a bind code from a server's Settings tab in Kretase, then runs:</p>
             <code className="block bg-zinc-950 rounded px-2 py-1 text-zinc-400">/bind &lt;code&gt;</code>
             <p>in the Discord channel that should control that server. <code className="text-zinc-400">/unbind</code> removes the link.</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Discord Login (SSO) */}
+      <div className="card">
+        <div className="card-header">
+          <h2 className="text-sm font-semibold text-zinc-100 flex items-center gap-2"><Bot size={14} />Discord Login (SSO)</h2>
+          <p className="text-xs text-zinc-500 mt-0.5">
+            Lets users sign in with Discord instead of (or alongside) email/password. Separate from the bot above — this is a different application entry.
+          </p>
+        </div>
+        <div className="p-6 space-y-4">
+          <label className="flex items-center justify-between gap-4 cursor-pointer">
+            <div>
+              <p className="text-sm font-medium text-zinc-200">Enable Discord login</p>
+              <p className="text-xs text-zinc-500 mt-0.5">Shows a "Continue with Discord" button on the login page.</p>
+            </div>
+            <input
+              type="checkbox"
+              checked={form['discord.oauth.enabled'] === 'true'}
+              onChange={e => setForm(f => ({ ...f, 'discord.oauth.enabled': e.target.checked ? 'true' : 'false' }))}
+              className="shrink-0 w-9 h-5 accent-panel-500"
+            />
+          </label>
+
+          <div>
+            <label className="label">Client ID</label>
+            <input
+              className="input font-mono text-sm"
+              value={form['discord.oauth.clientId']}
+              onChange={e => setForm(f => ({ ...f, 'discord.oauth.clientId': e.target.value }))}
+              placeholder="1234567890123456789"
+            />
+          </div>
+
+          <div>
+            <label className="label">Client Secret</label>
+            <div className="relative">
+              <input
+                type={showKey['discordOauthSecret'] ? 'text' : 'password'}
+                className="input font-mono text-sm pr-10"
+                value={form['discord.oauth.clientSecret']}
+                onChange={e => setForm(f => ({ ...f, 'discord.oauth.clientSecret': e.target.value }))}
+                placeholder="••••••••••••••••••••••••"
+              />
+              <button
+                type="button"
+                onClick={() => setShowKey(s => ({ ...s, discordOauthSecret: !s.discordOauthSecret }))}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-300 transition-colors"
+              >
+                {showKey['discordOauthSecret'] ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-zinc-800 p-4 space-y-1.5">
+            <p className="text-xs font-medium text-zinc-300">Setup</p>
+            <p className="text-xs text-zinc-500">
+              Create an application at{' '}
+              <a href="https://discord.com/developers/applications" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">
+                discord.com/developers/applications
+              </a>
+              , open OAuth2 → General, copy the Client ID and Client Secret above, and add this exact Redirect URI there:
+            </p>
+            <code className="block bg-zinc-950 rounded px-2 py-1 text-zinc-400 text-xs mt-2 break-all">
+              {`${window.location.origin}/api/v1/auth/discord/callback`}
+            </code>
           </div>
         </div>
       </div>

@@ -64,6 +64,24 @@ export async function sendCommand(
   await client.post(`/servers/${server.uuid}/command`, { command });
 }
 
+// Pushes an updated build/resource config to Wings — applied live to the
+// running container (no restart) where the docker cgroup driver allows it,
+// and always cached for the next start regardless. Used by admin manual
+// resource edits and by plan-based auto-upgrades on a store purchase.
+export async function updateServerBuild(
+  server: Server & { node: { fqdn: string; daemonPort: number; scheme: string; token: string } },
+  build: { memory_limit?: number; swap?: number; disk_space?: number; io_weight?: number; cpu_limit?: number; oom_disabled?: boolean }
+): Promise<void> {
+  const client = getNodeClient(
+    server.node.fqdn,
+    server.node.daemonPort,
+    server.node.scheme,
+    server.node.token
+  );
+
+  await client.patch(`/servers/${server.uuid}/build`, build);
+}
+
 export async function getServerResources(
   server: Server & { node: { fqdn: string; daemonPort: number; scheme: string; token: string } }
 ): Promise<{

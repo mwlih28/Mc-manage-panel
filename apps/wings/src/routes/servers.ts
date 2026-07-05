@@ -70,6 +70,18 @@ router.post('/:uuid/command', async (req: Request, res: Response) => {
   return res.json({ message: 'Command sent' });
 });
 
+// Live resource-limit update (e.g. a billing plan upgrade) — applies to the
+// running container without a restart where possible; always updates the
+// in-memory config so a future restart is consistent regardless.
+router.patch('/:uuid/build', async (req: Request, res: Response) => {
+  try {
+    await serverManager.updateBuild(req.params.uuid, req.body);
+    return res.json({ message: 'Build updated' });
+  } catch (err) {
+    return res.status(500).json({ message: (err as Error).message });
+  }
+});
+
 // Get resources/stats
 router.get('/:uuid/resources', async (req: Request, res: Response) => {
   const { uuid } = req.params;

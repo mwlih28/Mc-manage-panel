@@ -4,6 +4,7 @@ import rateLimit from 'express-rate-limit';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+import axios from 'axios';
 import { prisma } from '../utils/prisma';
 import { generateTokenPair, verifyRefreshToken } from '../utils/jwt';
 import { authenticate } from '../middleware/auth';
@@ -11,10 +12,24 @@ import { AuthRequest } from '../types';
 import { verify } from 'otplib';
 import { sendPasswordResetEmail } from '../services/emailService';
 import { logActivity } from '../services/activityService';
+import { logger } from '../utils/logger';
 
 const router = Router();
 
 const JWT_SECRET = process.env.JWT_SECRET!;
+
+function getFrontendOrigin(): string {
+  return process.env.CORS_ORIGIN || 'http://localhost:5173';
+}
+
+// The API's own public base URL — Discord redirects the browser back here
+// after authorization, so it must be reachable from the outside, not the
+// frontend origin. Same domain in the common single-nginx-proxy deploy
+// (install-panel.sh sets APP_URL to that domain), separate in a split
+// frontend/API deploy.
+function getApiBaseUrl(): string {
+  return (process.env.APP_URL || getFrontendOrigin()).replace(/\/$/, '');
+}
 
 // Brute-force protection: 10 attempts / 15 min per IP on credential-guessing endpoints
 const authLimiter = rateLimit({
@@ -247,6 +262,134 @@ router.post(
     return res.json({ message: 'Password updated — you can now log in' });
   }
 );
+
+// GET /auth/discord — kicks off Discord OAuth login. The state param is a
+// short-lived signed JWT (not a server-side session — this API is stateless)
+// so the callback can prove the request round-tripped through Discord
+// rather than being a forged direct hit.
+router.get('/discord', async (_req: Request, res: Response) => {
+  const frontend = getFrontendOrigin();
+  const [clientIdRow, enabledRow] = await Promise.all([
+    prisma.setting.findUnique({ where: { key: 'discord.oauth.clientId' } }),
+    prisma.setting.findUnique({ where: { key: 'discord.oauth.enabled' } }),
+  ]);
+  if (enabledRow?.value !== 'true' || !clientIdRow?.value) {
+    return res.redirect(`${frontend}/login?error=discord_not_configured`);
+  }
+
+  const state = jwt.sign({ nonce: crypto.randomBytes(8).toString('hex') }, JWT_SECRET, { expiresIn: '10m' });
+  const redirectUri = `${getApiBaseUrl()}/api/v1/auth/discord/callback`;
+  const params = new URLSearchParams({
+    client_id: clientIdRow.value,
+    redirect_uri: redirectUri,
+    response_type: 'code',
+    scope: 'identify email',
+    state,
+  });
+  return res.redirect(`https://discord.com/api/oauth2/authorize?${params.toString()}`);
+});
+
+// GET /auth/discord/callback — exchanges the code, finds/links/creates the
+// user, then hands off to the SPA the same way a normal login would: a
+// redirect carrying either a pendingToken (2FA still required — Discord
+// login does not bypass it) or a real token pair for the frontend to store.
+router.get('/discord/callback', async (req: Request, res: Response) => {
+  const frontend = getFrontendOrigin();
+  const { code, state, error } = req.query as Record<string, string | undefined>;
+
+  if (error) return res.redirect(`${frontend}/login?error=discord_cancelled`);
+  if (!code || !state) return res.redirect(`${frontend}/login?error=discord_invalid`);
+  try {
+    jwt.verify(state, JWT_SECRET);
+  } catch {
+    return res.redirect(`${frontend}/login?error=discord_invalid`);
+  }
+
+  const [clientIdRow, clientSecretRow] = await Promise.all([
+    prisma.setting.findUnique({ where: { key: 'discord.oauth.clientId' } }),
+    prisma.setting.findUnique({ where: { key: 'discord.oauth.clientSecret' } }),
+  ]);
+  if (!clientIdRow?.value || !clientSecretRow?.value) {
+    return res.redirect(`${frontend}/login?error=discord_not_configured`);
+  }
+
+  try {
+    const redirectUri = `${getApiBaseUrl()}/api/v1/auth/discord/callback`;
+    const tokenResp = await axios.post(
+      'https://discord.com/api/oauth2/token',
+      new URLSearchParams({
+        client_id: clientIdRow.value,
+        client_secret: clientSecretRow.value,
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: redirectUri,
+      }),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+    );
+
+    const discordAccessToken = tokenResp.data.access_token as string;
+    const meResp = await axios.get('https://discord.com/api/users/@me', {
+      headers: { Authorization: `Bearer ${discordAccessToken}` },
+    });
+    const discordUser = meResp.data as { id: string; username: string; global_name?: string; email?: string; verified?: boolean };
+
+    // Discord's `email` scope can still return an unverified address — don't
+    // use it to link/create an account, since that would let someone claim
+    // an email they don't actually control.
+    if (!discordUser.email || !discordUser.verified) {
+      return res.redirect(`${frontend}/login?error=discord_email_unverified`);
+    }
+
+    let user = await prisma.user.findUnique({ where: { discordId: discordUser.id } });
+
+    if (!user) {
+      const existingByEmail = await prisma.user.findUnique({ where: { email: discordUser.email } });
+      if (existingByEmail) {
+        user = await prisma.user.update({
+          where: { id: existingByEmail.id },
+          data: { discordId: discordUser.id, discordUsername: discordUser.username },
+        });
+      }
+    }
+
+    if (!user) {
+      let username = discordUser.username.replace(/[^a-zA-Z0-9_]/g, '').slice(0, 20) || `user${discordUser.id.slice(-6)}`;
+      if (await prisma.user.findUnique({ where: { username } })) {
+        username = `${username.slice(0, 14)}${crypto.randomBytes(3).toString('hex')}`;
+      }
+      // No usable password — this account only ever authenticates via
+      // Discord unless the owner sets one through the normal reset flow.
+      const unusablePassword = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 12);
+      user = await prisma.user.create({
+        data: {
+          email: discordUser.email,
+          username,
+          password: unusablePassword,
+          firstName: discordUser.global_name || discordUser.username,
+          lastName: '',
+          discordId: discordUser.id,
+          discordUsername: discordUser.username,
+        },
+      });
+    } else if (user.discordUsername !== discordUser.username) {
+      user = await prisma.user.update({ where: { id: user.id }, data: { discordUsername: discordUser.username } });
+    }
+
+    await prisma.user.update({ where: { id: user.id }, data: { lastLogin: new Date() } });
+    await logActivity({ userId: user.id, event: 'auth:login', ip: req.ip, properties: JSON.stringify({ via: 'discord' }) }).catch(() => {});
+
+    if (user.twoFactor && user.twoFactorSecret) {
+      const pendingToken = jwt.sign({ userId: user.id, pending: true }, JWT_SECRET, { expiresIn: '5m' });
+      return res.redirect(`${frontend}/login?requiresTwoFactor=1&pendingToken=${encodeURIComponent(pendingToken)}`);
+    }
+
+    const tokens = generateTokenPair({ userId: user.id, email: user.email, role: user.role });
+    return res.redirect(`${frontend}/auth/discord/callback?accessToken=${encodeURIComponent(tokens.accessToken)}&refreshToken=${encodeURIComponent(tokens.refreshToken)}`);
+  } catch (err) {
+    logger.warn(`Discord OAuth callback failed: ${(err as Error).message}`);
+    return res.redirect(`${frontend}/login?error=discord_failed`);
+  }
+});
 
 // GET /auth/setup/status - check if initial setup is needed
 router.get('/setup/status', async (_req, res) => {

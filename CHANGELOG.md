@@ -11,6 +11,8 @@
 - **Import from Pterodactyl** — a new Admin → Migration wizard that pulls servers from a source Pterodactyl panel's Application API and transfers their actual files (worlds, plugins, configs) over SFTP into Kretase.
 - **Installable app + push notifications** — the panel can now be installed to a home screen/desktop like a native app, and sends a real OS-level notification on server crash, suspension, or a security alert — even with no tab open.
 - **Billing & store integrations** — real WHMCS and Blesta provisioning modules (downloadable from Admin → Billing & Store) for automatic account creation/suspension/termination on order events, plus Tebex/CraftingStore purchase webhooks that can run a console command (e.g. granting a rank) on a mapped package.
+- **Resource Plans + auto-upgrade on purchase** — define reusable RAM/CPU/disk/database/backup templates from Admin → Billing & Store and map a store package to one; a purchase now upgrades the server's actual resources live (no restart) instead of only being able to run a console command.
+- **Discord login (SSO)** — users can sign in with Discord instead of, or in addition to, email/password, configurable from Admin → Settings. First-time Discord sign-in auto-creates an account (or links to an existing one on matching verified email); 2FA is still enforced if enabled.
 
 ### Security
 - Closed an API-key scope enforcement gap on ~48 nested server/backup routes (power actions, file management, players, schedules, and more) that had no scope check at all, meaning a narrowly-scoped API key could still reach them. Added a new `servers:power` scope so automation/billing integrations don't need full write access just to start/stop a server.
