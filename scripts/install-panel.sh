@@ -339,6 +339,18 @@ const prisma = new PrismaClient();
 "
 success "Admin account created: ${ADMIN_EMAIL}"
 
+# ── Seed community egg catalog ────────────────────────────────────────
+# Fresh install only (not run by update-panel.sh) — populates Eggs with the
+# same ~299-egg community library Admin → Eggs → Browse Community Eggs
+# pulls from, so a new panel doesn't start with an empty egg list. Needs
+# internet access to pelican-eggs' GitHub repos; if that's unavailable at
+# install time the script logs a warning and exits 0 — it never aborts
+# the install, and admins can re-run the import from the panel UI later.
+step "Importing community egg catalog"
+cd "${PANEL_DIR}/apps/api"
+node dist/scripts/seedEggs.js || true
+success "Egg catalog import finished"
+
 # ── Optional: Email Setup (Resend) ────────────────────────────────────
 step "Email Setup (optional)"
 echo ""
