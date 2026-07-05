@@ -30,6 +30,8 @@ const AdminEggsPage      = lazy(() => import('@/pages/admin/AdminEggsPage').then
 const AdminActivityPage  = lazy(() => import('@/pages/admin/AdminActivityPage').then(m => ({ default: m.AdminActivityPage })));
 const AdminSettingsPage  = lazy(() => import('@/pages/admin/AdminSettingsPage').then(m => ({ default: m.AdminSettingsPage })));
 const AdminApiKeysPage   = lazy(() => import('@/pages/admin/AdminApiKeysPage').then(m => ({ default: m.AdminApiKeysPage })));
+const AdminApiDocsPage   = lazy(() => import('@/pages/admin/AdminApiDocsPage').then(m => ({ default: m.AdminApiDocsPage })));
+const AdminWebhooksPage  = lazy(() => import('@/pages/admin/AdminWebhooksPage').then(m => ({ default: m.AdminWebhooksPage })));
 const PublicStatusPage   = lazy(() => import('@/pages/PublicStatusPage').then(m => ({ default: m.PublicStatusPage })));
 
 function RouteFallback() {
@@ -91,6 +93,8 @@ export default function App() {
             <Route path="/admin/eggs" element={<AdminEggsPage />} />
             <Route path="/admin/activity" element={<AdminActivityPage />} />
             <Route path="/admin/api-keys" element={<AdminApiKeysPage />} />
+            <Route path="/admin/api-docs" element={<AdminApiDocsPage />} />
+            <Route path="/admin/webhooks" element={<AdminWebhooksPage />} />
             <Route path="/admin/settings" element={<AdminSettingsPage />} />
           </Route>
         </Route>

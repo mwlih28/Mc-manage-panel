@@ -2,6 +2,7 @@ import { io as ioClient, Socket } from 'socket.io-client';
 import { Server as SocketServer } from 'socket.io';
 import { logger } from '../utils/logger';
 import { prisma } from '../utils/prisma';
+import { logActivity } from './activityService';
 
 interface NodeInfo {
   id: string;
@@ -125,17 +126,15 @@ function checkAutoOptimize(nodeId: string, uuid: string, entry: StatsEntry): voi
       }
     }
 
-    await prisma.activity.create({
-      data: {
-        serverId: server.id,
-        event: 'server:auto-optimize',
-        properties: JSON.stringify({
-          reason: cpuTriggered ? 'high_cpu' : 'high_memory',
-          avgCpuPercent: Math.round(avgCpu),
-          memoryPercent: Math.round(memPct),
-          action,
-        }),
-      },
+    await logActivity({
+      serverId: server.id,
+      event: 'server:auto-optimize',
+      properties: JSON.stringify({
+        reason: cpuTriggered ? 'high_cpu' : 'high_memory',
+        avgCpuPercent: Math.round(avgCpu),
+        memoryPercent: Math.round(memPct),
+        action,
+      }),
     }).catch((err: Error) => logger.warn(`Failed to log auto-optimize activity for ${uuid}: ${err.message}`));
 
     logger.info(`Auto-optimize triggered for ${uuid}: cpu=${avgCpu.toFixed(1)}% mem=${memPct.toFixed(1)}% -> ${action}`);
@@ -198,12 +197,10 @@ export function getOrConnectWings(node: NodeInfo, io: SocketServer): Socket {
         prisma.server.findFirst({ where: { uuid: alertData.uuid }, select: { id: true } })
           .then((server) => {
             if (!server) return;
-            return prisma.activity.create({
-              data: {
-                serverId: server.id,
-                event: event === 'server:crash' ? 'server:crash' : 'server:security-alert',
-                properties: event === 'server:alert' ? JSON.stringify({ severity: alertData.severity, message: alertData.message }) : '{}',
-              },
+            return logActivity({
+              serverId: server.id,
+              event: event === 'server:crash' ? 'server:crash' : 'server:security-alert',
+              properties: event === 'server:alert' ? JSON.stringify({ severity: alertData.severity, message: alertData.message }) : '{}',
             });
           })
           .catch((err: Error) => logger.warn(`Failed to log ${event} for ${alertData.uuid}: ${err.message}`));

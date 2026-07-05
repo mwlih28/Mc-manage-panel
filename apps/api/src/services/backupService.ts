@@ -2,6 +2,7 @@ import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import { Server, Node } from '@prisma/client';
 import { prisma } from '../utils/prisma';
+import { logActivity } from './activityService';
 import { logger } from '../utils/logger';
 
 // Archiving a large world can take minutes — callers that have an HTTP
@@ -31,13 +32,11 @@ export async function startBackup(
     },
   });
 
-  await prisma.activity.create({
-    data: {
-      userId: opts.userId,
-      serverId: server.id,
-      event: 'server:backup.start',
-      properties: JSON.stringify({ name: backup.name }),
-    },
+  await logActivity({
+    userId: opts.userId,
+    serverId: server.id,
+    event: 'server:backup.start',
+    properties: JSON.stringify({ name: backup.name }),
   });
 
   const run = async () => {
@@ -60,8 +59,20 @@ export async function startBackup(
           completedAt: new Date(),
         },
       });
+      await logActivity({
+        userId: opts.userId,
+        serverId: server.id,
+        event: 'server:backup.complete',
+        properties: JSON.stringify({ name: backup.name }),
+      });
     } catch (err) {
       logger.warn(`Backup ${backup.uuid} failed for server ${server.uuid}: ${(err as Error).message}`);
+      await logActivity({
+        userId: opts.userId,
+        serverId: server.id,
+        event: 'server:backup.failed',
+        properties: JSON.stringify({ name: backup.name, error: (err as Error).message }),
+      });
     }
   };
 

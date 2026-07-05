@@ -55,15 +55,18 @@ export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction
   next();
 }
 
-// Gates a route behind a specific API key scope. Only meaningful for
-// requests authenticated via an admin API key (req.apiKeyScopes set) — a
-// normal session-authenticated admin already has full rights for their
-// role and passes through untouched, since session logins aren't scoped.
-export function requireScope(scope: ApiKeyScope) {
+// Gates a route behind a specific API key scope (or any one of several —
+// e.g. a power-action route accepts the narrow servers:power scope OR the
+// broader servers:write). Only meaningful for requests authenticated via an
+// admin API key (req.apiKeyScopes set) — a normal session-authenticated
+// admin already has full rights for their role and passes through
+// untouched, since session logins aren't scoped.
+export function requireScope(scope: ApiKeyScope | ApiKeyScope[]) {
+  const required = Array.isArray(scope) ? scope : [scope];
   return (req: AuthRequest, res: Response, next: NextFunction) => {
     if (!req.apiKeyScopes) return next();
-    if (!hasScope(req.apiKeyScopes, scope)) {
-      return res.status(403).json({ message: `API key is missing required scope: ${scope}` });
+    if (!required.some((s) => hasScope(req.apiKeyScopes!, s))) {
+      return res.status(403).json({ message: `API key is missing required scope: ${required.join(' or ')}` });
     }
     next();
   };

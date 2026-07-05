@@ -1,10 +1,11 @@
 import { Router, Response } from 'express';
 import axios from 'axios';
 import { prisma } from '../utils/prisma';
-import { authenticate } from '../middleware/auth';
+import { authenticate, requireScope } from '../middleware/auth';
 import { AuthRequest } from '../types';
 import { getWingsClient } from './servers';
 import { startBackup } from '../services/backupService';
+import { logActivity } from '../services/activityService';
 import { logger } from '../utils/logger';
 
 const router = Router({ mergeParams: true });
@@ -15,7 +16,7 @@ const router = Router({ mergeParams: true });
 const BACKUP_TIMEOUT_MS = 10 * 60 * 1000;
 
 // GET /servers/:serverId/backups
-router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/', authenticate, requireScope('servers:read'), async (req: AuthRequest, res: Response) => {
   const isAdmin = req.user!.role === 'ADMIN';
   const server = await prisma.server.findFirst({
     where: {
@@ -35,7 +36,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
 });
 
 // POST /servers/:serverId/backups
-router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
+router.post('/', authenticate, requireScope('servers:write'), async (req: AuthRequest, res: Response) => {
   const isAdmin = req.user!.role === 'ADMIN';
   const server = await prisma.server.findFirst({
     where: {
@@ -67,7 +68,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
 });
 
 // DELETE /servers/:serverId/backups/:backupId
-router.delete('/:backupId', authenticate, async (req: AuthRequest, res: Response) => {
+router.delete('/:backupId', authenticate, requireScope('servers:write'), async (req: AuthRequest, res: Response) => {
   const isAdmin = req.user!.role === 'ADMIN';
   const server = await prisma.server.findFirst({
     where: {
@@ -103,7 +104,7 @@ router.delete('/:backupId', authenticate, async (req: AuthRequest, res: Response
 });
 
 // POST /servers/:serverId/backups/:backupId/restore
-router.post('/:backupId/restore', authenticate, async (req: AuthRequest, res: Response) => {
+router.post('/:backupId/restore', authenticate, requireScope('servers:write'), async (req: AuthRequest, res: Response) => {
   const isAdmin = req.user!.role === 'ADMIN';
   const ctx = await getWingsClient(req.params.serverId, req.user!.id, isAdmin);
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
@@ -124,9 +125,7 @@ router.post('/:backupId/restore', authenticate, async (req: AuthRequest, res: Re
 
   try {
     await ctx.client.post(`/servers/${server.uuid}/backups/${backup.uuid}/restore`, {}, { timeout: BACKUP_TIMEOUT_MS });
-    await prisma.activity.create({
-      data: { userId: req.user!.id, serverId: server.id, event: 'server:backup.restore', properties: JSON.stringify({ name: backup.name }), ip: req.ip },
-    });
+    await logActivity({ userId: req.user!.id, serverId: server.id, event: 'server:backup.restore', properties: JSON.stringify({ name: backup.name }), ip: req.ip });
   } catch (err) {
     logger.warn(`Restore of backup ${backup.uuid} failed for server ${server.uuid}: ${(err as Error).message}`);
   } finally {

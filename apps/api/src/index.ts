@@ -48,6 +48,8 @@ import curseforgeRoutes from './routes/curseforge';
 import modrinthRoutes from './routes/modrinth';
 import publicRoutes from './routes/public';
 import apiKeyRoutes from './routes/apiKeys';
+import docsRoutes from './routes/docs';
+import webhookRoutes from './routes/webhooks';
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -163,6 +165,8 @@ api.use('/curseforge', curseforgeRoutes);
 api.use('/modrinth', modrinthRoutes);
 api.use('/public', publicRoutes);
 api.use('/api-keys', apiKeyRoutes);
+api.use('/docs', docsRoutes);
+api.use('/webhooks', webhookRoutes);
 
 app.use('/api/v1', api);
 

@@ -12,6 +12,7 @@ import { resolveModpackInstall as resolveModrinthModpack, matchFilesBySha1, Modr
 import { ResolvedModpack } from '../services/modpackTypes';
 import { computeNextRun } from '../services/scheduler';
 import { getLiveServerStatus } from '../services/serverStatus';
+import { logActivity } from '../services/activityService';
 import { logger } from '../utils/logger';
 
 export async function getWingsClient(serverId: string, userId: string, isAdmin: boolean) {
@@ -242,14 +243,12 @@ router.post(
       throw err;
     }
 
-    await prisma.activity.create({
-      data: {
-        userId: req.user!.id,
-        serverId: server.id,
-        event: 'server:create',
-        properties: JSON.stringify({ name }),
-        ip: req.ip,
-      },
+    await logActivity({
+      userId: req.user!.id,
+      serverId: server.id,
+      event: 'server:create',
+      properties: JSON.stringify({ name }),
+      ip: req.ip,
     });
 
     // Notify Wings to load the new server
@@ -439,11 +438,21 @@ router.patch('/:id', authenticate, requireScope('servers:write'), async (req: Au
     },
   });
 
+  if (typeof updateData.suspended === 'boolean') {
+    await logActivity({
+      userId: req.user!.id,
+      serverId: server.id,
+      event: 'server:suspend',
+      properties: JSON.stringify({ suspended: updateData.suspended }),
+      ip: req.ip,
+    });
+  }
+
   return res.json({ data: updated });
 });
 
 // POST /servers/:id/reinstall - Admin only
-router.post('/:id/reinstall', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.post('/:id/reinstall', authenticate, requireAdmin, requireScope('servers:write'), async (req: AuthRequest, res: Response) => {
   try {
     const server = await prisma.server.findFirst({
       where: { id: req.params.id },
@@ -467,9 +476,7 @@ router.post('/:id/reinstall', authenticate, requireAdmin, async (req: AuthReques
         .catch(err => logger.warn(`Wings reinstall request failed: ${(err as Error).message}`));
     }
 
-    await prisma.activity.create({
-      data: { userId: req.user!.id, serverId: server.id, event: 'server:reinstall', ip: req.ip },
-    });
+    await logActivity({ userId: req.user!.id, serverId: server.id, event: 'server:reinstall', ip: req.ip });
 
     return res.json({ message: 'Reinstall initiated' });
   } catch (err) {
@@ -484,7 +491,7 @@ router.post('/:id/reinstall', authenticate, requireAdmin, async (req: AuthReques
 // panel) and bundled overrides (small config files, base64'd through the
 // panel since they come from inside the pack's zip). Only Fabric packs are
 // supported today — Forge/NeoForge/Quilt have no matching egg yet.
-router.post('/:id/modpack/install', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.post('/:id/modpack/install', authenticate, requireAdmin, requireScope('servers:write'), async (req: AuthRequest, res: Response) => {
   const { source, packName, modId, fileId, versionId } = req.body as {
     source?: 'curseforge' | 'modrinth'; packName?: string;
     modId?: number; fileId?: number; versionId?: string;
@@ -597,14 +604,12 @@ router.post('/:id/modpack/install', authenticate, requireAdmin, async (req: Auth
     }
 
     await prisma.server.update({ where: { id: server.id }, data: { status: 'OFFLINE' } });
-    await prisma.activity.create({
-      data: {
-        userId: req.user!.id,
-        serverId: server.id,
-        event: 'server:modpack-install',
-        properties: JSON.stringify({ source, packName: packName || null, mcVersion: env.MC_VERSION }),
-        ip: req.ip,
-      },
+    await logActivity({
+      userId: req.user!.id,
+      serverId: server.id,
+      event: 'server:modpack-install',
+      properties: JSON.stringify({ source, packName: packName || null, mcVersion: env.MC_VERSION }),
+      ip: req.ip,
     });
     logger.info(`Modpack install complete for ${server.uuid}`);
   } catch (err) {
@@ -619,7 +624,7 @@ router.post('/:id/modpack/install', authenticate, requireAdmin, async (req: Auth
 // the panel's own disk), tears down the source copy, then repoints the DB
 // row. Pterodactyl has no equivalent of this — moving a server between
 // nodes there means manually re-uploading files.
-router.post('/:id/migrate', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.post('/:id/migrate', authenticate, requireAdmin, requireScope('servers:write'), async (req: AuthRequest, res: Response) => {
   const server = await prisma.server.findUnique({
     where: { id: req.params.id },
     include: {
@@ -749,14 +754,12 @@ router.post('/:id/migrate', authenticate, requireAdmin, async (req: AuthRequest,
     // leave a backup entry that looks fine but silently can't be restored.
     await prisma.backup.deleteMany({ where: { serverId: server.id } });
 
-    await prisma.activity.create({
-      data: {
-        userId: req.user!.id,
-        serverId: server.id,
-        event: 'server:migrate',
-        properties: JSON.stringify({ from: sourceNode.name, to: targetNode.name }),
-        ip: req.ip,
-      },
+    await logActivity({
+      userId: req.user!.id,
+      serverId: server.id,
+      event: 'server:migrate',
+      properties: JSON.stringify({ from: sourceNode.name, to: targetNode.name }),
+      ip: req.ip,
     });
     logger.info(`Migration complete: ${server.uuid} moved from ${sourceNode.name} to ${targetNode.name}`);
   } catch (err) {
@@ -774,7 +777,7 @@ router.post('/:id/migrate', authenticate, requireAdmin, async (req: AuthRequest,
 // brand-new server (its own id/uuid/allocation) that's a snapshot copy,
 // for testing a plugin/mod update or config change without risking the
 // live one. Reuses the same snapshot+stream+restore primitives as migrate.
-router.post('/:id/clone', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.post('/:id/clone', authenticate, requireAdmin, requireScope('servers:write'), async (req: AuthRequest, res: Response) => {
   const source = await prisma.server.findUnique({
     where: { id: req.params.id },
     include: { node: true, egg: { select: { startup: true, dockerImage: true, scriptInstall: true, scriptContainer: true } } },
@@ -893,14 +896,12 @@ router.post('/:id/clone', authenticate, requireAdmin, async (req: AuthRequest, r
     await destClient.delete(`/servers/${clone.uuid}/backups/${cloneUuid}`).catch(() => {});
 
     await prisma.server.update({ where: { id: clone.id }, data: { status: 'OFFLINE' } });
-    await prisma.activity.create({
-      data: {
-        userId: req.user!.id,
-        serverId: clone.id,
-        event: 'server:clone',
-        properties: JSON.stringify({ sourceServerId: source.id, sourceName: source.name }),
-        ip: req.ip,
-      },
+    await logActivity({
+      userId: req.user!.id,
+      serverId: clone.id,
+      event: 'server:clone',
+      properties: JSON.stringify({ sourceServerId: source.id, sourceName: source.name }),
+      ip: req.ip,
     });
     logger.info(`Clone complete: ${clone.uuid} is a copy of ${source.uuid}`);
   } catch (err) {
@@ -927,20 +928,18 @@ router.delete('/:id', authenticate, requireAdmin, requireScope('servers:write'),
 
   await prisma.server.delete({ where: { id: req.params.id } });
 
-  await prisma.activity.create({
-    data: {
-      userId: req.user!.id,
-      event: 'server:delete',
-      properties: JSON.stringify({ name: server.name }),
-      ip: req.ip,
-    },
+  await logActivity({
+    userId: req.user!.id,
+    event: 'server:delete',
+    properties: JSON.stringify({ name: server.name }),
+    ip: req.ip,
   });
 
   return res.status(204).send();
 });
 
 // POST /servers/:id/power - Power actions (real Wings integration)
-router.post('/:id/power', authenticate, async (req: AuthRequest, res: Response) => {
+router.post('/:id/power', authenticate, requireScope(['servers:power', 'servers:write']), async (req: AuthRequest, res: Response) => {
   const isAdmin = req.user!.role === 'ADMIN';
   const server = await prisma.server.findFirst({
     where: {
@@ -989,13 +988,11 @@ router.post('/:id/power', authenticate, async (req: AuthRequest, res: Response) 
     logger.warn(`Node is offline, power action queued for ${server.uuid}`);
   }
 
-  await prisma.activity.create({
-    data: {
-      userId: req.user!.id,
-      serverId: server.id,
-      event: `server:power.${action}`,
-      ip: req.ip,
-    },
+  await logActivity({
+    userId: req.user!.id,
+    serverId: server.id,
+    event: `server:power.${action}`,
+    ip: req.ip,
   });
 
   return res.json({ message: `Server ${action} command sent` });
@@ -1004,7 +1001,7 @@ router.post('/:id/power', authenticate, async (req: AuthRequest, res: Response) 
 // POST /servers/:id/accept-eula — the server's owner (or an admin) accepts the
 // Minecraft EULA on first start. Writes eula.txt directly via Wings so it's
 // in place before the start command is ever sent.
-router.post('/:id/accept-eula', authenticate, async (req: AuthRequest, res: Response) => {
+router.post('/:id/accept-eula', authenticate, requireScope('servers:write'), async (req: AuthRequest, res: Response) => {
   const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
 
@@ -1018,7 +1015,7 @@ router.post('/:id/accept-eula', authenticate, async (req: AuthRequest, res: Resp
 });
 
 // POST /servers/:id/command - Send console command
-router.post('/:id/command', authenticate, async (req: AuthRequest, res: Response) => {
+router.post('/:id/command', authenticate, requireScope(['servers:power', 'servers:write']), async (req: AuthRequest, res: Response) => {
   const isAdmin = req.user!.role === 'ADMIN';
   const server = await prisma.server.findFirst({
     where: {
@@ -1041,7 +1038,7 @@ router.post('/:id/command', authenticate, async (req: AuthRequest, res: Response
 });
 
 // GET /servers/:id/resources - Real resource data from Wings
-router.get('/:id/resources', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:id/resources', authenticate, requireScope('servers:read'), async (req: AuthRequest, res: Response) => {
   const isAdmin = req.user!.role === 'ADMIN';
   const server = await prisma.server.findFirst({
     where: {
@@ -1064,7 +1061,7 @@ router.get('/:id/resources', authenticate, async (req: AuthRequest, res: Respons
 });
 
 // GET /servers/:id/activity
-router.get('/:id/activity', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:id/activity', authenticate, requireScope('servers:read'), async (req: AuthRequest, res: Response) => {
   const isAdmin = req.user!.role === 'ADMIN';
   const server = await prisma.server.findFirst({
     where: {
@@ -1090,7 +1087,7 @@ router.get('/:id/activity', authenticate, async (req: AuthRequest, res: Response
 // ──────────────────────────────────────────────────────
 
 // GET /servers/:id/files?directory=/
-router.get('/:id/files', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:id/files', authenticate, requireScope('servers:read'), async (req: AuthRequest, res: Response) => {
   if (hasPathTraversal(req.query)) return res.status(400).json({ message: 'Invalid path' });
   const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
@@ -1108,7 +1105,7 @@ router.get('/:id/files', authenticate, async (req: AuthRequest, res: Response) =
 // a Kretase-written manifest entry (manually uploaded, predate the
 // manifest, or dropped in by the modpack installer). Filename-independent,
 // unlike the manifest-based update check the plugin/mod managers already do.
-router.get('/:id/files/detect', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:id/files/detect', authenticate, requireScope('servers:read'), async (req: AuthRequest, res: Response) => {
   if (hasPathTraversal(req.query)) return res.status(400).json({ message: 'Invalid path' });
   const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
@@ -1144,7 +1141,7 @@ router.get('/:id/files/detect', authenticate, async (req: AuthRequest, res: Resp
 });
 
 // GET /servers/:id/files/contents?file=path
-router.get('/:id/files/contents', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:id/files/contents', authenticate, requireScope('servers:read'), async (req: AuthRequest, res: Response) => {
   if (hasPathTraversal(req.query)) return res.status(400).json({ message: 'Invalid path' });
   const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
@@ -1158,7 +1155,7 @@ router.get('/:id/files/contents', authenticate, async (req: AuthRequest, res: Re
 });
 
 // POST /servers/:id/files/write
-router.post('/:id/files/write', authenticate, async (req: AuthRequest, res: Response) => {
+router.post('/:id/files/write', authenticate, requireScope('servers:write'), async (req: AuthRequest, res: Response) => {
   if (hasPathTraversal(req.body)) return res.status(400).json({ message: 'Invalid path' });
   const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
@@ -1172,7 +1169,7 @@ router.post('/:id/files/write', authenticate, async (req: AuthRequest, res: Resp
 });
 
 // POST /servers/:id/files/delete
-router.post('/:id/files/delete', authenticate, async (req: AuthRequest, res: Response) => {
+router.post('/:id/files/delete', authenticate, requireScope('servers:write'), async (req: AuthRequest, res: Response) => {
   if (hasPathTraversal(req.body)) return res.status(400).json({ message: 'Invalid path' });
   const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
@@ -1186,7 +1183,7 @@ router.post('/:id/files/delete', authenticate, async (req: AuthRequest, res: Res
 });
 
 // POST /servers/:id/files/create-folder
-router.post('/:id/files/create-folder', authenticate, async (req: AuthRequest, res: Response) => {
+router.post('/:id/files/create-folder', authenticate, requireScope('servers:write'), async (req: AuthRequest, res: Response) => {
   if (hasPathTraversal(req.body)) return res.status(400).json({ message: 'Invalid path' });
   const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
@@ -1200,7 +1197,7 @@ router.post('/:id/files/create-folder', authenticate, async (req: AuthRequest, r
 });
 
 // PUT /servers/:id/files/rename
-router.put('/:id/files/rename', authenticate, async (req: AuthRequest, res: Response) => {
+router.put('/:id/files/rename', authenticate, requireScope('servers:write'), async (req: AuthRequest, res: Response) => {
   if (hasPathTraversal(req.body)) return res.status(400).json({ message: 'Invalid path' });
   const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
@@ -1214,7 +1211,7 @@ router.put('/:id/files/rename', authenticate, async (req: AuthRequest, res: Resp
 });
 
 // GET /servers/:id/players - Proxy to Wings for log-based player tracking
-router.get('/:id/players', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:id/players', authenticate, requireScope('servers:read'), async (req: AuthRequest, res: Response) => {
   const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
   try {
@@ -1226,7 +1223,7 @@ router.get('/:id/players', authenticate, async (req: AuthRequest, res: Response)
 });
 
 // GET /servers/:id/players/:playerUuid/inventory
-router.get('/:id/players/:playerUuid/inventory', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:id/players/:playerUuid/inventory', authenticate, requireScope('servers:read'), async (req: AuthRequest, res: Response) => {
   const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
   try {
@@ -1238,7 +1235,7 @@ router.get('/:id/players/:playerUuid/inventory', authenticate, async (req: AuthR
 });
 
 // GET /servers/:id/players/all — all players who ever joined
-router.get('/:id/players/all', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:id/players/all', authenticate, requireScope('servers:read'), async (req: AuthRequest, res: Response) => {
   const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
   try {
@@ -1248,7 +1245,7 @@ router.get('/:id/players/all', authenticate, async (req: AuthRequest, res: Respo
 });
 
 // GET /servers/:id/players/leaderboard
-router.get('/:id/players/leaderboard', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:id/players/leaderboard', authenticate, requireScope('servers:read'), async (req: AuthRequest, res: Response) => {
   const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
   try {
@@ -1258,7 +1255,7 @@ router.get('/:id/players/leaderboard', authenticate, async (req: AuthRequest, re
 });
 
 // GET /servers/:id/players/:playerUuid/details
-router.get('/:id/players/:playerUuid/details', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:id/players/:playerUuid/details', authenticate, requireScope('servers:read'), async (req: AuthRequest, res: Response) => {
   const isAdmin = req.user!.role === 'ADMIN';
   const ctx = await getWingsClient(req.params.id, req.user!.id, isAdmin);
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
@@ -1269,7 +1266,7 @@ router.get('/:id/players/:playerUuid/details', authenticate, async (req: AuthReq
 });
 
 // POST /servers/:id/players/:playerUuid/ban
-router.post('/:id/players/:playerUuid/ban', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.post('/:id/players/:playerUuid/ban', authenticate, requireAdmin, requireScope('servers:write'), async (req: AuthRequest, res: Response) => {
   const ctx = await getWingsClient(req.params.id, req.user!.id, true);
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
   try {
@@ -1282,7 +1279,7 @@ router.post('/:id/players/:playerUuid/ban', authenticate, requireAdmin, async (r
 });
 
 // DELETE /servers/:id/players/:playerUuid/ban
-router.delete('/:id/players/:playerUuid/ban', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.delete('/:id/players/:playerUuid/ban', authenticate, requireAdmin, requireScope('servers:write'), async (req: AuthRequest, res: Response) => {
   const ctx = await getWingsClient(req.params.id, req.user!.id, true);
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
   try {
@@ -1295,7 +1292,7 @@ router.delete('/:id/players/:playerUuid/ban', authenticate, requireAdmin, async 
 });
 
 // POST /servers/:id/players/:playerUuid/kick
-router.post('/:id/players/:playerUuid/kick', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.post('/:id/players/:playerUuid/kick', authenticate, requireAdmin, requireScope('servers:write'), async (req: AuthRequest, res: Response) => {
   const ctx = await getWingsClient(req.params.id, req.user!.id, true);
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
   try {
@@ -1308,7 +1305,7 @@ router.post('/:id/players/:playerUuid/kick', authenticate, requireAdmin, async (
 });
 
 // POST /servers/:id/players/:playerUuid/ipban
-router.post('/:id/players/:playerUuid/ipban', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.post('/:id/players/:playerUuid/ipban', authenticate, requireAdmin, requireScope('servers:write'), async (req: AuthRequest, res: Response) => {
   const ctx = await getWingsClient(req.params.id, req.user!.id, true);
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
   try {
@@ -1321,7 +1318,7 @@ router.post('/:id/players/:playerUuid/ipban', authenticate, requireAdmin, async 
 });
 
 // DELETE /servers/:id/players/:playerUuid/inventory/:slot
-router.delete('/:id/players/:playerUuid/inventory/:slot', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
+router.delete('/:id/players/:playerUuid/inventory/:slot', authenticate, requireAdmin, requireScope('servers:write'), async (req: AuthRequest, res: Response) => {
   const ctx = await getWingsClient(req.params.id, req.user!.id, true);
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
   try {
@@ -1337,7 +1334,7 @@ router.delete('/:id/players/:playerUuid/inventory/:slot', authenticate, requireA
 });
 
 // POST /servers/:id/plugins/install - Proxy to Wings for plugin download
-router.post('/:id/plugins/install', authenticate, async (req: AuthRequest, res: Response) => {
+router.post('/:id/plugins/install', authenticate, requireScope('servers:write'), async (req: AuthRequest, res: Response) => {
   const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
   try {
@@ -1350,7 +1347,7 @@ router.post('/:id/plugins/install', authenticate, async (req: AuthRequest, res: 
 });
 
 // GET /servers/:id/versions
-router.get('/:id/versions', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:id/versions', authenticate, requireScope('servers:read'), async (req: AuthRequest, res: Response) => {
   const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
   try {
@@ -1367,7 +1364,7 @@ router.get('/:id/versions', authenticate, async (req: AuthRequest, res: Response
 });
 
 // GET /servers/:id/versions/:version/builds
-router.get('/:id/versions/:version/builds', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:id/versions/:version/builds', authenticate, requireScope('servers:read'), async (req: AuthRequest, res: Response) => {
   const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
   try {
@@ -1384,7 +1381,7 @@ router.get('/:id/versions/:version/builds', authenticate, async (req: AuthReques
 });
 
 // POST /servers/:id/version — install specific Paper version
-router.post('/:id/version', authenticate, async (req: AuthRequest, res: Response) => {
+router.post('/:id/version', authenticate, requireScope('servers:write'), async (req: AuthRequest, res: Response) => {
   const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
   try {
@@ -1399,7 +1396,7 @@ router.post('/:id/version', authenticate, async (req: AuthRequest, res: Response
 // ─── World Manager ────────────────────────────────────────────────────────────
 
 // GET /servers/:id/worlds
-router.get('/:id/worlds', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:id/worlds', authenticate, requireScope('servers:read'), async (req: AuthRequest, res: Response) => {
   const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
   try {
@@ -1412,7 +1409,7 @@ router.get('/:id/worlds', authenticate, async (req: AuthRequest, res: Response) 
 });
 
 // PUT /servers/:id/worlds/active
-router.put('/:id/worlds/active', authenticate, async (req: AuthRequest, res: Response) => {
+router.put('/:id/worlds/active', authenticate, requireScope('servers:write'), async (req: AuthRequest, res: Response) => {
   const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
   try {
@@ -1425,7 +1422,7 @@ router.put('/:id/worlds/active', authenticate, async (req: AuthRequest, res: Res
 });
 
 // POST /servers/:id/worlds/install — download a world zip from a URL (e.g. a CurseForge file) and install it
-router.post('/:id/worlds/install', authenticate, async (req: AuthRequest, res: Response) => {
+router.post('/:id/worlds/install', authenticate, requireScope('servers:write'), async (req: AuthRequest, res: Response) => {
   const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
   try {
@@ -1438,7 +1435,7 @@ router.post('/:id/worlds/install', authenticate, async (req: AuthRequest, res: R
 });
 
 // GET /servers/:id/worlds/:name/download — stream a world's zip through to the client
-router.get('/:id/worlds/:name/download', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:id/worlds/:name/download', authenticate, requireScope('servers:read'), async (req: AuthRequest, res: Response) => {
   const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
   try {
@@ -1455,7 +1452,7 @@ router.get('/:id/worlds/:name/download', authenticate, async (req: AuthRequest, 
 });
 
 // DELETE /servers/:id/worlds/:name
-router.delete('/:id/worlds/:name', authenticate, async (req: AuthRequest, res: Response) => {
+router.delete('/:id/worlds/:name', authenticate, requireScope('servers:write'), async (req: AuthRequest, res: Response) => {
   const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
   try {
@@ -1469,7 +1466,7 @@ router.delete('/:id/worlds/:name', authenticate, async (req: AuthRequest, res: R
 
 // GET /servers/:id/world/map — proxy a static top-down PNG render of the
 // server's world, read straight off the real .mca files by Wings.
-router.get('/:id/world/map', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:id/world/map', authenticate, requireScope('servers:read'), async (req: AuthRequest, res: Response) => {
   const ctx = await getWingsClient(req.params.id, req.user!.id, req.user!.role === 'ADMIN');
   if (!ctx) return res.status(404).json({ message: 'Server not found' });
   try {
@@ -1500,7 +1497,7 @@ router.get('/:id/world/map', authenticate, async (req: AuthRequest, res: Respons
 
 // ─── Server Notes ─────────────────────────────────────────────────────────────
 
-router.get('/:id/notes', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:id/notes', authenticate, requireScope('servers:read'), async (req: AuthRequest, res: Response) => {
   const isAdmin = req.user!.role === 'ADMIN';
   const server = await prisma.server.findFirst({
     where: { id: req.params.id, ...(isAdmin ? {} : { userId: req.user!.id }) },
@@ -1510,7 +1507,7 @@ router.get('/:id/notes', authenticate, async (req: AuthRequest, res: Response) =
   return res.json({ content: note?.content || '' });
 });
 
-router.put('/:id/notes', authenticate, async (req: AuthRequest, res: Response) => {
+router.put('/:id/notes', authenticate, requireScope('servers:write'), async (req: AuthRequest, res: Response) => {
   const isAdmin = req.user!.role === 'ADMIN';
   const server = await prisma.server.findFirst({
     where: { id: req.params.id, ...(isAdmin ? {} : { userId: req.user!.id }) },
@@ -1526,7 +1523,7 @@ router.put('/:id/notes', authenticate, async (req: AuthRequest, res: Response) =
 
 // ─── Sub-Users ────────────────────────────────────────────────────────────────
 
-router.get('/:id/subusers', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:id/subusers', authenticate, requireScope('servers:read'), async (req: AuthRequest, res: Response) => {
   const isAdmin = req.user!.role === 'ADMIN';
   const server = await prisma.server.findFirst({
     where: { id: req.params.id, ...(isAdmin ? {} : { userId: req.user!.id }) },
@@ -1539,7 +1536,7 @@ router.get('/:id/subusers', authenticate, async (req: AuthRequest, res: Response
   return res.json({ data: subUsers });
 });
 
-router.post('/:id/subusers', authenticate, async (req: AuthRequest, res: Response) => {
+router.post('/:id/subusers', authenticate, requireScope('servers:write'), async (req: AuthRequest, res: Response) => {
   const isAdmin = req.user!.role === 'ADMIN';
   const server = await prisma.server.findFirst({
     where: { id: req.params.id, ...(isAdmin ? {} : { userId: req.user!.id }) },
@@ -1558,7 +1555,7 @@ router.post('/:id/subusers', authenticate, async (req: AuthRequest, res: Respons
   return res.json(su);
 });
 
-router.delete('/:id/subusers/:userId', authenticate, async (req: AuthRequest, res: Response) => {
+router.delete('/:id/subusers/:userId', authenticate, requireScope('servers:write'), async (req: AuthRequest, res: Response) => {
   const isAdmin = req.user!.role === 'ADMIN';
   const server = await prisma.server.findFirst({
     where: { id: req.params.id, ...(isAdmin ? {} : { userId: req.user!.id }) },
@@ -1570,7 +1567,7 @@ router.delete('/:id/subusers/:userId', authenticate, async (req: AuthRequest, re
 
 // ─── Scheduled Tasks ─────────────────────────────────────────────────────────
 
-router.get('/:id/schedules', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:id/schedules', authenticate, requireScope('servers:read'), async (req: AuthRequest, res: Response) => {
   const isAdmin = req.user!.role === 'ADMIN';
   const server = await prisma.server.findFirst({
     where: { id: req.params.id, ...(isAdmin ? {} : { userId: req.user!.id }) },
@@ -1580,7 +1577,7 @@ router.get('/:id/schedules', authenticate, async (req: AuthRequest, res: Respons
   return res.json({ data: schedules });
 });
 
-router.post('/:id/schedules', authenticate, async (req: AuthRequest, res: Response) => {
+router.post('/:id/schedules', authenticate, requireScope('servers:write'), async (req: AuthRequest, res: Response) => {
   const isAdmin = req.user!.role === 'ADMIN';
   const server = await prisma.server.findFirst({
     where: { id: req.params.id, ...(isAdmin ? {} : { userId: req.user!.id }) },
@@ -1595,7 +1592,7 @@ router.post('/:id/schedules', authenticate, async (req: AuthRequest, res: Respon
   return res.json(task);
 });
 
-router.put('/:id/schedules/:taskId', authenticate, async (req: AuthRequest, res: Response) => {
+router.put('/:id/schedules/:taskId', authenticate, requireScope('servers:write'), async (req: AuthRequest, res: Response) => {
   const isAdmin = req.user!.role === 'ADMIN';
   const server = await prisma.server.findFirst({
     where: { id: req.params.id, ...(isAdmin ? {} : { userId: req.user!.id }) },
@@ -1622,7 +1619,7 @@ router.put('/:id/schedules/:taskId', authenticate, async (req: AuthRequest, res:
   return res.json(task);
 });
 
-router.delete('/:id/schedules/:taskId', authenticate, async (req: AuthRequest, res: Response) => {
+router.delete('/:id/schedules/:taskId', authenticate, requireScope('servers:write'), async (req: AuthRequest, res: Response) => {
   const isAdmin = req.user!.role === 'ADMIN';
   const server = await prisma.server.findFirst({
     where: { id: req.params.id, ...(isAdmin ? {} : { userId: req.user!.id }) },
@@ -1643,7 +1640,7 @@ const HISTORY_RANGE_MS: Record<string, number> = {
 };
 const HISTORY_MAX_POINTS = 300;
 
-router.get('/:id/stats/history', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:id/stats/history', authenticate, requireScope('servers:read'), async (req: AuthRequest, res: Response) => {
   const isAdmin = req.user!.role === 'ADMIN';
   const server = await prisma.server.findFirst({
     where: { id: req.params.id, ...(isAdmin ? {} : { userId: req.user!.id }) },
@@ -1686,7 +1683,7 @@ router.get('/:id/stats/history', authenticate, async (req: AuthRequest, res: Res
 // crash events, auto-optimize triggers, backup freshness, sustained CPU —
 // instead of one more raw chart to interpret. Every deduction is listed so
 // it's inspectable, not a black-box score.
-router.get('/:id/health', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:id/health', authenticate, requireScope('servers:read'), async (req: AuthRequest, res: Response) => {
   const isAdmin = req.user!.role === 'ADMIN';
   const server = await prisma.server.findFirst({
     where: { id: req.params.id, ...(isAdmin ? {} : { userId: req.user!.id }) },
@@ -1743,7 +1740,7 @@ router.get('/:id/health', authenticate, async (req: AuthRequest, res: Response) 
 // the public status page uses, but authenticated and ignoring
 // publicStatusEnabled, so the owner can preview their customization before
 // (or without ever) actually turning the public page on.
-router.get('/:id/public-preview', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:id/public-preview', authenticate, requireScope('servers:read'), async (req: AuthRequest, res: Response) => {
   const isAdmin = req.user!.role === 'ADMIN';
   const server = await prisma.server.findFirst({
     where: { id: req.params.id, ...(isAdmin ? {} : { userId: req.user!.id }) },

@@ -10,6 +10,7 @@ import { authenticate } from '../middleware/auth';
 import { AuthRequest } from '../types';
 import { verify } from 'otplib';
 import { sendPasswordResetEmail } from '../services/emailService';
+import { logActivity } from '../services/activityService';
 
 const router = Router();
 
@@ -60,12 +61,10 @@ router.post(
       data: { lastLogin: new Date() },
     });
 
-    await prisma.activity.create({
-      data: {
-        userId: user.id,
-        event: 'auth:login',
-        ip: req.ip,
-      },
+    await logActivity({
+      userId: user.id,
+      event: 'auth:login',
+      ip: req.ip,
     }).catch(() => {});
 
     // 2FA check
@@ -188,12 +187,10 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
 });
 
 router.post('/logout', authenticate, async (req: AuthRequest, res: Response) => {
-  await prisma.activity.create({
-    data: {
-      userId: req.user!.id,
-      event: 'auth:logout',
-      ip: req.ip,
-    },
+  await logActivity({
+    userId: req.user!.id,
+    event: 'auth:logout',
+    ip: req.ip,
   }).catch(() => {});
   return res.json({ message: 'Logged out successfully' });
 });
@@ -245,9 +242,7 @@ router.post(
       data: { password: hashedPassword, resetToken: null, resetTokenExpiry: null },
     });
 
-    await prisma.activity.create({
-      data: { userId: user.id, event: 'auth:password_reset', ip: req.ip },
-    }).catch(() => {});
+    await logActivity({ userId: user.id, event: 'auth:password_reset', ip: req.ip }).catch(() => {});
 
     return res.json({ message: 'Password updated — you can now log in' });
   }

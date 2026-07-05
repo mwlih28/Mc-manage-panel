@@ -198,6 +198,7 @@ model Server {
   subUsers    ServerSubUser[]
   schedules   ScheduledTask[]
   statSamples ServerStatSample[]
+  webhooks    Webhook[]
 
   @@index([userId])
   @@index([nodeId])
@@ -348,4 +349,29 @@ model ScheduledTask {
   updatedAt      DateTime  @updatedAt
 
   server         Server    @relation(fields: [serverId], references: [id], onDelete: Cascade)
+}
+
+model Webhook {
+  id              String    @id @default(uuid())
+  name            String
+  url             String
+  // "generic" (signed JSON, any receiver) or "discord" (Discord embed format)
+  mode            String    @default("generic")
+  // HMAC signing key for generic mode only — plaintext, same protection
+  // tier as other integration secrets (e.g. smtp.pass) since the panel
+  // must retain it to sign every future delivery.
+  secret          String?
+  // JSON array of event keys, e.g. ["server:create","server:power.*"],
+  // or ["*"] for everything.
+  events          String    @default("[]")
+  // null = fires for all servers; set = scoped to one server
+  serverId        String?
+  enabled         Boolean   @default(true)
+  lastStatus      String?
+  lastTriggeredAt DateTime?
+  lastError       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  server          Server?   @relation(fields: [serverId], references: [id], onDelete: Cascade)
 }

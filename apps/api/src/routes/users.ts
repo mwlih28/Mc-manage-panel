@@ -7,6 +7,7 @@ import { authenticate, requireAdmin, requireScope } from '../middleware/auth';
 import { AuthRequest } from '../types';
 import { generateSecret, verify, generateURI } from 'otplib';
 import QRCode from 'qrcode';
+import { logActivity } from '../services/activityService';
 
 const router = Router();
 
@@ -125,6 +126,13 @@ router.post(
       },
     });
 
+    await logActivity({
+      userId: req.user!.id,
+      event: 'user:create',
+      properties: JSON.stringify({ email: user.email, username: user.username }),
+      ip: req.ip,
+    });
+
     return res.status(201).json({ data: user });
   }
 );
@@ -165,7 +173,15 @@ router.delete('/:id', authenticate, requireAdmin, requireScope('users:write'), a
     return res.status(400).json({ message: 'Cannot delete your own account' });
   }
 
-  await prisma.user.delete({ where: { id: req.params.id } });
+  const deleted = await prisma.user.delete({ where: { id: req.params.id } });
+
+  await logActivity({
+    userId: req.user!.id,
+    event: 'user:delete',
+    properties: JSON.stringify({ email: deleted.email, username: deleted.username }),
+    ip: req.ip,
+  });
+
   return res.status(204).send();
 });
 

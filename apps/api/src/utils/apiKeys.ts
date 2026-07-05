@@ -7,7 +7,7 @@ export const API_KEY_PREFIX = 'kre_';
 // Every permission scope an admin API key can be granted. "*" grants every
 // scope below — checked as a wildcard in hasScope(), not stored expanded.
 export const API_KEY_SCOPES = [
-  'servers:read', 'servers:write',
+  'servers:read', 'servers:write', 'servers:power',
   'users:read', 'users:write',
   'nodes:read', 'nodes:write',
   'eggs:read', 'eggs:write',

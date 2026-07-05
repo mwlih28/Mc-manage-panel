@@ -4,6 +4,7 @@ import { AuthRequest } from '../types';
 import { prisma } from '../utils/prisma';
 import { logger } from '../utils/logger';
 import { API_KEY_SCOPES, generateApiKey } from '../utils/apiKeys';
+import { logActivity } from '../services/activityService';
 
 const router = Router();
 
@@ -73,9 +74,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
     select: { id: true, name: true, identifier: true, permissions: true, expiresAt: true, createdAt: true },
   });
 
-  await prisma.activity.create({
-    data: { userId: req.user!.id, event: 'apikey:create', properties: JSON.stringify({ name: created.name, identifier }), ip: req.ip },
-  }).catch(() => {});
+  await logActivity({ userId: req.user!.id, event: 'apikey:create', properties: JSON.stringify({ name: created.name, identifier }), ip: req.ip }).catch(() => {});
 
   logger.info(`API key created: ${created.name} (${identifier}) by ${req.user!.email}`);
 
@@ -91,9 +90,7 @@ router.delete('/:id', async (req: AuthRequest, res: Response) => {
   if (!key) return res.status(404).json({ message: 'API key not found' });
 
   await prisma.apiKey.delete({ where: { id: key.id } });
-  await prisma.activity.create({
-    data: { userId: req.user!.id, event: 'apikey:revoke', properties: JSON.stringify({ name: key.name, identifier: key.identifier }), ip: req.ip },
-  }).catch(() => {});
+  await logActivity({ userId: req.user!.id, event: 'apikey:revoke', properties: JSON.stringify({ name: key.name, identifier: key.identifier }), ip: req.ip }).catch(() => {});
 
   return res.status(204).send();
 });
