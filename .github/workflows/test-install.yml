@@ -3,6 +3,9 @@ name: Test Install Scripts
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   test-install:
     name: Fresh install (panel + wings, same host)
