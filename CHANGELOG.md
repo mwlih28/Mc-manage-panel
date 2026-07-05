@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.3.0
+
+### Added
+- **Outbound webhooks** — Discord embeds or generic HMAC-signed JSON, fired on server/user events (create, delete, power actions, backups, and more), managed from a new Admin → Webhooks page with per-webhook event filtering and test delivery.
+- **White-label theming** — a raw custom-CSS field (applies panel-wide, including the login page) and a toggle to hide the "Powered by Kretase" attribution on public status pages.
+- **Self-documenting API reference** — a new Admin → API Reference page listing every integration-facing route with its required scope and a copy-able curl example, generated from the same source of truth used to enforce those scopes.
+- **Cloud backup destinations** — upload new backups to S3-compatible storage (AWS, Backblaze B2, Cloudflare R2, Wasabi, DigitalOcean Spaces, MinIO), SFTP, or Google Drive, in addition to the local copy on each node.
+- **Discord bot control** — `/start`, `/stop`, `/restart`, and `/status` slash commands, bound to a specific server from a one-time code generated in the panel (no Discord-account linking required).
+- **Import from Pterodactyl** — a new Admin → Migration wizard that pulls servers from a source Pterodactyl panel's Application API and transfers their actual files (worlds, plugins, configs) over SFTP into Kretase.
+- **Installable app + push notifications** — the panel can now be installed to a home screen/desktop like a native app, and sends a real OS-level notification on server crash, suspension, or a security alert — even with no tab open.
+- **Billing & store integrations** — real WHMCS and Blesta provisioning modules (downloadable from Admin → Billing & Store) for automatic account creation/suspension/termination on order events, plus Tebex/CraftingStore purchase webhooks that can run a console command (e.g. granting a rank) on a mapped package.
+
+### Security
+- Closed an API-key scope enforcement gap on ~48 nested server/backup routes (power actions, file management, players, schedules, and more) that had no scope check at all, meaning a narrowly-scoped API key could still reach them. Added a new `servers:power` scope so automation/billing integrations don't need full write access just to start/stop a server.
+
 ## v1.2.0
 
 ### Added
