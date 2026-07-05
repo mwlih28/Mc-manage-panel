@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { prisma } from '../utils/prisma';
 import { authenticate, requireAdmin, requireScope } from '../middleware/auth';
 import { AuthRequest } from '../types';
+import { parsePterodactylEgg, resolveNestId, createEggFromParsed, buildEggExportJson } from '../services/eggImport';
 
 const router = Router();
 
@@ -99,6 +100,32 @@ router.post('/', authenticate, requireAdmin, requireScope('eggs:write'), async (
   return res.status(201).json({ data: egg });
 });
 
+// POST /eggs/import — paste or upload any Pterodactyl-format egg JSON
+// (PTDL_v1/v2) and create it directly, exactly like Pterodactyl's own
+// "Import Egg" — this is how an admin brings in a fully custom egg of their
+// own, not just one from Kretase's bundled catalog or the community store.
+router.post('/import', authenticate, requireAdmin, requireScope('eggs:write'), async (req: AuthRequest, res: Response) => {
+  const { nestId, nestName, json } = req.body as { nestId?: string; nestName?: string; json?: unknown };
+  if (json === undefined || json === null) return res.status(422).json({ message: 'json is required' });
+
+  let parsed;
+  try {
+    parsed = parsePterodactylEgg(json);
+  } catch (err) {
+    return res.status(422).json({ message: (err as Error).message });
+  }
+
+  let resolvedNestId: string;
+  try {
+    resolvedNestId = await resolveNestId({ nestId, nestName });
+  } catch (err) {
+    return res.status(422).json({ message: (err as Error).message });
+  }
+
+  const egg = await createEggFromParsed(parsed, resolvedNestId);
+  return res.status(201).json({ data: egg });
+});
+
 // PUT /eggs/:id
 router.put('/:id', authenticate, requireAdmin, requireScope('eggs:write'), async (req: AuthRequest, res: Response) => {
   try {
@@ -148,6 +175,17 @@ router.get('/:id', authenticate, requireAdmin, requireScope('eggs:read'), async 
 
   if (!egg) return res.status(404).json({ message: 'Egg not found' });
   return res.json({ data: egg });
+});
+
+// GET /eggs/:id/export — download as a Pterodactyl-compatible egg JSON, so
+// a custom egg built in Kretase can be shared or re-imported elsewhere.
+router.get('/:id/export', authenticate, requireAdmin, requireScope('eggs:read'), async (req: AuthRequest, res: Response) => {
+  const egg = await prisma.egg.findUnique({ where: { id: req.params.id }, include: { variables: true } });
+  if (!egg) return res.status(404).json({ message: 'Egg not found' });
+
+  const filename = `egg-${egg.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'export'}.json`;
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  return res.json(buildEggExportJson(egg));
 });
 
 export default router;

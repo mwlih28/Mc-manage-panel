@@ -57,6 +57,7 @@ import pushRoutes from './routes/push';
 import storeIntegrationRoutes from './routes/storeIntegrations';
 import storeWebhookRoutes from './routes/storeWebhooks';
 import planRoutes from './routes/plans';
+import eggStoreRoutes from './routes/eggStore';
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -201,6 +202,7 @@ api.use('/push', pushRoutes);
 api.use('/store-integrations', storeIntegrationRoutes);
 api.use('/store-webhooks', storeWebhookRoutes);
 api.use('/plans', planRoutes);
+api.use('/egg-store', eggStoreRoutes);
 
 app.use('/api/v1', api);
 

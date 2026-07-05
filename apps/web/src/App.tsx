@@ -29,6 +29,7 @@ const AdminUsersPage     = lazy(() => import('@/pages/admin/AdminUsersPage').the
 const AdminNodesPage     = lazy(() => import('@/pages/admin/AdminNodesPage').then(m => ({ default: m.AdminNodesPage })));
 const AdminServersPage   = lazy(() => import('@/pages/admin/AdminServersPage').then(m => ({ default: m.AdminServersPage })));
 const AdminEggsPage      = lazy(() => import('@/pages/admin/AdminEggsPage').then(m => ({ default: m.AdminEggsPage })));
+const AdminEggStorePage  = lazy(() => import('@/pages/admin/AdminEggStorePage').then(m => ({ default: m.AdminEggStorePage })));
 const AdminActivityPage  = lazy(() => import('@/pages/admin/AdminActivityPage').then(m => ({ default: m.AdminActivityPage })));
 const AdminSettingsPage  = lazy(() => import('@/pages/admin/AdminSettingsPage').then(m => ({ default: m.AdminSettingsPage })));
 const AdminApiKeysPage   = lazy(() => import('@/pages/admin/AdminApiKeysPage').then(m => ({ default: m.AdminApiKeysPage })));
@@ -97,6 +98,7 @@ export default function App() {
             <Route path="/admin/users" element={<AdminUsersPage />} />
             <Route path="/admin/nodes" element={<AdminNodesPage />} />
             <Route path="/admin/eggs" element={<AdminEggsPage />} />
+            <Route path="/admin/eggs/store" element={<AdminEggStorePage />} />
             <Route path="/admin/activity" element={<AdminActivityPage />} />
             <Route path="/admin/api-keys" element={<AdminApiKeysPage />} />
             <Route path="/admin/api-docs" element={<AdminApiDocsPage />} />

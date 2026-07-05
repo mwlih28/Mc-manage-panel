@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Package, Plus, Pencil, Trash2, Zap } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Package, Plus, Pencil, Trash2, Zap, Upload, Download, Store } from 'lucide-react';
 import api from '@/lib/axios';
 import { Egg } from '@/types';
 import { Spinner } from '@/components/ui/Spinner';
@@ -42,6 +43,7 @@ echo "Downloaded: \${TARGET}"`,
 
 export function AdminEggsPage() {
   const [showCreate, setShowCreate] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [editEgg, setEditEgg] = useState<Egg | null>(null);
   const [deleteEgg, setDeleteEgg] = useState<Egg | null>(null);
   const queryClient = useQueryClient();
@@ -66,16 +68,40 @@ export function AdminEggsPage() {
 
   const eggs: Egg[] = data || [];
 
+  const exportEgg = async (egg: Egg) => {
+    try {
+      const res = await api.get(`/eggs/${egg.id}/export`, { responseType: 'blob' });
+      const url = URL.createObjectURL(res.data as Blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `egg-${egg.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Failed to export egg');
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-100">Eggs</h1>
           <p className="text-slate-400 text-sm mt-1">Server configuration templates</p>
         </div>
-        <button className="btn-primary" onClick={() => setShowCreate(true)}>
-          <Plus size={16} /> New Egg
-        </button>
+        <div className="flex items-center gap-2">
+          <Link to="/admin/eggs/store" className="btn-secondary">
+            <Store size={16} /> Browse Community Eggs
+          </Link>
+          <button className="btn-secondary" onClick={() => setShowImport(true)}>
+            <Upload size={16} /> Import JSON
+          </button>
+          <button className="btn-primary" onClick={() => setShowCreate(true)}>
+            <Plus size={16} /> New Egg
+          </button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -141,6 +167,13 @@ export function AdminEggsPage() {
                   <Pencil size={13} /> Edit
                 </button>
                 <button
+                  className="btn-secondary btn-sm"
+                  onClick={() => exportEgg(egg)}
+                  title="Export as Pterodactyl-format JSON"
+                >
+                  <Download size={13} />
+                </button>
+                <button
                   className="btn-danger btn-sm flex-1"
                   onClick={() => setDeleteEgg(egg)}
                   disabled={(egg._count?.servers || 0) > 0}
@@ -159,6 +192,16 @@ export function AdminEggsPage() {
           onClose={() => setShowCreate(false)}
           onSuccess={() => {
             setShowCreate(false);
+            queryClient.invalidateQueries({ queryKey: ['admin-eggs'] });
+          }}
+        />
+      )}
+
+      {showImport && (
+        <ImportEggModal
+          onClose={() => setShowImport(false)}
+          onSuccess={() => {
+            setShowImport(false);
             queryClient.invalidateQueries({ queryKey: ['admin-eggs'] });
           }}
         />
@@ -383,6 +426,85 @@ function EditEggModal({ egg, onClose, onSuccess }: { egg: Egg; onClose: () => vo
           <button type="button" className="btn-secondary flex-1" onClick={onClose}>Cancel</button>
           <button type="submit" className="btn-primary flex-1" disabled={isLoading}>
             {isLoading ? <Spinner size="sm" /> : 'Save Changes'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+// Lets an admin bring in any egg of their own — a JSON file exported from a
+// real Pterodactyl/Pelican panel, or hand-written to the same format — not
+// just what's bundled or available from the community store.
+function ImportEggModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const [nestName, setNestName] = useState('');
+  const [raw, setRaw] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => setRaw(String(reader.result || ''));
+    reader.readAsText(file);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nestName.trim()) { toast.error('Nest name is required'); return; }
+
+    let json: unknown;
+    try {
+      json = JSON.parse(raw);
+    } catch {
+      toast.error('That is not valid JSON');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await api.post('/eggs/import', { nestName: nestName.trim(), json });
+      toast.success('Egg imported');
+      onSuccess();
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      toast.error(e.response?.data?.message || 'Failed to import egg');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <Modal isOpen onClose={onClose} title="Import Egg (JSON)" size="lg">
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <p className="text-xs text-slate-500">
+          Paste or upload a Pterodactyl-format egg export (the same file "Export Egg" produces on Pterodactyl, Pelican, or any egg downloaded from the community).
+        </p>
+        <div>
+          <label className="label">Nest (Category)</label>
+          <input className="input" placeholder="Minecraft" value={nestName} onChange={(e) => setNestName(e.target.value)} required />
+        </div>
+        <div>
+          <label className="label">Egg JSON file <span className="text-slate-500 font-normal">(optional — or paste below)</span></label>
+          <input
+            type="file"
+            accept="application/json,.json"
+            className="input"
+            onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+          />
+        </div>
+        <div>
+          <label className="label">Egg JSON</label>
+          <textarea
+            className="input font-mono text-xs min-h-[220px] resize-y"
+            placeholder='{"name": "...", "startup": "...", "docker_images": {...}, ...}'
+            value={raw}
+            onChange={(e) => setRaw(e.target.value)}
+            required
+          />
+        </div>
+        <div className="flex gap-3 pt-2">
+          <button type="button" className="btn-secondary flex-1" onClick={onClose}>Cancel</button>
+          <button type="submit" className="btn-primary flex-1" disabled={isLoading}>
+            {isLoading ? <Spinner size="sm" /> : 'Import Egg'}
           </button>
         </div>
       </form>
