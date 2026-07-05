@@ -84,13 +84,19 @@ export async function listCategoryEggs(slug: string): Promise<StoreEggEntry[]> {
     { timeout: 15000 }
   );
   const allPaths = flatten(data.files || []);
+  // Two naming conventions exist in this repo for the pterodactyl-format
+  // variant: "egg-pterodactyl-x.json" (most folders) and, for a handful,
+  // "pterodactyl-egg-x.json" — missing the second form here meant those
+  // eggs silently fell back to the Pelican-only "egg-x.json" file, which
+  // lacks a top-level `startup` field and fails to parse (caught via a real
+  // failed import: cubic_odyssey, nightingale, voyagers_of_nera).
   const jsonEggs = allPaths.filter((p) => {
     const fn = p.split('/').pop() || '';
-    return fn.startsWith('egg-') && fn.endsWith('.json') && isSafePath(p);
+    return /^(egg-|pterodactyl-egg-).*\.json$/i.test(fn) && isSafePath(p);
   });
 
   // The same egg is frequently exported twice in this repo — a plain
-  // "egg-x.json" (Pelican's own format) and an "egg-pterodactyl-x.json"
+  // "egg-x.json" (Pelican's own format) and a pterodactyl-labelled one
   // (this ecosystem's format, which is what we are) for the same folder.
   // Keep one per folder, preferring the pterodactyl-labelled file.
   const byDir = new Map<string, string>();
