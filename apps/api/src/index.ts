@@ -52,6 +52,7 @@ import apiKeyRoutes from './routes/apiKeys';
 import docsRoutes from './routes/docs';
 import webhookRoutes from './routes/webhooks';
 import storageRoutes from './routes/storage';
+import migrationRoutes from './routes/migrations';
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -170,6 +171,7 @@ api.use('/api-keys', apiKeyRoutes);
 api.use('/docs', docsRoutes);
 api.use('/webhooks', webhookRoutes);
 api.use('/storage', storageRoutes);
+api.use('/migrations', migrationRoutes);
 
 app.use('/api/v1', api);
 

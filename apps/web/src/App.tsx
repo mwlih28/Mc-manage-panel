@@ -33,6 +33,7 @@ const AdminSettingsPage  = lazy(() => import('@/pages/admin/AdminSettingsPage').
 const AdminApiKeysPage   = lazy(() => import('@/pages/admin/AdminApiKeysPage').then(m => ({ default: m.AdminApiKeysPage })));
 const AdminApiDocsPage   = lazy(() => import('@/pages/admin/AdminApiDocsPage').then(m => ({ default: m.AdminApiDocsPage })));
 const AdminWebhooksPage  = lazy(() => import('@/pages/admin/AdminWebhooksPage').then(m => ({ default: m.AdminWebhooksPage })));
+const AdminMigrationPage = lazy(() => import('@/pages/admin/AdminMigrationPage').then(m => ({ default: m.AdminMigrationPage })));
 const PublicStatusPage   = lazy(() => import('@/pages/PublicStatusPage').then(m => ({ default: m.PublicStatusPage })));
 
 function RouteFallback() {
@@ -97,6 +98,7 @@ export default function App() {
             <Route path="/admin/api-keys" element={<AdminApiKeysPage />} />
             <Route path="/admin/api-docs" element={<AdminApiDocsPage />} />
             <Route path="/admin/webhooks" element={<AdminWebhooksPage />} />
+            <Route path="/admin/migration" element={<AdminMigrationPage />} />
             <Route path="/admin/settings" element={<AdminSettingsPage />} />
           </Route>
         </Route>

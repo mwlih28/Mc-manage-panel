@@ -396,3 +396,16 @@ model DiscordBinding {
 
   server    Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
 }
+
+// Tracks a single "import from another panel" run so the admin has an audit
+// trail/live log to poll — source credentials (API key, SSH password) are
+// never persisted here, only held in memory for the duration of the run.
+model MigrationJob {
+  id        String   @id @default(uuid())
+  provider  String   @default("pterodactyl")
+  status    String   @default("pending") // pending | running | completed | failed
+  // JSON array of { ts, serverName, status: 'ok'|'error', message }
+  log       String   @default("[]")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
