@@ -33,9 +33,12 @@ export function AdminEggStorePage() {
   const [importAllProgress, setImportAllProgress] = useState<CategoryImportState[] | null>(null);
   const queryClient = useQueryClient();
 
-  const { data: categories, isLoading: loadingCategories } = useQuery({
+  const {
+    data: categories, isLoading: loadingCategories, isError: categoriesError, error: categoriesErrorObj, refetch: refetchCategories,
+  } = useQuery({
     queryKey: ['egg-store-categories'],
     queryFn: () => api.get('/egg-store/categories').then((r) => r.data.data as Category[]),
+    retry: 1,
   });
 
   const { data: nests } = useQuery({
@@ -197,6 +200,21 @@ export function AdminEggStorePage() {
       ) : !activeCategory ? (
         loadingCategories ? (
           <div className="flex justify-center py-12"><Spinner size="lg" /></div>
+        ) : categoriesError ? (
+          <div className="card p-8 text-center space-y-3">
+            <p className="text-red-400 font-medium">Couldn't load categories</p>
+            <p className="text-xs text-zinc-500 font-mono break-all max-w-lg mx-auto">
+              {(categoriesErrorObj as { response?: { status?: number; data?: { message?: string } }; message?: string })?.response
+                ? `HTTP ${(categoriesErrorObj as { response?: { status?: number } }).response?.status} — ${(categoriesErrorObj as { response?: { data?: { message?: string } } }).response?.data?.message || 'no message'}`
+                : (categoriesErrorObj as Error)?.message || 'Unknown error'}
+            </p>
+            <p className="text-xs text-zinc-600">
+              This means the panel's frontend can't reach the new <code>/egg-store</code> API route — check that the API was actually restarted with the latest code (not an old process still holding the port).
+            </p>
+            <button className="btn-secondary btn-sm" onClick={() => refetchCategories()}>Retry</button>
+          </div>
+        ) : (categories || []).length === 0 ? (
+          <div className="card p-8 text-center text-slate-500 text-sm">No categories returned by the API.</div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {(categories || []).map((c) => (
