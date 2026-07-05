@@ -245,7 +245,7 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
   });
 
   // Derive selected egg type
-  const eggs: { id: string; name: string }[] = eggsData || [];
+  const eggs: { id: string; name: string; nest?: { name: string } }[] = eggsData || [];
   const selectedEgg = eggs.find((e) => e.id === form.eggId);
   const isPaperEgg = selectedEgg?.name?.toLowerCase() === 'paper';
   const isBedrockEgg = selectedEgg?.name?.toLowerCase().includes('bedrock') ?? false;
@@ -383,8 +383,18 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
             <label className="label">Egg (Server Type)</label>
             <select className="input" value={form.eggId} onChange={f('eggId')} required>
               <option value="">Select egg...</option>
-              {eggs.map((egg) => (
-                <option key={egg.id} value={egg.id}>{egg.name}</option>
+              {Object.entries(
+                eggs.reduce<Record<string, typeof eggs>>((acc, egg) => {
+                  const key = egg.nest?.name || 'Other';
+                  (acc[key] ||= []).push(egg);
+                  return acc;
+                }, {})
+              ).map(([nestName, nestEggs]) => (
+                <optgroup key={nestName} label={nestName}>
+                  {nestEggs.map((egg) => (
+                    <option key={egg.id} value={egg.id}>{egg.name}</option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           </div>

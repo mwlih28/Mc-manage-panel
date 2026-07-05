@@ -81,6 +81,7 @@ export interface Egg {
   startup: string;
   configStop: string;
   scriptInstall?: string | null;
+  logoUrl?: string | null;
   variables?: EggVariable[];
   nest?: Nest;
   _count?: { servers: number };

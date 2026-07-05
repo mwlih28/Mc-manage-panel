@@ -136,7 +136,7 @@ export async function importStoreEgg(
   slug: string, path: string, nestInput: { nestId?: string; nestName?: string }
 ) {
   const json = await fetchStoreEggJson(slug, path);
-  const parsed = parsePterodactylEgg(json);
+  const parsed = await parsePterodactylEgg(json);
   const nestId = await resolveNestId(nestInput);
   return createEggFromParsed(parsed, nestId);
 }
@@ -160,7 +160,7 @@ export async function importStoreEggsBulk(
   for (const path of paths) {
     try {
       const json = await fetchStoreEggJson(slug, path);
-      const parsed = parsePterodactylEgg(json);
+      const parsed = await parsePterodactylEgg(json);
       const egg = await createEggFromParsed(parsed, nestId);
       results.push({ path, success: true, eggId: egg.id });
     } catch (err) {

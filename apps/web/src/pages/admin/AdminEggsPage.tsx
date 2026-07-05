@@ -120,7 +120,7 @@ export function AdminEggsPage() {
           {eggs.map((egg) => (
             <div key={egg.id} className="card p-5">
               <div className="flex items-start gap-3 mb-3">
-                <div className="p-2.5 rounded-lg bg-brand-500/20">
+                <div className="p-2.5 rounded-lg bg-brand-500/20 shrink-0">
                   <Package size={18} className="text-brand-400" />
                 </div>
                 <div className="flex-1 min-w-0">

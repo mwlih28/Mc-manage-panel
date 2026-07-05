@@ -110,7 +110,7 @@ router.post('/import', authenticate, requireAdmin, requireScope('eggs:write'), a
 
   let parsed;
   try {
-    parsed = parsePterodactylEgg(json);
+    parsed = await parsePterodactylEgg(json);
   } catch (err) {
     return res.status(422).json({ message: (err as Error).message });
   }

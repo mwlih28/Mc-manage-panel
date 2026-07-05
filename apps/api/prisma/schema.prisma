@@ -104,6 +104,11 @@ model Egg {
   scriptEntry     String   @default("bash")
   scriptContainer String   @default("alpine:3.4")
   copyScriptFrom  String?
+  // Auto-resolved on import when a Steam App ID is detectable (see
+  // eggImport.ts) — a real Steam CDN header image, not a fabricated or
+  // hand-curated logo. Null when no App ID was found; the UI falls back to
+  // a generic icon in that case rather than guessing.
+  logoUrl         String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

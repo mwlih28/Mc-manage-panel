@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import { prisma } from '../utils/prisma';
 
@@ -21,6 +22,7 @@ export interface ParsedEgg {
   scriptInstall: string | null;
   scriptEntry: string;
   scriptContainer: string;
+  logoUrl: string | null;
   variables: Array<{
     name: string;
     description: string;
@@ -32,13 +34,44 @@ export interface ParsedEgg {
   }>;
 }
 
+// Most SteamCMD-family eggs in the pelican-eggs community repo expose a
+// Steam App ID as a variable. Verified against live eggs this is usually
+// the *dedicated server* App ID (what SteamCMD actually downloads), which
+// is frequently a different, unlisted app from the game's real store page
+// and has no header art of its own (e.g. Rust's server id 258550 vs. the
+// game's own id 252490) — so the App ID alone isn't safe to turn into a
+// CDN image URL by guessing a path. Steam's own public appdetails API
+// tells us definitively whether an id is a real store listing and, when it
+// is, hands back its actual header image — used here instead of assuming.
+const APPID_VAR_NAMES = /^(SRCDS_APPID|STEAM_APPID|APP_ID|APPID)$/i;
+
+async function resolveSteamLogo(
+  variables: Array<{ envVariable: string; defaultValue: string }>,
+  installScript: string | null
+): Promise<string | null> {
+  const fromVar = variables.find((v) => APPID_VAR_NAMES.test(v.envVariable) && /^\d{2,7}$/.test(v.defaultValue));
+  const appId = fromVar?.defaultValue || installScript?.match(/app_update\s+(\d{2,7})/)?.[1];
+  if (!appId) return null;
+
+  try {
+    const { data } = await axios.get(`https://store.steampowered.com/api/appdetails`, {
+      params: { appids: appId },
+      timeout: 6000,
+    });
+    const entry = data?.[appId];
+    return entry?.success && typeof entry.data?.header_image === 'string' ? entry.data.header_image : null;
+  } catch {
+    return null;
+  }
+}
+
 function asString(value: unknown, fallback = ''): string {
   if (typeof value === 'string') return value;
   if (value === undefined || value === null) return fallback;
   return JSON.stringify(value);
 }
 
-export function parsePterodactylEgg(raw: unknown): ParsedEgg {
+export async function parsePterodactylEgg(raw: unknown): Promise<ParsedEgg> {
   if (!raw || typeof raw !== 'object') throw new Error('Egg JSON must be an object');
   const j = raw as Record<string, unknown>;
 
@@ -79,6 +112,8 @@ export function parsePterodactylEgg(raw: unknown): ParsedEgg {
     })
     .filter((v) => v.envVariable);
 
+  const scriptInstall = typeof scripts.script === 'string' && scripts.script ? scripts.script : null;
+
   return {
     name: j.name.trim().slice(0, 191),
     author: typeof j.author === 'string' && j.author.trim() ? j.author.trim() : 'community@import',
@@ -89,9 +124,10 @@ export function parsePterodactylEgg(raw: unknown): ParsedEgg {
     configStop: typeof config.stop === 'string' && config.stop ? config.stop : '^C',
     configLogs: asString(config.logs, '{}'),
     startup: j.startup.trim(),
-    scriptInstall: typeof scripts.script === 'string' && scripts.script ? scripts.script : null,
+    scriptInstall,
     scriptEntry: typeof scripts.entrypoint === 'string' && scripts.entrypoint ? scripts.entrypoint : 'bash',
     scriptContainer: typeof scripts.container === 'string' && scripts.container ? scripts.container : 'alpine:3.4',
+    logoUrl: await resolveSteamLogo(variables, scriptInstall),
     variables,
   };
 }
@@ -131,6 +167,7 @@ export async function createEggFromParsed(parsed: ParsedEgg, nestId: string) {
       scriptInstall: parsed.scriptInstall,
       scriptEntry: parsed.scriptEntry,
       scriptContainer: parsed.scriptContainer,
+      logoUrl: parsed.logoUrl,
       variables: parsed.variables.length ? { create: parsed.variables } : undefined,
     },
     include: { variables: true, nest: true },
