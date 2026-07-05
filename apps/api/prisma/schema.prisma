@@ -232,6 +232,10 @@ model Backup {
   name         String
   ignoredFiles String    @default("[]")
   disk         String    @default("local")
+  // Resolved storage-backend path/key at upload time — an S3 object key, an
+  // SFTP path, or a Google Drive file ID. Pinned at upload time so a later
+  // change to the bucket/base-path setting can't orphan existing backups.
+  remotePath   String?
   checksum     String?
   bytes        BigInt    @default(0)
   completedAt  DateTime?

@@ -50,6 +50,7 @@ import publicRoutes from './routes/public';
 import apiKeyRoutes from './routes/apiKeys';
 import docsRoutes from './routes/docs';
 import webhookRoutes from './routes/webhooks';
+import storageRoutes from './routes/storage';
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -167,6 +168,7 @@ api.use('/public', publicRoutes);
 api.use('/api-keys', apiKeyRoutes);
 api.use('/docs', docsRoutes);
 api.use('/webhooks', webhookRoutes);
+api.use('/storage', storageRoutes);
 
 app.use('/api/v1', api);
 

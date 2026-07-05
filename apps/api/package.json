@@ -15,6 +15,8 @@
     "db:fix-game-eggs": "ts-node src/utils/fix-game-eggs.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1079.0",
+    "@aws-sdk/lib-storage": "^3.1079.0",
     "@prisma/client": "^5.7.0",
     "adm-zip": "^0.5.16",
     "axios": "^1.6.2",
@@ -27,6 +29,7 @@
     "express": "^4.18.2",
     "express-rate-limit": "^8.5.2",
     "express-validator": "^7.0.1",
+    "googleapis": "^173.0.0",
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
@@ -37,6 +40,7 @@
     "qrcode": "^1.5.4",
     "socket.io": "^4.6.1",
     "socket.io-client": "^4.8.3",
+    "ssh2-sftp-client": "^12.1.1",
     "uuid": "^14.0.1",
     "winston": "^3.11.0"
   },
@@ -53,6 +57,7 @@
     "@types/node": "^20.10.0",
     "@types/nodemailer": "^8.0.1",
     "@types/qrcode": "^1.5.6",
+    "@types/ssh2-sftp-client": "^9.0.6",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.3.2",
     "vitest": "^4.1.9"

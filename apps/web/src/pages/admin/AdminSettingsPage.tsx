@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, Globe, Image, Type, FileText, Mail, Send, Eye, EyeOff, Zap, Sparkles, Mountain, Paintbrush } from 'lucide-react';
+import { Save, Globe, Image, Type, FileText, Mail, Send, Eye, EyeOff, Zap, Sparkles, Mountain, Paintbrush, UploadCloud, PlugZap } from 'lucide-react';
 import api from '@/lib/axios';
 import toast from 'react-hot-toast';
 import { Spinner } from '@/components/ui/Spinner';
@@ -21,10 +21,20 @@ const AI_PROVIDERS: { id: AiProvider; label: string; logo: string; supportsImage
   { id: 'anthropic', label: 'Anthropic', logo: '/brand/anthropic.svg', supportsImages: false },
 ];
 
+type StorageProvider = 'none' | 's3' | 'sftp' | 'gdrive';
+
+const STORAGE_PROVIDERS: { id: StorageProvider; label: string }[] = [
+  { id: 'none', label: 'None (local only)' },
+  { id: 's3', label: 'S3-Compatible' },
+  { id: 'sftp', label: 'SFTP' },
+  { id: 'gdrive', label: 'Google Drive' },
+];
+
 export function AdminSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testingSmtp, setTestingSmtp] = useState(false);
+  const [testingStorage, setTestingStorage] = useState(false);
   const [showSmtpPass, setShowSmtpPass] = useState(false);
   const [form, setForm] = useState({
     'app.name': '',
@@ -44,6 +54,23 @@ export function AdminSettingsPage() {
     'curseforge.apiKey': '',
     'theme.customCss': '',
     'whitelabel.hidePoweredBy': 'false',
+    'storage.provider': 'none' as StorageProvider,
+    'storage.deleteLocalAfterUpload': 'false',
+    'storage.s3.endpoint': '',
+    'storage.s3.region': '',
+    'storage.s3.bucket': '',
+    'storage.s3.accessKeyId': '',
+    'storage.s3.secretAccessKey': '',
+    'storage.s3.forcePathStyle': 'false',
+    'storage.s3.prefix': '',
+    'storage.sftp.host': '',
+    'storage.sftp.port': '22',
+    'storage.sftp.username': '',
+    'storage.sftp.password': '',
+    'storage.sftp.privateKey': '',
+    'storage.sftp.basePath': '',
+    'storage.gdrive.serviceAccountJson': '',
+    'storage.gdrive.folderId': '',
   });
   const [showKey, setShowKey] = useState<Record<string, boolean>>({});
   const queryClient = useQueryClient();
@@ -68,6 +95,23 @@ export function AdminSettingsPage() {
         'curseforge.apiKey': data['curseforge.apiKey'] || '',
         'theme.customCss': data['theme.customCss'] || '',
         'whitelabel.hidePoweredBy': data['whitelabel.hidePoweredBy'] || 'false',
+        'storage.provider': (data['storage.provider'] || 'none') as StorageProvider,
+        'storage.deleteLocalAfterUpload': data['storage.deleteLocalAfterUpload'] || 'false',
+        'storage.s3.endpoint': data['storage.s3.endpoint'] || '',
+        'storage.s3.region': data['storage.s3.region'] || '',
+        'storage.s3.bucket': data['storage.s3.bucket'] || '',
+        'storage.s3.accessKeyId': data['storage.s3.accessKeyId'] || '',
+        'storage.s3.secretAccessKey': data['storage.s3.secretAccessKey'] || '',
+        'storage.s3.forcePathStyle': data['storage.s3.forcePathStyle'] || 'false',
+        'storage.s3.prefix': data['storage.s3.prefix'] || '',
+        'storage.sftp.host': data['storage.sftp.host'] || '',
+        'storage.sftp.port': data['storage.sftp.port'] || '22',
+        'storage.sftp.username': data['storage.sftp.username'] || '',
+        'storage.sftp.password': data['storage.sftp.password'] || '',
+        'storage.sftp.privateKey': data['storage.sftp.privateKey'] || '',
+        'storage.sftp.basePath': data['storage.sftp.basePath'] || '',
+        'storage.gdrive.serviceAccountJson': data['storage.gdrive.serviceAccountJson'] || '',
+        'storage.gdrive.folderId': data['storage.gdrive.folderId'] || '',
       });
     }).finally(() => setLoading(false));
   }, []);
@@ -86,6 +130,19 @@ export function AdminSettingsPage() {
       toast.error('SMTP test failed — check your settings');
     } finally {
       setTestingSmtp(false);
+    }
+  };
+
+  const testStorage = async () => {
+    setTestingStorage(true);
+    try {
+      await api.post('/storage/test');
+      toast.success('Connection succeeded');
+    } catch (err) {
+      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast.error(message || 'Connection failed');
+    } finally {
+      setTestingStorage(false);
     }
   };
 
@@ -324,6 +381,246 @@ export function AdminSettingsPage() {
             </a>
             . Without a key, users can still switch, back up, and delete their existing worlds, but the premade world browser stays hidden.
           </p>
+        </div>
+      </div>
+
+      {/* Cloud Backups */}
+      <div className="card">
+        <div className="card-header">
+          <h2 className="text-sm font-semibold text-zinc-100 flex items-center gap-2"><UploadCloud size={14} />Cloud Backups</h2>
+          <p className="text-xs text-zinc-500 mt-0.5">Upload new backups to an off-site destination in addition to the local copy on each node.</p>
+        </div>
+        <div className="p-6 space-y-5">
+          <div>
+            <label className="label">Destination</label>
+            <div className="grid grid-cols-4 gap-3">
+              {STORAGE_PROVIDERS.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setForm(f => ({ ...f, 'storage.provider': p.id }))}
+                  className={`flex flex-col items-center justify-center gap-1 p-3 rounded-lg border text-center transition-colors ${
+                    form['storage.provider'] === p.id
+                      ? 'border-panel-500 bg-panel-500/10'
+                      : 'border-zinc-800 hover:border-zinc-700'
+                  }`}
+                >
+                  <span className="text-xs font-medium text-zinc-200">{p.label}</span>
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-zinc-600 mt-2">
+              S3-Compatible covers AWS S3, Backblaze B2, Cloudflare R2, Wasabi, DigitalOcean Spaces, and MinIO — they all speak the same API.
+            </p>
+          </div>
+
+          {form['storage.provider'] === 's3' && (
+            <div className="space-y-4 rounded-lg border border-zinc-800 p-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className="label">Endpoint (blank for AWS)</label>
+                  <input
+                    className="input font-mono text-sm"
+                    value={form['storage.s3.endpoint']}
+                    onChange={e => setForm(f => ({ ...f, 'storage.s3.endpoint': e.target.value }))}
+                    placeholder="https://s3.us-west-002.backblazeb2.com"
+                  />
+                </div>
+                <div>
+                  <label className="label">Region</label>
+                  <input
+                    className="input"
+                    value={form['storage.s3.region']}
+                    onChange={e => setForm(f => ({ ...f, 'storage.s3.region': e.target.value }))}
+                    placeholder="us-east-1"
+                  />
+                </div>
+                <div>
+                  <label className="label">Bucket</label>
+                  <input
+                    className="input"
+                    value={form['storage.s3.bucket']}
+                    onChange={e => setForm(f => ({ ...f, 'storage.s3.bucket': e.target.value }))}
+                    placeholder="kretase-backups"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="label">Access Key ID</label>
+                <input
+                  className="input font-mono text-sm"
+                  value={form['storage.s3.accessKeyId']}
+                  onChange={e => setForm(f => ({ ...f, 'storage.s3.accessKeyId': e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="label">Secret Access Key</label>
+                <div className="relative">
+                  <input
+                    type={showKey['s3secret'] ? 'text' : 'password'}
+                    className="input font-mono text-sm pr-10"
+                    value={form['storage.s3.secretAccessKey']}
+                    onChange={e => setForm(f => ({ ...f, 'storage.s3.secretAccessKey': e.target.value }))}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowKey(s => ({ ...s, s3secret: !s.s3secret }))}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-300 transition-colors"
+                  >
+                    {showKey['s3secret'] ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Key Prefix (optional)</label>
+                  <input
+                    className="input font-mono text-sm"
+                    value={form['storage.s3.prefix']}
+                    onChange={e => setForm(f => ({ ...f, 'storage.s3.prefix': e.target.value }))}
+                    placeholder="backups/"
+                  />
+                </div>
+                <label className="flex items-center gap-2 mt-6 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form['storage.s3.forcePathStyle'] === 'true'}
+                    onChange={e => setForm(f => ({ ...f, 'storage.s3.forcePathStyle': e.target.checked ? 'true' : 'false' }))}
+                    className="accent-panel-500"
+                  />
+                  <span className="text-xs text-zinc-400">Force path-style (needed for MinIO)</span>
+                </label>
+              </div>
+            </div>
+          )}
+
+          {form['storage.provider'] === 'sftp' && (
+            <div className="space-y-4 rounded-lg border border-zinc-800 p-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2">
+                  <label className="label">Host</label>
+                  <input
+                    className="input"
+                    value={form['storage.sftp.host']}
+                    onChange={e => setForm(f => ({ ...f, 'storage.sftp.host': e.target.value }))}
+                    placeholder="backups.example.com"
+                  />
+                </div>
+                <div>
+                  <label className="label">Port</label>
+                  <input
+                    className="input"
+                    value={form['storage.sftp.port']}
+                    onChange={e => setForm(f => ({ ...f, 'storage.sftp.port': e.target.value }))}
+                    placeholder="22"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="label">Username</label>
+                <input
+                  className="input"
+                  value={form['storage.sftp.username']}
+                  onChange={e => setForm(f => ({ ...f, 'storage.sftp.username': e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="label">Password</label>
+                <div className="relative">
+                  <input
+                    type={showKey['sftppass'] ? 'text' : 'password'}
+                    className="input pr-10"
+                    value={form['storage.sftp.password']}
+                    onChange={e => setForm(f => ({ ...f, 'storage.sftp.password': e.target.value }))}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowKey(s => ({ ...s, sftppass: !s.sftppass }))}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-300 transition-colors"
+                  >
+                    {showKey['sftppass'] ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+                <p className="text-xs text-zinc-600 mt-1">Or provide a private key below instead.</p>
+              </div>
+              <div>
+                <label className="label">Private Key (optional)</label>
+                <textarea
+                  className="input font-mono text-xs min-h-[100px] resize-y"
+                  value={form['storage.sftp.privateKey']}
+                  onChange={e => setForm(f => ({ ...f, 'storage.sftp.privateKey': e.target.value }))}
+                  placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+                  spellCheck={false}
+                />
+              </div>
+              <div>
+                <label className="label">Base Path (optional)</label>
+                <input
+                  className="input font-mono text-sm"
+                  value={form['storage.sftp.basePath']}
+                  onChange={e => setForm(f => ({ ...f, 'storage.sftp.basePath': e.target.value }))}
+                  placeholder="/home/backups/kretase"
+                />
+              </div>
+            </div>
+          )}
+
+          {form['storage.provider'] === 'gdrive' && (
+            <div className="space-y-4 rounded-lg border border-zinc-800 p-4">
+              <div>
+                <label className="label">Service Account JSON</label>
+                <textarea
+                  className="input font-mono text-xs min-h-[140px] resize-y"
+                  value={form['storage.gdrive.serviceAccountJson']}
+                  onChange={e => setForm(f => ({ ...f, 'storage.gdrive.serviceAccountJson': e.target.value }))}
+                  placeholder='{"type": "service_account", "client_email": "...", "private_key": "..."}'
+                  spellCheck={false}
+                />
+                <p className="text-xs text-zinc-600 mt-1">
+                  Create a service account in{' '}
+                  <a href="https://console.cloud.google.com/iam-admin/serviceaccounts" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">
+                    Google Cloud Console
+                  </a>
+                  , download its JSON key, then share your Drive folder with the service account's email address.
+                </p>
+              </div>
+              <div>
+                <label className="label">Drive Folder ID</label>
+                <input
+                  className="input font-mono text-sm"
+                  value={form['storage.gdrive.folderId']}
+                  onChange={e => setForm(f => ({ ...f, 'storage.gdrive.folderId': e.target.value }))}
+                  placeholder="1a2B3cD4eFgHiJkLmNoPqRsTuVwXyZ"
+                />
+                <p className="text-xs text-zinc-600 mt-1">The id from the folder's share URL.</p>
+              </div>
+            </div>
+          )}
+
+          {form['storage.provider'] !== 'none' && (
+            <>
+              <label className="flex items-center justify-between gap-4 cursor-pointer">
+                <div>
+                  <p className="text-sm font-medium text-zinc-200">Delete local copy after successful upload</p>
+                  <p className="text-xs text-zinc-500 mt-0.5">
+                    Off by default — keeps both the local and cloud copy. Only deletes the node-local file once the cloud upload has confirmed success.
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={form['storage.deleteLocalAfterUpload'] === 'true'}
+                  onChange={e => setForm(f => ({ ...f, 'storage.deleteLocalAfterUpload': e.target.checked ? 'true' : 'false' }))}
+                  className="shrink-0 w-9 h-5 accent-panel-500"
+                />
+              </label>
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <p className="text-xs text-zinc-600">Save your changes first, then test the connection.</p>
+                <button type="button" className="btn-secondary text-xs py-1.5 px-3 shrink-0" onClick={testStorage} disabled={testingStorage}>
+                  {testingStorage ? <><Spinner size="sm" />Testing...</> : <><PlugZap size={13} />Test Connection</>}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
 

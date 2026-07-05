@@ -3,6 +3,7 @@ import { prisma } from '../utils/prisma';
 import { authenticate, requireAdmin, optionalAuth } from '../middleware/auth';
 import { AuthRequest } from '../types';
 import { checkForUpdate } from '../services/updateCheck';
+import { isConfigured as isStorageConfigured } from '../services/storage';
 
 const router = Router();
 
@@ -22,6 +23,8 @@ const DEFAULTS: Record<string, string> = {
   'ai.provider': 'openai',
   'theme.customCss': '',
   'whitelabel.hidePoweredBy': 'false',
+  'storage.provider': 'none',
+  'storage.deleteLocalAfterUpload': 'false',
 };
 
 const PROVIDER_KEY_SETTING: Record<string, string> = {
@@ -29,6 +32,8 @@ const PROVIDER_KEY_SETTING: Record<string, string> = {
   gemini: 'ai.geminiKey',
   anthropic: 'ai.anthropicKey',
 };
+
+const STORAGE_PROVIDERS = new Set(['none', 's3', 'sftp', 'gdrive']);
 
 // Keys safe to expose without authentication (sidebar/login branding, public
 // feature flags). Everything else (SMTP creds, AI provider keys) is stripped
@@ -43,6 +48,7 @@ router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
     const providerKey = PROVIDER_KEY_SETTING[settings['ai.provider']] || 'ai.openaiKey';
     settings['ai.configured'] = settings[providerKey] ? 'true' : 'false';
     settings['curseforge.configured'] = settings['curseforge.apiKey'] ? 'true' : 'false';
+    settings['storage.configured'] = isStorageConfigured(settings) ? 'true' : 'false';
     // Sourced from the deployed .env, not the DB — install/update-panel.sh
     // keep PANEL_VERSION in sync with the actual release tag on every run.
     settings['app.version'] = process.env.PANEL_VERSION || '1.0.0';
@@ -62,12 +68,21 @@ router.put('/', authenticate, requireAdmin, async (req: AuthRequest, res: Respon
   if (req.body['ai.provider'] !== undefined && !PROVIDER_KEY_SETTING[req.body['ai.provider']]) {
     return res.status(422).json({ message: 'Invalid ai.provider — must be openai, gemini, or anthropic' });
   }
+  if (req.body['storage.provider'] !== undefined && !STORAGE_PROVIDERS.has(req.body['storage.provider'])) {
+    return res.status(422).json({ message: 'Invalid storage.provider — must be none, s3, sftp, or gdrive' });
+  }
   const allowed = [
     'app.name', 'app.title', 'app.logo', 'app.description',
     'smtp.host', 'smtp.port', 'smtp.user', 'smtp.pass', 'smtp.from',
     'features.aiTools', 'ai.provider', 'ai.openaiKey', 'ai.geminiKey', 'ai.anthropicKey',
     'curseforge.apiKey',
     'theme.customCss', 'whitelabel.hidePoweredBy',
+    'storage.provider', 'storage.deleteLocalAfterUpload',
+    'storage.s3.endpoint', 'storage.s3.region', 'storage.s3.bucket', 'storage.s3.accessKeyId',
+    'storage.s3.secretAccessKey', 'storage.s3.forcePathStyle', 'storage.s3.prefix',
+    'storage.sftp.host', 'storage.sftp.port', 'storage.sftp.username', 'storage.sftp.password',
+    'storage.sftp.privateKey', 'storage.sftp.basePath',
+    'storage.gdrive.serviceAccountJson', 'storage.gdrive.folderId',
   ];
   if (req.body['theme.customCss'] !== undefined) {
     const css = req.body['theme.customCss'];
