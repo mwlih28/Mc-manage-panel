@@ -9,11 +9,12 @@ import {
   MapPin, Clock, Sword, Hammer, Footprints, Ban, LogOut, Wifi, Navigation,
   StickyNote, CalendarClock, UserCog, Save, Copy, CheckCircle2, Globe2, Boxes,
   Settings as SettingsIcon, Gauge, RotateCw, Trophy, Map as MapIcon,
-  ExternalLink, Palette
+  ExternalLink, Palette, Bot
 } from 'lucide-react';
 import { io as ioClient, Socket } from 'socket.io-client';
 import api from '@/lib/axios';
 import { useAuthStore } from '@/store/authStore';
+import { useSettings } from '@/hooks/useSettings';
 import { Server, ServerStats, ServerStatus } from '@/types';
 import {
   getServerStatusDot, getServerStatusBadge, formatBytes, formatUptime
@@ -184,6 +185,9 @@ export function ServerDetailPage() {
   const [ipCopied, setIpCopied] = useState(false);
   const [showEulaModal, setShowEulaModal] = useState(false);
   const [acceptingEula, setAcceptingEula] = useState(false);
+  const [discordBindCode, setDiscordBindCode] = useState<string | null>(null);
+  const [generatingBindCode, setGeneratingBindCode] = useState(false);
+  const { data: siteSettings } = useSettings();
   const socketRef = useRef<Socket | null>(null);
   const consoleEndRef = useRef<HTMLDivElement>(null);
 
@@ -362,6 +366,18 @@ export function ServerDetailPage() {
       toast.error(message || 'Failed to save settings');
     } finally {
       setSavingSettings(false);
+    }
+  };
+
+  const generateDiscordBindCode = async () => {
+    setGeneratingBindCode(true);
+    try {
+      const { data } = await api.post(`/servers/${id}/discord/bind-code`);
+      setDiscordBindCode(data.code);
+    } catch {
+      toast.error('Failed to generate a code');
+    } finally {
+      setGeneratingBindCode(false);
     }
   };
 
@@ -2045,6 +2061,44 @@ export function ServerDetailPage() {
               </div>
             </div>
           </div>
+
+          {siteSettings?.['discord.configured'] === 'true' && (
+            <div className="card">
+              <div className="card-header flex items-center gap-2">
+                <Bot size={14} className="text-slate-400" />
+                <h3 className="text-sm font-semibold text-slate-100">Discord Bot</h3>
+              </div>
+              <div className="p-5 space-y-3">
+                <p className="text-xs text-slate-500">
+                  Link a Discord channel to this server so <code className="text-panel-400">/start</code>, <code className="text-panel-400">/stop</code>,{' '}
+                  <code className="text-panel-400">/restart</code>, and <code className="text-panel-400">/status</code> work right from Discord.
+                </p>
+                <ol className="text-xs text-slate-500 list-decimal list-inside space-y-1">
+                  <li>Generate a code below (valid for 10 minutes).</li>
+                  <li>In the Discord channel you want to control this server from, run <code className="text-panel-400">/bind &lt;code&gt;</code>.</li>
+                </ol>
+                {discordBindCode ? (
+                  <div className="flex items-center gap-2">
+                    <code className="text-sm px-3 py-1.5 rounded bg-dark-900 text-panel-400 font-mono tracking-wider">{discordBindCode}</code>
+                    <button
+                      type="button"
+                      className="p-1.5 text-slate-500 hover:text-slate-300"
+                      onClick={() => { navigator.clipboard.writeText(discordBindCode); toast.success('Code copied'); }}
+                    >
+                      <Copy size={13} />
+                    </button>
+                    <button type="button" className="btn-secondary btn-sm" onClick={generateDiscordBindCode} disabled={generatingBindCode}>
+                      {generatingBindCode ? <Spinner size="sm" /> : 'Regenerate'}
+                    </button>
+                  </div>
+                ) : (
+                  <button type="button" className="btn-secondary btn-sm" onClick={generateDiscordBindCode} disabled={generatingBindCode}>
+                    {generatingBindCode ? <Spinner size="sm" /> : <><Bot size={13} /> Generate Bind Code</>}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

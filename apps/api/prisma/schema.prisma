@@ -199,6 +199,7 @@ model Server {
   schedules   ScheduledTask[]
   statSamples ServerStatSample[]
   webhooks    Webhook[]
+  discordBindings DiscordBinding[]
 
   @@index([userId])
   @@index([nodeId])
@@ -378,4 +379,20 @@ model Webhook {
   updatedAt       DateTime  @updatedAt
 
   server          Server?   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+}
+
+// Links one Discord channel to one Kretase server so /start /stop /restart
+// /status commands in that channel act on that server, without ever needing
+// a Discord identity mapped to a Kretase user account. Created via the
+// /bind slash command using a short-lived code generated from the panel
+// (proves the Discord operator actually has panel access to that server) —
+// see services/discordBindCodes.ts.
+model DiscordBinding {
+  id        String   @id @default(uuid())
+  guildId   String
+  channelId String   @unique
+  serverId  String
+  createdAt DateTime @default(now())
+
+  server    Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
 }

@@ -5,7 +5,7 @@ import axios from 'axios';
 import { prisma } from '../utils/prisma';
 import { authenticate, requireAdmin, requireScope } from '../middleware/auth';
 import { AuthRequest } from '../types';
-import { sendPowerAction, sendCommand as wingsSendCommand, createServerOnNode, getServerResources, buildWingsConfig } from '../services/wingsClient';
+import { sendCommand as wingsSendCommand, createServerOnNode, getServerResources, buildWingsConfig } from '../services/wingsClient';
 import { fetchPaperVersions, fetchPaperBuildDetails } from '../services/paperApi';
 import { resolveModpackInstall as resolveCurseForgeModpack, matchFilesByFingerprint, CurseForgeFileMatch } from '../services/curseforgeApi';
 import { resolveModpackInstall as resolveModrinthModpack, matchFilesBySha1, ModrinthFileMatch } from '../services/modrinthApi';
@@ -13,6 +13,8 @@ import { ResolvedModpack } from '../services/modpackTypes';
 import { computeNextRun } from '../services/scheduler';
 import { getLiveServerStatus } from '../services/serverStatus';
 import { logActivity } from '../services/activityService';
+import { performPowerAction } from '../services/powerActionService';
+import { createBindCode } from '../services/discordBindCodes';
 import { logger } from '../utils/logger';
 
 export async function getWingsClient(serverId: string, userId: string, isAdmin: boolean) {
@@ -938,6 +940,20 @@ router.delete('/:id', authenticate, requireAdmin, requireScope('servers:write'),
   return res.status(204).send();
 });
 
+// POST /servers/:id/discord/bind-code — generates a short-lived code the
+// owner pastes into `/bind <code>` in Discord, proving they actually have
+// panel access to this server without needing a Discord-account link.
+router.post('/:id/discord/bind-code', authenticate, requireScope('servers:write'), async (req: AuthRequest, res: Response) => {
+  const isAdmin = req.user!.role === 'ADMIN';
+  const server = await prisma.server.findFirst({
+    where: { id: req.params.id, ...(isAdmin ? {} : { userId: req.user!.id }) },
+  });
+  if (!server) return res.status(404).json({ message: 'Server not found' });
+
+  const code = createBindCode(server.id);
+  return res.json({ code, expiresInSeconds: 600 });
+});
+
 // POST /servers/:id/power - Power actions (real Wings integration)
 router.post('/:id/power', authenticate, requireScope(['servers:power', 'servers:write']), async (req: AuthRequest, res: Response) => {
   const isAdmin = req.user!.role === 'ADMIN';
@@ -952,50 +968,13 @@ router.post('/:id/power', authenticate, requireScope(['servers:power', 'servers:
   if (!server) return res.status(404).json({ message: 'Server not found' });
 
   const { action } = req.body;
-  if (!['start', 'stop', 'restart', 'kill'].includes(action)) {
-    return res.status(422).json({ message: 'Invalid power action' });
+  const result = await performPowerAction(server, action, { userId: req.user!.id, ip: req.ip });
+  if (!result.ok) {
+    const status = result.code === 'INVALID_ACTION' ? 422 : 409;
+    return res.status(status).json({ message: result.message, code: result.code });
   }
 
-  // The Minecraft EULA only applies to Minecraft-family eggs — non-Minecraft
-  // games (CS2, Rust, ARK, GMod, TShock, ...) have no such requirement and
-  // must never be gated on `eulaAccepted`. Bedrock is a Minecraft-nest egg
-  // but is excluded too, matching the rest of the codebase's existing choice
-  // not to enforce EULA acceptance for it.
-  const isMinecraftEgg = server.egg.nest?.name === 'Minecraft';
-  const isBedrockEgg = server.egg.name.toLowerCase().includes('bedrock') || server.egg.startup.includes('bedrock_server');
-  if (action === 'start' && isMinecraftEgg && !isBedrockEgg && !server.eulaAccepted) {
-    return res.status(409).json({ message: 'EULA_NOT_ACCEPTED', code: 'EULA_NOT_ACCEPTED' });
-  }
-
-  const statusMap: Record<string, string> = {
-    start: 'STARTING',
-    stop: 'STOPPING',
-    restart: 'STOPPING',
-    kill: 'OFFLINE',
-  };
-
-  // Update status optimistically
-  await prisma.server.update({
-    where: { id: server.id },
-    data: { status: statusMap[action] as 'STARTING' | 'STOPPING' | 'OFFLINE' },
-  });
-
-  // Send to Wings daemon (non-blocking)
-  if (server.node?.status === 'ONLINE') {
-    sendPowerAction(server as Parameters<typeof sendPowerAction>[0], action as 'start' | 'stop' | 'restart' | 'kill')
-      .catch(err => logger.warn(`Wings power action failed for ${server.uuid}: ${err.message}`));
-  } else {
-    logger.warn(`Node is offline, power action queued for ${server.uuid}`);
-  }
-
-  await logActivity({
-    userId: req.user!.id,
-    serverId: server.id,
-    event: `server:power.${action}`,
-    ip: req.ip,
-  });
-
-  return res.json({ message: `Server ${action} command sent` });
+  return res.json({ message: result.message });
 });
 
 // POST /servers/:id/accept-eula — the server's owner (or an admin) accepts the

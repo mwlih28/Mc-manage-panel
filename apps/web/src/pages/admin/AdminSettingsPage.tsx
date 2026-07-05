@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, Globe, Image, Type, FileText, Mail, Send, Eye, EyeOff, Zap, Sparkles, Mountain, Paintbrush, UploadCloud, PlugZap } from 'lucide-react';
+import { Save, Globe, Image, Type, FileText, Mail, Send, Eye, EyeOff, Zap, Sparkles, Mountain, Paintbrush, UploadCloud, PlugZap, Bot } from 'lucide-react';
 import api from '@/lib/axios';
 import toast from 'react-hot-toast';
 import { Spinner } from '@/components/ui/Spinner';
@@ -29,6 +29,20 @@ const STORAGE_PROVIDERS: { id: StorageProvider; label: string }[] = [
   { id: 'sftp', label: 'SFTP' },
   { id: 'gdrive', label: 'Google Drive' },
 ];
+
+// A Discord bot token is `<base64url(bot user id)>.<random>.<random>` — the
+// bot's user id doubles as its application id for the OAuth invite link, so
+// this avoids making the admin go dig it up separately.
+function extractDiscordBotId(token: string): string | null {
+  const first = token.split('.')[0];
+  if (!first) return null;
+  try {
+    const id = atob(first.replace(/-/g, '+').replace(/_/g, '/'));
+    return /^\d+$/.test(id) ? id : null;
+  } catch {
+    return null;
+  }
+}
 
 export function AdminSettingsPage() {
   const [loading, setLoading] = useState(true);
@@ -71,6 +85,7 @@ export function AdminSettingsPage() {
     'storage.sftp.basePath': '',
     'storage.gdrive.serviceAccountJson': '',
     'storage.gdrive.folderId': '',
+    'discord.botToken': '',
   });
   const [showKey, setShowKey] = useState<Record<string, boolean>>({});
   const queryClient = useQueryClient();
@@ -112,6 +127,7 @@ export function AdminSettingsPage() {
         'storage.sftp.basePath': data['storage.sftp.basePath'] || '',
         'storage.gdrive.serviceAccountJson': data['storage.gdrive.serviceAccountJson'] || '',
         'storage.gdrive.folderId': data['storage.gdrive.folderId'] || '',
+        'discord.botToken': data['discord.botToken'] || '',
       });
     }).finally(() => setLoading(false));
   }, []);
@@ -621,6 +637,71 @@ export function AdminSettingsPage() {
               </div>
             </>
           )}
+        </div>
+      </div>
+
+      {/* Discord Bot */}
+      <div className="card">
+        <div className="card-header">
+          <h2 className="text-sm font-semibold text-zinc-100 flex items-center gap-2"><Bot size={14} />Discord Bot</h2>
+          <p className="text-xs text-zinc-500 mt-0.5">
+            Lets server owners run /start, /stop, /restart, and /status from a Discord channel.
+          </p>
+        </div>
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="label">Bot Token</label>
+            <div className="relative">
+              <input
+                type={showKey['discordToken'] ? 'text' : 'password'}
+                className="input font-mono text-sm pr-10"
+                value={form['discord.botToken']}
+                onChange={e => setForm(f => ({ ...f, 'discord.botToken': e.target.value }))}
+                placeholder="MTA1Nz...GaBcD.eXaMpLe.tOkEn"
+              />
+              <button
+                type="button"
+                onClick={() => setShowKey(s => ({ ...s, discordToken: !s.discordToken }))}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-300 transition-colors"
+              >
+                {showKey['discordToken'] ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+            </div>
+            <p className="text-xs text-zinc-600 mt-1">
+              Create an application and bot at{' '}
+              <a href="https://discord.com/developers/applications" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">
+                discord.com/developers/applications
+              </a>
+              , then copy its token here.
+            </p>
+          </div>
+
+          {form['discord.botToken'] && extractDiscordBotId(form['discord.botToken']) && (
+            <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-4">
+              <p className="text-sm font-medium text-blue-300">Invite the bot to your server</p>
+              <p className="text-xs text-zinc-500 mt-1">
+                Save your changes first, then use this link to add the bot to a Discord server with the permissions it needs.
+              </p>
+              <a
+                // 3072 = View Channel (1024) + Send Messages (2048) — the
+                // only permissions the bot actually needs; slash commands
+                // themselves come from the applications.commands scope, not
+                // a permission bit.
+                href={`https://discord.com/oauth2/authorize?client_id=${extractDiscordBotId(form['discord.botToken'])}&scope=bot%20applications.commands&permissions=3072`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block mt-2 btn-secondary text-xs py-1.5 px-3"
+              >
+                Get Invite Link
+              </a>
+            </div>
+          )}
+
+          <div className="text-xs text-zinc-600 space-y-1">
+            <p>Once invited, a server owner (or admin) generates a bind code from a server's Settings tab in Kretase, then runs:</p>
+            <code className="block bg-zinc-950 rounded px-2 py-1 text-zinc-400">/bind &lt;code&gt;</code>
+            <p>in the Discord channel that should control that server. <code className="text-zinc-400">/unbind</code> removes the link.</p>
+          </div>
         </div>
       </div>
 

@@ -32,6 +32,7 @@ import { logger } from './utils/logger';
 import { errorHandler, notFound } from './middleware/errorHandler';
 import { initSocketServer } from './services/socketService';
 import { startScheduler } from './services/scheduler';
+import { startDiscordBot } from './services/discordBot';
 
 import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
@@ -186,6 +187,7 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   logger.info(`Environment: ${process.env.NODE_ENV}`);
   logger.info(`CORS Origin: ${CORS_ORIGIN}`);
   startScheduler();
+  startDiscordBot().catch((err) => logger.warn(`Discord bot startup failed: ${err.message}`));
 });
 
 export { app, io };
