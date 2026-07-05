@@ -6,6 +6,8 @@ import { useAuthStore } from '@/store/authStore';
 import { Server as ServerType, ServerStatus } from '@/types';
 import { getServerStatusDot, getServerStatusBadge, formatBytes } from '@/lib/utils';
 import { Spinner } from '@/components/ui/Spinner';
+import { MetricStrip, Metric } from '@/components/ui/MetricStrip';
+import { StatusBreakdown } from '@/components/ui/StatusBreakdown';
 
 export function DashboardPage() {
   const { user } = useAuthStore();
@@ -57,14 +59,14 @@ export function DashboardPage() {
       </div>
 
       {/* Dense metric strip */}
-      <div className="card grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 divide-x divide-y sm:divide-y-0 divide-dark-800">
+      <MetricStrip>
         <Metric label="Total Servers" value={servers.length} color="bg-zinc-400" />
         <Metric label="Running" value={running} color="bg-green-400" />
         <Metric label="Suspended" value={suspended} color="bg-red-400" />
         <Metric label="Nodes" value={nodeCount} color="bg-yellow-400" />
         <Metric label="Total RAM" value={formatBytes(totalRam)} color="bg-panel-400" />
         <Metric label="Total Disk" value={formatBytes(totalDisk)} color="bg-blue-400" />
-      </div>
+      </MetricStrip>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         {/* Servers table */}
@@ -133,33 +135,11 @@ export function DashboardPage() {
             <div className="card-header">
               <h2 className="text-sm font-semibold text-slate-200">Status Breakdown</h2>
             </div>
-            <div className="card-body space-y-3">
-              {servers.length === 0 ? (
-                <p className="text-xs text-slate-600">No data yet</p>
-              ) : (
-                <>
-                  <div className="flex h-2 rounded-full overflow-hidden bg-dark-950">
-                    {(Object.entries(statusCounts) as [ServerStatus, number][]).map(([status, count]) => (
-                      <div
-                        key={status}
-                        className={getServerStatusDot(status).replace('animate-pulse', '')}
-                        style={{ width: `${(count / servers.length) * 100}%` }}
-                      />
-                    ))}
-                  </div>
-                  <div className="space-y-1.5">
-                    {(Object.entries(statusCounts) as [ServerStatus, number][]).map(([status, count]) => (
-                      <div key={status} className="flex items-center justify-between text-xs">
-                        <span className="flex items-center gap-2 text-slate-400">
-                          <span className={`h-1.5 w-1.5 rounded-full ${getServerStatusDot(status).replace(' animate-pulse', '')}`} />
-                          {status}
-                        </span>
-                        <span className="font-mono text-slate-300">{count}</span>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
+            <div className="card-body">
+              <StatusBreakdown
+                counts={statusCounts as Record<string, number>}
+                dotClass={(status) => getServerStatusDot(status as ServerStatus)}
+              />
             </div>
           </div>
 
@@ -186,18 +166,6 @@ export function DashboardPage() {
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function Metric({ label, value, color }: { label: string; value: string | number; color: string }) {
-  return (
-    <div className="px-4 py-3">
-      <div className="flex items-center gap-1.5 mb-1">
-        <span className={`h-1.5 w-1.5 rounded-full ${color}`} />
-        <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">{label}</p>
-      </div>
-      <p className="text-lg font-bold text-white font-mono leading-none">{value}</p>
     </div>
   );
 }
