@@ -1,5 +1,6 @@
 import { prisma } from '../utils/prisma';
 import { dispatchWebhooks } from './webhookDispatch';
+import { dispatchPush } from './pushDispatch';
 
 interface LogActivityInput {
   userId?: string;
@@ -21,5 +22,6 @@ export async function logActivity(input: LogActivityInput) {
     userId: input.userId,
     properties: input.properties,
   }).catch(() => {});
+  dispatchPush(input.event, input.serverId, input.properties).catch(() => {});
   return activity;
 }

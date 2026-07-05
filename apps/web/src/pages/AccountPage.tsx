@@ -1,16 +1,18 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { User, Lock, ShieldCheck, ShieldAlert, ArrowRight } from 'lucide-react';
+import { User, Lock, ShieldCheck, ShieldAlert, ArrowRight, Bell } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import api from '@/lib/axios';
 import { useAuthStore } from '@/store/authStore';
 import { Spinner } from '@/components/ui/Spinner';
 import toast from 'react-hot-toast';
 import { SUPPORTED_LANGUAGES } from '@/i18n';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 
 export function AccountPage() {
   const { t, i18n } = useTranslation();
   const { user, setUser } = useAuthStore();
+  const push = usePushNotifications();
   const [profileForm, setProfileForm] = useState({
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
@@ -337,6 +339,33 @@ export function AccountPage() {
           )}
         </div>
       </div>
+
+      {/* Push Notifications */}
+      {push.supported && (
+        <div className="card">
+          <div className="card-header flex items-center gap-2">
+            <Bell size={14} className="text-slate-400" />
+            <h2 className="text-sm font-semibold text-zinc-100">Notifications</h2>
+          </div>
+          <div className="p-6">
+            <label className="flex items-center justify-between gap-4 cursor-pointer">
+              <div>
+                <p className="text-sm font-medium text-zinc-200">Server alerts on this device</p>
+                <p className="text-xs text-zinc-500 mt-0.5">
+                  Get a notification if one of your servers crashes, gets suspended, or triggers a security alert — even with no tab open.
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                checked={push.subscribed}
+                disabled={push.loading}
+                onChange={(e) => (e.target.checked ? push.subscribe() : push.unsubscribe())}
+                className="shrink-0 w-9 h-5 accent-panel-500"
+              />
+            </label>
+          </div>
+        </div>
+      )}
 
     </div>
   );

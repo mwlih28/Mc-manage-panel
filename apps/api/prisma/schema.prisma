@@ -26,10 +26,11 @@ model User {
   updatedAt    DateTime  @updatedAt
   lastLogin    DateTime?
 
-  servers        Server[]
-  apiKeys        ApiKey[]
-  activities     Activity[]
-  subUserServers ServerSubUser[]
+  servers           Server[]
+  apiKeys           ApiKey[]
+  activities        Activity[]
+  subUserServers    ServerSubUser[]
+  pushSubscriptions PushSubscription[]
 }
 
 model Node {
@@ -408,4 +409,17 @@ model MigrationJob {
   log       String   @default("[]")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// A browser's Web Push subscription — lets the panel deliver a real OS-level
+// notification (crash, security alert, suspend) even when no tab is open.
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

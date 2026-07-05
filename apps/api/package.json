@@ -44,6 +44,7 @@
     "socket.io-client": "^4.8.3",
     "ssh2-sftp-client": "^12.1.1",
     "uuid": "^14.0.1",
+    "web-push": "^3.6.7",
     "winston": "^3.11.0"
   },
   "devDependencies": {
@@ -61,6 +62,7 @@
     "@types/nodemailer": "^8.0.1",
     "@types/qrcode": "^1.5.6",
     "@types/ssh2-sftp-client": "^9.0.6",
+    "@types/web-push": "^3.6.4",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.3.2",
     "vitest": "^4.1.9"
