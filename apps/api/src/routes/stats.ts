@@ -42,7 +42,10 @@ router.get('/overview', authenticate, async (req: AuthRequest, res: Response) =>
   const [servers, runningServers] = await Promise.all([
     prisma.server.findMany({
       where: { userId },
-      select: { id: true, name: true, status: true, memory: true, disk: true, cpu: true },
+      select: {
+        id: true, uuidShort: true, name: true, status: true, memory: true, disk: true, cpu: true,
+        node: { select: { id: true, name: true } },
+      },
     }),
     prisma.server.count({ where: { userId, status: 'RUNNING' } }),
   ]);
