@@ -90,6 +90,35 @@ for i in {1..20}; do
 done
 $WINGS_READY && success "mc-wings is running" || warn "mc-wings did not report active — check: journalctl -u mc-wings -n 50"
 
+# ── Firewall ──────────────────────────────────────────────────────────
+# Nodes installed before this update only opened the Minecraft port range —
+# `ufw allow` is idempotent, so it's safe to re-apply on every update as new
+# game ports get added here, without needing a separate one-off script.
+step "Refreshing firewall rules (UFW)"
+if command -v ufw &>/dev/null; then
+  for range in \
+    "27015:27050:Source engine (CS2/GMod/TF2/L4D2)" \
+    "28015:28050:Rust" \
+    "7777:7800:ARK/Terraria/Satisfactory" \
+    "2456:2470:Valheim" \
+    "26900:26910:7 Days to Die" \
+    "16261:16270:Project Zomboid" \
+    "9876:9880:V Rising" \
+    "8211:8220:Palworld" \
+    "7787:7790:Squad" \
+    "34197:34200:Factorio" \
+    "9987:9990:TeamSpeak" \
+    "64738:64740:Mumble"
+  do
+    portRange="${range%:*}"; game="${range##*:}"
+    ufw allow "${portRange}/tcp" comment "$game" >/dev/null 2>&1 || true
+    ufw allow "${portRange}/udp" comment "$game" >/dev/null 2>&1 || true
+  done
+  success "UFW: common non-Minecraft game ports opened"
+else
+  info "UFW not found — skipping firewall refresh"
+fi
+
 echo ""
 echo -e "${GREEN}${BOLD}"
 echo "  ╔═══════════════════════════════════════════════════╗"

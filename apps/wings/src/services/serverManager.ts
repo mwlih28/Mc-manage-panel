@@ -637,10 +637,10 @@ class ServerManager extends EventEmitter {
 
     const envArray = Object.entries(config.environment).map(([k, v]) => `${k}=${v}`);
 
-    const container = await d.createContainer({
+    const createInstallContainer = (shell: string) => d.createContainer({
       name: installName,
       Image: installImage,
-      Cmd: ['/bin/bash', '/mnt/server/.wings_install.sh'],
+      Cmd: [shell, '/mnt/server/.wings_install.sh'],
       Env: envArray,
       User: '0',
       WorkingDir: '/mnt/server',
@@ -653,7 +653,23 @@ class ServerManager extends EventEmitter {
       },
     });
 
-    await container.start();
+    // Most egg install scripts are written for bash, so prefer it when present.
+    // But plenty of minimal/SteamCMD-style images (common for non-Minecraft
+    // eggs) only ship /bin/sh — fall back instead of hard-failing the install.
+    let container = await createInstallContainer('/bin/bash');
+    try {
+      await container.start();
+    } catch (err) {
+      const msg = (err as Error).message || '';
+      if (msg.includes('/bin/bash') && msg.includes('no such file or directory')) {
+        this.sendConsole(uuid, '[Wings] /bin/bash not found in install image, retrying with /bin/sh...');
+        await container.remove({ force: true }).catch(() => {});
+        container = await createInstallContainer('/bin/sh');
+        await container.start();
+      } else {
+        throw err;
+      }
+    }
 
     // Stream install output to console
     await new Promise<void>((resolve) => {

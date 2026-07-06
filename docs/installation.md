@@ -56,7 +56,7 @@ If you used the one-command activation setup code from the panel, paste it when 
 - **Node token** (from Admin → Nodes → your node → Configuration)
 - **Wings listen port** (default `8080`)
 
-What it sets up: Docker, Node.js, the Wings daemon (as the `mc-wings` systemd service), and firewall rules (UFW) opening the Wings port, the SFTP port (`2022`), and a game-server port range (`25565-25600/tcp+udp`).
+What it sets up: Docker, Node.js, the Wings daemon (as the `mc-wings` systemd service), and firewall rules (UFW) opening the Wings port, the SFTP port (`2022`), the Minecraft port range (`25565-25600/tcp+udp`), and ranges for common non-Minecraft games from the community egg store (CS2/Source engine, Rust, ARK, Valheim, and others) — see `scripts/install-wings.sh` for the full list. Running `update-wings.sh` re-applies these too, so already-installed nodes pick up newly-added game ports without a separate step.
 
 Once it's running, the node's status in the panel should turn from grey/offline to green/online within a few seconds (Wings authenticates and sends a heartbeat automatically).
 

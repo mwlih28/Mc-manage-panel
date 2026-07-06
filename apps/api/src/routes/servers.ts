@@ -42,6 +42,38 @@ function generateShortUuid() {
   return uuidv4().replace(/-/g, '').slice(0, 8);
 }
 
+// Well-known default listen ports for common non-Minecraft game servers,
+// matched against the egg's name. Not exhaustive — the community egg store
+// is open-ended — but covers the games most likely to actually be deployed
+// through it. Falls back to the Minecraft Java default (25565) when nothing
+// matches, same as before this table existed.
+const GAME_DEFAULT_PORTS: Array<{ match: RegExp; port: number }> = [
+  { match: /counter-?strike\s*2|\bcs2\b|counter-?strike|csgo|cs:?go/i, port: 27015 },
+  { match: /garry'?s mod|\bgmod\b/i, port: 27015 },
+  { match: /team fortress 2|\btf2\b/i, port: 27015 },
+  { match: /left 4 dead 2|\bl4d2\b/i, port: 27015 },
+  { match: /\brust\b/i, port: 28015 },
+  { match: /\bark\b|survival evolved/i, port: 7777 },
+  { match: /valheim/i, port: 2456 },
+  { match: /terraria/i, port: 7777 },
+  { match: /7 days to die/i, port: 26900 },
+  { match: /project zomboid/i, port: 16261 },
+  { match: /satisfactory/i, port: 7777 },
+  { match: /v rising/i, port: 9876 },
+  { match: /palworld/i, port: 8211 },
+  { match: /\bsquad\b/i, port: 7787 },
+  { match: /space engineers/i, port: 27016 },
+  { match: /factorio/i, port: 34197 },
+  { match: /teamspeak/i, port: 9987 },
+  { match: /mumble/i, port: 64738 },
+];
+
+function getDefaultBasePort(eggName: string, isBedrockEgg: boolean): number {
+  if (isBedrockEgg) return 19132;
+  const known = GAME_DEFAULT_PORTS.find((g) => g.match.test(eggName));
+  return known ? known.port : 25565;
+}
+
 // Belt-and-braces guard for the file-manager routes below — traversal
 // protection is expected to live in Wings too, but the API shouldn't
 // forward an obviously malicious path just because Wings is trusted to
@@ -179,13 +211,18 @@ router.post(
             finalAllocationId = freeAlloc.id;
             finalPort = freeAlloc.port;
           } else {
-            // Auto-generate the next available port starting from 25565
-            const highest = await tx.allocation.findFirst({
-              where: { nodeId },
+            // Auto-generate the next available port, starting from a base
+            // appropriate to the game this egg actually runs (a CS2 server
+            // has no business being handed 25566 just because a Minecraft
+            // server on the same node happens to be the highest-numbered
+            // allocation — that also lands outside the firewall's game port
+            // range for anything other than Minecraft/Bedrock).
+            const basePort = getDefaultBasePort(egg.name, isBedrockEgg);
+            const highestInRange = await tx.allocation.findFirst({
+              where: { nodeId, port: { gte: basePort, lt: basePort + 1000 } },
               orderBy: { port: 'desc' },
             });
-            const basePort = isBedrockEgg ? 19132 : 25565;
-            const nextPort = highest ? highest.port + 1 : basePort;
+            const nextPort = highestInRange ? highestInRange.port + 1 : basePort;
             const nodeRecord = await tx.node.findUnique({ where: { id: nodeId } });
             const created = await tx.allocation.create({
               data: { nodeId, ip: nodeRecord?.fqdn || '0.0.0.0', port: nextPort, assigned: true },

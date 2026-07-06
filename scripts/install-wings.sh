@@ -418,10 +418,31 @@ if command -v ufw &>/dev/null; then
   ufw allow 22/tcp                  comment "SSH"          >/dev/null 2>&1 || true
   ufw allow "${WINGS_PORT}/tcp"     comment "Wings daemon" >/dev/null 2>&1 || true
   ufw allow 2022/tcp                comment "Wings SFTP"   >/dev/null 2>&1 || true
-  ufw allow 25565:25600/tcp         comment "Game servers" >/dev/null 2>&1 || true
-  ufw allow 25565:25600/udp         comment "Game servers" >/dev/null 2>&1 || true
+  ufw allow 25565:25600/tcp         comment "Minecraft"    >/dev/null 2>&1 || true
+  ufw allow 25565:25600/udp         comment "Minecraft"    >/dev/null 2>&1 || true
+  # Common non-Minecraft game ports (community egg store) — best-effort
+  # coverage, not exhaustive. Ranges give room for more than one server of
+  # the same game on this node; open more manually if you need it.
+  for range in \
+    "27015:27050:Source engine (CS2/GMod/TF2/L4D2)" \
+    "28015:28050:Rust" \
+    "7777:7800:ARK/Terraria/Satisfactory" \
+    "2456:2470:Valheim" \
+    "26900:26910:7 Days to Die" \
+    "16261:16270:Project Zomboid" \
+    "9876:9880:V Rising" \
+    "8211:8220:Palworld" \
+    "7787:7790:Squad" \
+    "34197:34200:Factorio" \
+    "9987:9990:TeamSpeak" \
+    "64738:64740:Mumble"
+  do
+    portRange="${range%:*}"; game="${range##*:}"
+    ufw allow "${portRange}/tcp" comment "$game" >/dev/null 2>&1 || true
+    ufw allow "${portRange}/udp" comment "$game" >/dev/null 2>&1 || true
+  done
   ufw --force enable >/dev/null 2>&1 || true
-  success "UFW: ports 22, ${WINGS_PORT}, 2022, 25565-25600 open"
+  success "UFW: ports 22, ${WINGS_PORT}, 2022, 25565-25600 (+ common game ranges) open"
 else
   info "UFW not found — skipping firewall"
 fi
