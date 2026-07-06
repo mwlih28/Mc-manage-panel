@@ -12,6 +12,7 @@ import { logger } from './utils/logger';
 import { ensureNetwork } from './services/dockerService';
 import { serverManager } from './services/serverManager';
 import { panelClient } from './services/panelClient';
+import { startSftpServer } from './services/sftpServer';
 
 import serverRoutes from './routes/servers';
 import fileRoutes from './routes/files';
@@ -131,6 +132,13 @@ async function main() {
 
   // --- Ensure Docker network ---
   await ensureNetwork();
+
+  // --- Start SFTP server ---
+  try {
+    startSftpServer();
+  } catch (err) {
+    logger.error(`Failed to start SFTP server: ${(err as Error).message}`);
+  }
 
   // --- Pull servers from Panel ---
   try {

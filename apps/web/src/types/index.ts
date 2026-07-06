@@ -41,6 +41,7 @@ export interface Node {
   scheme: string;
   port: number;
   daemonPort: number;
+  daemonSftp: number;
   memory: number;
   memoryOverallocate: number;
   disk: number;
@@ -145,7 +146,7 @@ export interface Server {
   createdAt: string;
   updatedAt: string;
   user?: Pick<User, 'id' | 'email' | 'username'>;
-  node?: Pick<Node, 'id' | 'name' | 'fqdn' | 'scheme' | 'daemonPort'>;
+  node?: Pick<Node, 'id' | 'name' | 'fqdn' | 'scheme' | 'daemonPort' | 'daemonSftp'>;
   egg?: Pick<Egg, 'id' | 'name'> & { variables?: EggVariable[]; nest?: Nest };
   allocation?: Allocation;
   _count?: { backups: number; databases: number };

@@ -185,6 +185,7 @@ function NodeDetailModal({ node, onClose, onSuccess }: { node: Node; onClose: ()
     fqdn: node.fqdn,
     scheme: node.scheme,
     daemonPort: String(node.daemonPort),
+    daemonSftp: String(node.daemonSftp ?? 2022),
     memory: String(node.memory),
     disk: String(node.disk),
     memoryOverallocate: String(node.memoryOverallocate ?? 0),
@@ -493,6 +494,10 @@ function NodeDetailModal({ node, onClose, onSuccess }: { node: Node; onClose: ()
               <input type="number" className="input" value={form.daemonPort} onChange={f('daemonPort')} />
             </div>
             <div>
+              <label className="label">SFTP Port</label>
+              <input type="number" className="input" value={form.daemonSftp} onChange={f('daemonSftp')} />
+            </div>
+            <div>
               <label className="label">Total Memory (MB)</label>
               <input type="number" className="input" value={form.memory} onChange={f('memory')} required />
             </div>
@@ -516,7 +521,7 @@ function NodeDetailModal({ node, onClose, onSuccess }: { node: Node; onClose: ()
 function CreateNodeModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const [form, setForm] = useState({
     name: '', description: '', fqdn: '', scheme: 'https',
-    port: '8080', daemonPort: '2022', memory: '', disk: '',
+    port: '8080', daemonPort: '2022', daemonSftp: '2022', memory: '', disk: '',
     memoryOverallocate: '0', diskOverallocate: '0',
   });
   const [isLoading, setIsLoading] = useState(false);
@@ -565,6 +570,10 @@ function CreateNodeModal({ onClose, onSuccess }: { onClose: () => void; onSucces
           <div>
             <label className="label">Daemon Port</label>
             <input type="number" className="input" value={form.daemonPort} onChange={f('daemonPort')} />
+          </div>
+          <div>
+            <label className="label">SFTP Port</label>
+            <input type="number" className="input" value={form.daemonSftp} onChange={f('daemonSftp')} />
           </div>
           <div>
             <label className="label">Total Memory (MB)</label>

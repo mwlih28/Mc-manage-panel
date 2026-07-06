@@ -103,7 +103,7 @@ router.get('/:id', authenticate, requireScope('servers:read'), async (req: AuthR
     },
     include: {
       user: { select: { id: true, email: true, username: true } },
-      node: { select: { id: true, name: true, fqdn: true, scheme: true, daemonPort: true } },
+      node: { select: { id: true, name: true, fqdn: true, scheme: true, daemonPort: true, daemonSftp: true } },
       egg: { include: { variables: true, nest: true } },
       allocation: true,
       _count: { select: { backups: true, databases: true } },

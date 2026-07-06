@@ -9,7 +9,7 @@ import {
   MapPin, Clock, Sword, Hammer, Footprints, Ban, LogOut, Wifi, Navigation,
   StickyNote, CalendarClock, UserCog, Save, Copy, CheckCircle2, Globe2, Boxes,
   Settings as SettingsIcon, Gauge, RotateCw, Trophy, Map as MapIcon,
-  ExternalLink, Palette, Bot
+  ExternalLink, Palette, Bot, KeyRound
 } from 'lucide-react';
 import { io as ioClient, Socket } from 'socket.io-client';
 import api from '@/lib/axios';
@@ -175,7 +175,7 @@ interface PlayerDetails {
 
 export function ServerDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { accessToken } = useAuthStore();
+  const { accessToken, user } = useAuthStore();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<Tab>('console');
   const [consoleLines, setConsoleLines] = useState<ConsoleLine[]>([]);
@@ -1143,6 +1143,38 @@ export function ServerDetailPage() {
 
       {/* Files Tab */}
       {activeTab === 'files' && (
+        <>
+          {data?.node && user?.username && (
+            <div className="card mb-4 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <KeyRound size={14} className="text-brand-400" />
+                <h3 className="text-sm font-semibold text-slate-200">SFTP Access</h3>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {[
+                  { label: 'Host', value: data.node.fqdn },
+                  { label: 'Port', value: String(data.node.daemonSftp ?? 2022) },
+                  { label: 'Username', value: `${user.username}.${data.uuidShort}` },
+                ].map(({ label, value }) => (
+                  <div key={label} className="bg-dark-950 border border-slate-700/50 rounded-lg px-3 py-2">
+                    <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-0.5">{label}</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-xs text-slate-300 truncate">{value}</span>
+                      <button
+                        className="text-slate-500 hover:text-slate-300 shrink-0"
+                        onClick={() => { navigator.clipboard.writeText(value); toast.success(`${label} copied`); }}
+                      >
+                        <Copy size={12} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-slate-500 mt-3">
+                Connect with any SFTP client using your panel password. Access is scoped to this server's files only.
+              </p>
+            </div>
+          )}
         <div className="card">
           {/* Breadcrumb */}
           <div className="flex items-center gap-1.5 px-4 py-3 border-b border-dark-800 text-xs font-mono text-slate-400 flex-wrap">
@@ -1263,6 +1295,7 @@ export function ServerDetailPage() {
             </div>
           )}
         </div>
+        </>
       )}
 
       {/* Plugins Tab */}

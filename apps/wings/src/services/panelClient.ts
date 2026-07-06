@@ -46,6 +46,17 @@ class PanelClient {
     const client = this.getClient();
     await client.post('/heartbeat', { load }).catch(() => {});
   }
+
+  async sftpAuth(username: string, password: string): Promise<{ serverUuid: string } | null> {
+    const client = this.getClient();
+    try {
+      const { data } = await client.post('/sftp-auth', { username, password });
+      if (data?.ok && data?.serverUuid) return { serverUuid: data.serverUuid };
+      return null;
+    } catch {
+      return null;
+    }
+  }
 }
 
 export const panelClient = new PanelClient();
