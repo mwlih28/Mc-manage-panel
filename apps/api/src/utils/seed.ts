@@ -292,6 +292,7 @@ echo "Velocity $VELOCITY_VER installed."`;
   await prisma.egg.upsert({
     where: { uuid: '00000000-0000-0000-0000-000000000004' },
     update: {
+      dockerImage: 'ghcr.io/pterodactyl/yolks:java_21',
       startup: 'java -Xms{{SERVER_MEMORY}}M -Xmx{{SERVER_MEMORY}}M -jar {{SERVER_JARFILE}} nogui',
       scriptInstall: VANILLA_INSTALL_SCRIPT,
       scriptContainer: 'ghcr.io/pterodactyl/installers:alpine',
@@ -314,6 +315,7 @@ echo "Velocity $VELOCITY_VER installed."`;
   const bungeeEgg = await prisma.egg.upsert({
     where: { uuid: '00000000-0000-0000-0000-000000000005' },
     update: {
+      dockerImage: 'ghcr.io/pterodactyl/yolks:java_21',
       scriptInstall: BUNGEECORD_INSTALL_SCRIPT,
       scriptContainer: 'ghcr.io/pterodactyl/installers:alpine',
     },
@@ -353,6 +355,7 @@ echo "Velocity $VELOCITY_VER installed."`;
   const velocityEgg = await prisma.egg.upsert({
     where: { uuid: '00000000-0000-0000-0000-000000000006' },
     update: {
+      dockerImage: 'ghcr.io/pterodactyl/yolks:java_21',
       scriptInstall: VELOCITY_INSTALL_SCRIPT,
       scriptContainer: 'ghcr.io/pterodactyl/installers:alpine',
     },
@@ -472,6 +475,8 @@ echo "Bedrock Server \${BDS_VER} installed successfully."`;
   const bedrockEgg = await prisma.egg.upsert({
     where: { uuid: '00000000-0000-0000-0000-000000000008' },
     update: {
+      dockerImage: 'debian:bookworm-slim',
+      startup: 'LD_LIBRARY_PATH=. ./bedrock_server',
       scriptInstall: BEDROCK_INSTALL_SCRIPT,
       scriptContainer: 'ghcr.io/pterodactyl/installers:alpine',
     },
