@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="www/assets/brand/kretase-logo-512.png" alt="Kretase" width="120" />
+  <img src="www/assets/brand/kretase-logo-512.png" alt="Kretase" width="320" />
 </div>
 
 ## 🚀 v1.2.0 OUT NOW!
