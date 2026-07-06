@@ -84,6 +84,14 @@ export function AdminIntegrationsPage() {
   const servers = serversData || [];
   const plans = plansData || [];
 
+  // Absolute API-origin URLs — nginx's standard reverse-proxy config only
+  // forwards /api/ to the backend, so a plain root-relative link here would
+  // hit the SPA fallback instead of the actual file (404 → client-side
+  // redirect) on every real deployment.
+  const API_ORIGIN = import.meta.env.VITE_API_URL || '';
+  const WHMCS_MODULE_URL = `${API_ORIGIN}/api/v1/integrations/whmcs`;
+  const BLESTA_MODULE_URL = `${API_ORIGIN}/api/v1/integrations/blesta`;
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
@@ -102,14 +110,14 @@ export function AdminIntegrationsPage() {
           </p>
         </div>
         <div className="p-6 grid grid-cols-2 gap-4">
-          <a href="/integrations/whmcs" className="flex items-center justify-between gap-3 p-4 rounded-lg border border-zinc-800 hover:border-zinc-700 transition-colors">
+          <a href={WHMCS_MODULE_URL} download className="flex items-center justify-between gap-3 p-4 rounded-lg border border-zinc-800 hover:border-zinc-700 transition-colors">
             <div>
               <p className="text-sm font-medium text-zinc-200">WHMCS Module</p>
               <p className="text-xs text-zinc-600 mt-0.5">modules/servers/kretase/kretase.php</p>
             </div>
             <Download size={16} className="text-zinc-500 shrink-0" />
           </a>
-          <a href="/integrations/blesta" className="flex items-center justify-between gap-3 p-4 rounded-lg border border-zinc-800 hover:border-zinc-700 transition-colors">
+          <a href={BLESTA_MODULE_URL} download className="flex items-center justify-between gap-3 p-4 rounded-lg border border-zinc-800 hover:border-zinc-700 transition-colors">
             <div>
               <p className="text-sm font-medium text-zinc-200">Blesta Module</p>
               <p className="text-xs text-zinc-600 mt-0.5">components/modules/kretase/</p>

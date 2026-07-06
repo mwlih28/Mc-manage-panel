@@ -146,21 +146,6 @@ app.get('/update-panel', serveInstallScript('update-panel.sh'));
 app.get('/update-wings', serveInstallScript('update-wings.sh'));
 app.get('/uninstall-panel', serveInstallScript('uninstall-panel.sh'));
 
-// Downloadable WHMCS/Blesta provisioning modules, served from this
-// deployment's own checkout so admins can grab them straight from the
-// panel instead of hunting through the GitHub repo.
-const INTEGRATIONS_DIR = path.join(__dirname, '..', '..', '..', 'integrations');
-app.get('/integrations/whmcs', (_req, res) => {
-  const filePath = path.join(INTEGRATIONS_DIR, 'whmcs', 'kretase', 'kretase.php');
-  if (!fs.existsSync(filePath)) return res.status(404).send('Module not found');
-  res.download(filePath, 'kretase.php');
-});
-app.get('/integrations/blesta', (_req, res) => {
-  const filePath = path.join(INTEGRATIONS_DIR, 'blesta', 'kretase', 'kretase_module.php');
-  if (!fs.existsSync(filePath)) return res.status(404).send('Module not found');
-  res.download(filePath, 'kretase_module.php');
-});
-
 // Templates endpoint
 import serverTemplates from './data/serverTemplates.json';
 import { fetchPaperVersions } from './services/paperApi';
@@ -168,6 +153,25 @@ import { authenticate as requireAuth } from './middleware/auth';
 
 // API routes
 const api = express.Router();
+
+// Downloadable WHMCS/Blesta provisioning modules, served from this
+// deployment's own checkout so admins can grab them straight from the
+// panel instead of hunting through the GitHub repo. Mounted under /api/v1
+// (not top-level) because nginx's production config only proxies /api/ to
+// this process — a top-level route is unreachable behind the standard
+// install-panel.sh reverse proxy, which serves everything else as the SPA.
+const INTEGRATIONS_DIR = path.join(__dirname, '..', '..', '..', 'integrations');
+api.get('/integrations/whmcs', (_req, res) => {
+  const filePath = path.join(INTEGRATIONS_DIR, 'whmcs', 'kretase', 'kretase.php');
+  if (!fs.existsSync(filePath)) return res.status(404).send('Module not found');
+  res.download(filePath, 'kretase.php');
+});
+api.get('/integrations/blesta', (_req, res) => {
+  const filePath = path.join(INTEGRATIONS_DIR, 'blesta', 'kretase', 'kretase_module.php');
+  if (!fs.existsSync(filePath)) return res.status(404).send('Module not found');
+  res.download(filePath, 'kretase_module.php');
+});
+
 api.use('/auth', authRoutes);
 api.use('/users', userRoutes);
 api.use('/servers', serverRoutes);
