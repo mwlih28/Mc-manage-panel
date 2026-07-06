@@ -81,8 +81,8 @@ app.use(helmet({
       // Tailwind's compiled CSS is a single stylesheet, but React sets some
       // inline style attributes at runtime — style-src-attr covers those
       // without weakening script-src.
-      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
-      fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://api.fontshare.com'],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com', 'https://api.fontshare.com', 'https://cdn.fontshare.com'],
       // Admin-set panel logo can be any external URL.
       imgSrc: ["'self'", 'data:', 'https:'],
       // Browser only ever talks to this same origin (REST + WebSocket) —
