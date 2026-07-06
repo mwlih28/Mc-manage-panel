@@ -316,7 +316,14 @@ For bug reports, include your OS, Node version, and relevant logs. For feature r
 **Testing:** new functionality should come with tests where practical (`npm test` in `apps/api` or `apps/web`, both run via [Vitest](https://vitest.dev)). CI runs the full suite — type-check, tests, and build — on every pull request.
 
 ---
+## DISCORD
 
+![Discord](https://cdn.phototourl.com/free/2026-07-06-7884af4c-6e10-43d5-aa54-3d38d25ab707.jpg)
+
+
+discord.gg/kretasecom
+
+---
 ## VIRUSTOTAL
 
 Install-panel.sh : https://www.virustotal.com/gui/file/46c5af7da89b7968dcf68e2bf6d81303ba4ceeff5b83492ceec287218aed573a
