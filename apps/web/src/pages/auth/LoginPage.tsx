@@ -134,36 +134,27 @@ export function LoginPage() {
       className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden"
       style={{ background: '#0B0C0E' }}
     >
-      {/* Subtle grid */}
+      {/* Faint top vignette — just enough depth to keep the flat background
+          from feeling completely inert, without the grid-pattern + glow-blob
+          combination that reads as a generic AI-dashboard template. */}
       <div
-        className="fixed inset-0 pointer-events-none opacity-[0.015]"
+        className="absolute inset-x-0 top-0 pointer-events-none"
         style={{
-          backgroundImage: 'linear-gradient(#fff 1px,transparent 1px),linear-gradient(90deg,#fff 1px,transparent 1px)',
-          backgroundSize: '48px 48px',
-        }}
-      />
-
-      {/* Soft accent glow anchored behind the card — gives the page a focal
-          point instead of a flat card floating in empty space. */}
-      <div
-        className="absolute pointer-events-none"
-        style={{
-          width: 720, height: 720,
-          background: 'radial-gradient(circle, rgba(34,168,120,0.16) 0%, rgba(34,168,120,0) 70%)',
-          top: '50%', left: '50%', transform: 'translate(-50%, -55%)',
+          height: 420,
+          background: 'radial-gradient(ellipse 60% 100% at 50% 0%, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0) 70%)',
         }}
       />
 
       <div className="w-full max-w-sm relative z-10">
         {/* Logo */}
-        <div className="flex flex-col items-center mb-8">
-          <img src={logoUrl || '/brand/kretase-logo-128.png'} alt="logo" className="h-12 w-12 rounded-xl object-contain mb-4" />
-          <h1 className="text-xl font-bold text-white tracking-tight">{siteName}</h1>
+        <div className="flex flex-col items-center mb-7">
+          <img src={logoUrl || '/brand/kretase-logo-128.png'} alt="logo" className="h-10 w-10 rounded-lg object-contain mb-3.5" />
+          <h1 className="text-lg font-semibold text-white tracking-tight">{siteName}</h1>
           <p className="text-zinc-500 text-xs mt-1">{siteDesc}</p>
         </div>
 
         {/* Card */}
-        <div className="rounded-2xl p-8" style={{ background: 'rgba(19,20,23,0.9)', border: '1px solid #1C1E22', backdropFilter: 'blur(8px)', boxShadow: '0 24px 60px -20px rgba(0,0,0,0.5)' }}>
+        <div className="rounded-xl p-8" style={{ background: '#131417', border: '1px solid #1C1E22', boxShadow: '0 12px 32px -16px rgba(0,0,0,0.4)' }}>
           {!requiresTwoFactor ? (
             <>
               <h2 className="text-sm font-semibold text-zinc-200 mb-6">{t('login.signInTitle')}</h2>

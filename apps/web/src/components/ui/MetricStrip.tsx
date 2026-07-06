@@ -16,14 +16,16 @@ export function MetricStrip({ children, columns = 6 }: { children: ReactNode; co
   );
 }
 
-export function Metric({ label, value, color }: { label: string; value: string | number; color: string }) {
+// `color` is intentionally unused — a different bullet color per metric
+// (RAM=green, disk=blue, nodes=yellow...) read as decoration without
+// meaning, since these are neutral counts, not statuses. Kept in the prop
+// signature so existing call sites don't need touching; color is reserved
+// for where it's actually meaningful, like the server status dot elsewhere.
+export function Metric({ label, value }: { label: string; value: string | number; color?: string }) {
   return (
-    <div className="px-4 py-3">
-      <div className="flex items-center gap-1.5 mb-1">
-        <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${color}`} />
-        <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider truncate">{label}</p>
-      </div>
-      <p className="text-lg font-bold text-white font-mono leading-none">{value}</p>
+    <div className="px-4 py-3.5">
+      <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider truncate mb-1.5">{label}</p>
+      <p className="text-xl font-semibold text-white font-mono leading-none tabular-nums">{value}</p>
     </div>
   );
 }
