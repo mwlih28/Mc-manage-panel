@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Package, Plus, Pencil, Trash2, Zap, Upload, Download, Store } from 'lucide-react';
+import { Package, Plus, Pencil, Trash2, Zap, Upload, Download, Store, Search, ChevronDown } from 'lucide-react';
 import api from '@/lib/axios';
 import { Egg } from '@/types';
 import { Spinner } from '@/components/ui/Spinner';
@@ -46,6 +46,8 @@ export function AdminEggsPage() {
   const [showImport, setShowImport] = useState(false);
   const [editEgg, setEditEgg] = useState<Egg | null>(null);
   const [deleteEgg, setDeleteEgg] = useState<Egg | null>(null);
+  const [search, setSearch] = useState('');
+  const [openNests, setOpenNests] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -67,6 +69,22 @@ export function AdminEggsPage() {
   });
 
   const eggs: Egg[] = data || [];
+  const filtered = eggs.filter((e) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return e.name.toLowerCase().includes(q) || (e.nest?.name || '').toLowerCase().includes(q) || (e.description || '').toLowerCase().includes(q);
+  });
+  const groupedByNest = filtered.reduce<Record<string, Egg[]>>((acc, e) => {
+    const key = e.nest?.name || 'Uncategorized';
+    (acc[key] ||= []).push(e);
+    return acc;
+  }, {});
+  const nestNames = Object.keys(groupedByNest).sort((a, b) => a.localeCompare(b));
+  const toggleNest = (name: string) => setOpenNests((s) => {
+    const next = new Set(s);
+    next.has(name) ? next.delete(name) : next.add(name);
+    return next;
+  });
 
   const exportEgg = async (egg: Egg) => {
     try {
@@ -116,75 +134,60 @@ export function AdminEggsPage() {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {eggs.map((egg) => (
-            <div key={egg.id} className="card p-5">
-              <div className="flex items-start gap-3 mb-3">
-                <div className="p-2.5 rounded-lg bg-brand-500/20 shrink-0">
-                  <Package size={18} className="text-brand-400" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-slate-100">{egg.name}</p>
-                  <p className="text-xs text-slate-500">{egg.nest?.name}</p>
-                </div>
-                {egg._count && (
-                  <span className="badge badge-blue">{egg._count.servers} servers</span>
-                )}
-              </div>
+        <>
+          <div className="relative max-w-sm">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600" />
+            <input
+              className="input pl-9"
+              placeholder={`Search ${eggs.length} eggs...`}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
 
-              {egg.description && (
-                <p className="text-xs text-slate-400 mb-3">{egg.description}</p>
-              )}
-
-              <div className="space-y-1 mb-3">
-                <p className="text-xs text-slate-500 font-medium">Docker Image</p>
-                <p className="text-xs font-mono text-slate-400 bg-dark-950/60 px-2 py-1 rounded break-all">
-                  {egg.dockerImage}
-                </p>
-              </div>
-
-              {egg.variables && egg.variables.length > 0 && (
-                <div className="pt-2 border-t border-dark-800 mb-3">
-                  <p className="text-xs text-slate-500 mb-2">{egg.variables.length} variables</p>
-                  <div className="flex flex-wrap gap-1">
-                    {egg.variables.slice(0, 3).map((v) => (
-                      <span key={v.id} className="text-[10px] font-mono bg-dark-950/60 px-1.5 py-0.5 rounded text-slate-400">
-                        {v.envVariable}
+          {filtered.length === 0 ? (
+            <div className="card p-10 text-center text-slate-600">
+              <Package size={36} className="mx-auto mb-3 opacity-20" />
+              <p className="text-sm">No eggs match "{search}"</p>
+            </div>
+          ) : search.trim() ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filtered.map((egg) => (
+                <EggCard key={egg.id} egg={egg} onEdit={setEditEgg} onDelete={setDeleteEgg} onExport={exportEgg} />
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {nestNames.map((nestName) => {
+                const isOpen = openNests.has(nestName);
+                const nestEggs = groupedByNest[nestName];
+                return (
+                  <div key={nestName} className="card overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => toggleNest(nestName)}
+                      className="w-full flex items-center justify-between gap-3 px-5 py-3.5 hover:bg-white/[0.02] transition-colors"
+                    >
+                      <span className="flex items-center gap-2.5 text-sm font-semibold text-zinc-100">
+                        <Package size={14} className="text-panel-400" />
+                        {nestName}
+                        <span className="text-xs font-normal text-zinc-500">{nestEggs.length}</span>
                       </span>
-                    ))}
-                    {egg.variables.length > 3 && (
-                      <span className="text-[10px] text-slate-500">+{egg.variables.length - 3} more</span>
+                      <ChevronDown size={15} className={`text-zinc-600 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    {isOpen && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-5 pt-1 border-t border-dark-800">
+                        {nestEggs.map((egg) => (
+                          <EggCard key={egg.id} egg={egg} onEdit={setEditEgg} onDelete={setDeleteEgg} onExport={exportEgg} />
+                        ))}
+                      </div>
                     )}
                   </div>
-                </div>
-              )}
-
-              <div className="flex gap-2">
-                <button
-                  className="btn-secondary btn-sm flex-1"
-                  onClick={() => setEditEgg(egg)}
-                >
-                  <Pencil size={13} /> Edit
-                </button>
-                <button
-                  className="btn-secondary btn-sm"
-                  onClick={() => exportEgg(egg)}
-                  title="Export as Pterodactyl-format JSON"
-                >
-                  <Download size={13} />
-                </button>
-                <button
-                  className="btn-danger btn-sm flex-1"
-                  onClick={() => setDeleteEgg(egg)}
-                  disabled={(egg._count?.servers || 0) > 0}
-                  title={(egg._count?.servers || 0) > 0 ? 'Cannot delete egg with active servers' : 'Delete egg'}
-                >
-                  <Trash2 size={13} /> Delete
-                </button>
-              </div>
+                );
+              })}
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
 
       {showCreate && (
@@ -227,6 +230,75 @@ export function AdminEggsPage() {
         confirmLabel="Delete Egg"
         isLoading={deleteMutation.isPending}
       />
+    </div>
+  );
+}
+
+function EggCard({ egg, onEdit, onDelete, onExport }: {
+  egg: Egg; onEdit: (egg: Egg) => void; onDelete: (egg: Egg) => void; onExport: (egg: Egg) => void;
+}) {
+  return (
+    <div className="card p-5">
+      <div className="flex items-start gap-3 mb-3">
+        <div className="p-2.5 rounded-lg bg-brand-500/20 shrink-0">
+          <Package size={18} className="text-brand-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-slate-100">{egg.name}</p>
+          <p className="text-xs text-slate-500">{egg.nest?.name}</p>
+        </div>
+        {egg._count && (
+          <span className="badge badge-blue">{egg._count.servers} servers</span>
+        )}
+      </div>
+
+      {egg.description && (
+        <p className="text-xs text-slate-400 mb-3">{egg.description}</p>
+      )}
+
+      <div className="space-y-1 mb-3">
+        <p className="text-xs text-slate-500 font-medium">Docker Image</p>
+        <p className="text-xs font-mono text-slate-400 bg-dark-950/60 px-2 py-1 rounded break-all">
+          {egg.dockerImage}
+        </p>
+      </div>
+
+      {egg.variables && egg.variables.length > 0 && (
+        <div className="pt-2 border-t border-dark-800 mb-3">
+          <p className="text-xs text-slate-500 mb-2">{egg.variables.length} variables</p>
+          <div className="flex flex-wrap gap-1">
+            {egg.variables.slice(0, 3).map((v) => (
+              <span key={v.id} className="text-[10px] font-mono bg-dark-950/60 px-1.5 py-0.5 rounded text-slate-400">
+                {v.envVariable}
+              </span>
+            ))}
+            {egg.variables.length > 3 && (
+              <span className="text-[10px] text-slate-500">+{egg.variables.length - 3} more</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <button className="btn-secondary btn-sm flex-1" onClick={() => onEdit(egg)}>
+          <Pencil size={13} /> Edit
+        </button>
+        <button
+          className="btn-secondary btn-sm"
+          onClick={() => onExport(egg)}
+          title="Export as Pterodactyl-format JSON"
+        >
+          <Download size={13} />
+        </button>
+        <button
+          className="btn-danger btn-sm flex-1"
+          onClick={() => onDelete(egg)}
+          disabled={(egg._count?.servers || 0) > 0}
+          title={(egg._count?.servers || 0) > 0 ? 'Cannot delete egg with active servers' : 'Delete egg'}
+        >
+          <Trash2 size={13} /> Delete
+        </button>
+      </div>
     </div>
   );
 }
