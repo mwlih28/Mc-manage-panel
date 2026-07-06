@@ -1,6 +1,5 @@
 import { useState, useRef } from 'react';
 import { Navigate, useNavigate, Link } from 'react-router-dom';
-import { Server } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 import { useAuthStore } from '@/store/authStore';
@@ -24,6 +23,8 @@ export function RegisterPage() {
     staleTime: 60000,
   });
   const captchaEnabled = settings?.['captcha.provider'] === 'hcaptcha' && !!settings?.['captcha.siteKey'];
+  const siteName = settings?.['app.name'] || 'Kretase';
+  const logoUrl = settings?.['app.logo'];
 
   if (isAuthenticated) return <Navigate to="/dashboard" replace />;
 
@@ -51,81 +52,85 @@ export function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-dark-950 p-4">
-      <div className="w-full max-w-md">
-        <div className="flex flex-col items-center mb-8">
-          <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-panel-500 to-panel-700 flex items-center justify-center shadow-xl shadow-panel-900/30 mb-4">
-            <Server size={28} className="text-white" />
-          </div>
-          <h1 className="text-2xl font-bold text-slate-100">Create Account</h1>
-          <p className="text-slate-500 text-sm mt-1">Join Kretase</p>
+    <div
+      className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden"
+      style={{ background: '#0B0C0E' }}
+    >
+      <div
+        className="absolute inset-x-0 top-0 pointer-events-none"
+        style={{
+          height: 420,
+          background: 'radial-gradient(ellipse 60% 100% at 50% 0%, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0) 70%)',
+        }}
+      />
+
+      <div className="w-full max-w-sm relative z-10">
+        <div className="flex flex-col items-center mb-7">
+          <img src={logoUrl || '/brand/kretase-logo-128.png'} alt="logo" className="h-10 w-10 rounded-lg object-contain mb-3.5" />
+          <h1 className="text-lg font-semibold text-white tracking-tight">Create account</h1>
+          <p className="text-zinc-500 text-xs mt-1">Join {siteName}</p>
         </div>
 
-        <div className="card">
-          <div className="card-header">
-            <h2 className="text-base font-semibold text-slate-100">Account Information</h2>
-          </div>
-          <div className="card-body">
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">First Name</label>
-                  <input type="text" className="input" placeholder="John" value={form.firstName}
-                    onChange={(e) => setForm({ ...form, firstName: e.target.value })} required />
-                </div>
-                <div>
-                  <label className="label">Last Name</label>
-                  <input type="text" className="input" placeholder="Doe" value={form.lastName}
-                    onChange={(e) => setForm({ ...form, lastName: e.target.value })} required />
-                </div>
-              </div>
-
+        <div className="rounded-xl p-8" style={{ background: '#131417', border: '1px solid #1C1E22', boxShadow: '0 12px 32px -16px rgba(0,0,0,0.4)' }}>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="label">Username</label>
-                <input type="text" className="input" placeholder="johndoe" value={form.username}
-                  onChange={(e) => setForm({ ...form, username: e.target.value })} required />
+                <label className="label">First Name</label>
+                <input type="text" className="input" placeholder="John" value={form.firstName}
+                  onChange={(e) => setForm({ ...form, firstName: e.target.value })} required autoFocus />
               </div>
-
               <div>
-                <label className="label">Email address</label>
-                <input type="email" className="input" placeholder="john@example.com" value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })} required />
+                <label className="label">Last Name</label>
+                <input type="text" className="input" placeholder="Doe" value={form.lastName}
+                  onChange={(e) => setForm({ ...form, lastName: e.target.value })} required />
               </div>
-
-              <div>
-                <label className="label">Password</label>
-                <input type="password" className="input" placeholder="••••••••" value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })} required minLength={8} />
-                <p className="text-xs text-slate-500 mt-1">Minimum 8 characters</p>
-              </div>
-
-              {captchaEnabled && (
-                <div className="flex justify-center">
-                  <HCaptcha
-                    ref={captchaRef}
-                    sitekey={settings!['captcha.siteKey']}
-                    theme="dark"
-                    onVerify={(token) => setCaptchaToken(token)}
-                    onExpire={() => setCaptchaToken('')}
-                  />
-                </div>
-              )}
-
-              <button type="submit" className="btn-primary w-full justify-center py-2.5" disabled={isLoading}>
-                {isLoading ? <Spinner size="sm" /> : 'Create Account'}
-              </button>
-            </form>
-
-            <div className="mt-4 pt-4 border-t border-dark-800 text-center">
-              <p className="text-sm text-slate-500">
-                Already have an account?{' '}
-                <Link to="/login" className="text-panel-400 hover:text-panel-300 transition-colors">
-                  Sign in
-                </Link>
-              </p>
             </div>
-          </div>
+
+            <div>
+              <label className="label">Username</label>
+              <input type="text" className="input" placeholder="johndoe" value={form.username}
+                onChange={(e) => setForm({ ...form, username: e.target.value })} required />
+            </div>
+
+            <div>
+              <label className="label">Email address</label>
+              <input type="email" className="input" placeholder="john@example.com" value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })} required />
+            </div>
+
+            <div>
+              <label className="label">Password</label>
+              <input type="password" className="input" placeholder="••••••••" value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })} required minLength={8} />
+              <p className="text-xs text-zinc-600 mt-1.5">Minimum 8 characters</p>
+            </div>
+
+            {captchaEnabled && (
+              <div className="flex justify-center">
+                <HCaptcha
+                  ref={captchaRef}
+                  sitekey={settings!['captcha.siteKey']}
+                  theme="dark"
+                  onVerify={(token) => setCaptchaToken(token)}
+                  onExpire={() => setCaptchaToken('')}
+                />
+              </div>
+            )}
+
+            <button type="submit" className="w-full btn-primary py-2.5 justify-center mt-2" disabled={isLoading}>
+              {isLoading ? <><Spinner size="sm" /> Creating...</> : 'Create Account'}
+            </button>
+          </form>
+
+          <p className="text-center text-xs text-zinc-600 mt-5">
+            Already have an account?{' '}
+            <Link to="/login" className="text-zinc-400 hover:text-white transition-colors">Sign in</Link>
+          </p>
         </div>
+
+        <p className="text-center text-[10px] text-zinc-800 mt-5">
+          {siteName} &copy; {new Date().getFullYear()}
+        </p>
       </div>
     </div>
   );
