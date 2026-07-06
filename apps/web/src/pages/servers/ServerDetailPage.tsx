@@ -1158,9 +1158,14 @@ export function ServerDetailPage() {
                 <KeyRound size={14} className="text-brand-400" />
                 <h3 className="text-sm font-semibold text-slate-200">SFTP Access</h3>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 {[
-                  { label: 'Host', value: data.node.fqdn },
+                  // Same source as the connection address shown in the server
+                  // header (data.allocation.ip) — the node's own fqdn can be
+                  // set to something only reachable from the node itself
+                  // (e.g. 127.0.0.1), while the allocation is this server's
+                  // actual public-facing address.
+                  { label: 'Host', value: data.allocation?.ip || data.node.fqdn },
                   { label: 'Port', value: String(data.node.daemonSftp ?? 2022) },
                   { label: 'Username', value: `${user.username}.${data.uuidShort}` },
                 ].map(({ label, value }) => (
@@ -1177,9 +1182,17 @@ export function ServerDetailPage() {
                     </div>
                   </div>
                 ))}
+                <div className="bg-dark-950 border border-slate-700/50 rounded-lg px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-0.5">Password</p>
+                  {/* There's no separate SFTP password to show or copy — the
+                      panel only ever stores a bcrypt hash of your account
+                      password, never the password itself, so it can't be
+                      displayed here even to you. */}
+                  <span className="text-xs text-slate-400">Your panel password</span>
+                </div>
               </div>
               <p className="text-xs text-slate-500 mt-3">
-                Connect with any SFTP client using your panel password. Access is scoped to this server's files only.
+                Connect with any SFTP client using your panel password — there's no separate SFTP credential to set up. Access is scoped to this server's files only.
               </p>
             </div>
           )}
