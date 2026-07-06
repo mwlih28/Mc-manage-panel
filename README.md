@@ -2,9 +2,9 @@
   <img src="www/assets/brand/kretase-logo-512.png" alt="Kretase" width="320" />
 </div>
 
-## 🚀 v1.2.0 OUT NOW!
+## 🚀 v1.3.0 OUT NOW!
 
-Server migration & cloning, one-click modpack installs, crash auto-restart, auto-optimize on lag, a real working Schedule tab, player leaderboard, server health score, a suspicious-activity alarm, a fully customizable public status page (logo/banner/announcement/custom CSS + live preview), and a real top-down world map rendered from your actual world files. See the [full changelog](./CHANGELOG.md#v120) for every detail.
+Cloud backup destinations (S3/B2/R2/Wasabi/Spaces/MinIO, SFTP, Google Drive), bidirectional Discord bot control (`/start`, `/stop`, `/restart` from Discord), a Pterodactyl migration wizard, an installable PWA with real crash/suspension push notifications, WHMCS/Blesta/Tebex/CraftingStore billing integrations, Discord login, a 299-egg community egg store, outbound webhooks, white-label theming, hCaptcha, a self-documenting API reference, and a **real SFTP server** in Wings (previously just a placeholder port). See the [full changelog](./CHANGELOG.md#v130) for every detail.
 
 ---
 
@@ -22,7 +22,9 @@ Server migration & cloning, one-click modpack installs, crash auto-restart, auto
 
 > 🔥 **Real-world performance:** a Minecraft 1.20.1 server with simulation-distance 32 runs smoothly on just **1 CPU core and 1.5GB RAM** — Aikar's JVM flags and Kretase's built-in auto-optimization do the heavy lifting out of the box.
 
-> ⚠️ **This project is under active development.** Core features work, but expect rough edges, breaking changes, and missing polish. Not yet recommended for production use without testing in your own environment first. Feedback and bug reports are very welcome.
+> ⚠️ **This project is under active development.** Core features work, but expect rough edges, breaking changes, and missing polish. Test in your own environment before relying on it for anything critical. Feedback and bug reports are very welcome.
+
+> ✅ **What's actually been hardened:** a full security audit was run against the codebase, closing an API-key scope-enforcement gap across ~48 server/backup routes that had no scope check at all. Auth-sensitive endpoints (login, 2FA, password reset, SFTP login) are rate-limited. Passwords are bcrypt-hashed, sessions use short-lived JWTs with refresh rotation, admin API keys are scoped (not all-or-nothing) and stored as hashes, generic webhooks are HMAC-signed, and SFTP/file-manager access is chrooted per-server with path-traversal checks. None of this makes "under active development" untrue above — it means the parts that *are* done were done with real scrutiny, not left as an afterthought.
 
 Manage Minecraft and other game servers from a web UI — with a Wings daemon on each node, real-time console, resource monitoring, and full admin controls.
 
@@ -126,6 +128,18 @@ The script will ask for:
 - **Egg System** — Server configuration templates (Minecraft Paper, Bedrock, Vanilla, Fabric, BungeeCord, Velocity, and more)
 - **Activity Log** — Full audit trail of panel actions
 - **JWT Authentication** — Access + refresh token pair, secure bcrypt hashing
+- **Real SFTP Access** — Direct file access per server, scoped to its own data directory, using your panel credentials
+- **Outbound Webhooks** — Discord embeds or generic HMAC-signed JSON on server/user events, with per-webhook event filtering
+- **Scoped API Keys** — Admin-issued keys with granular scopes (e.g. power-only, read-only) instead of all-or-nothing access
+- **Cloud Backup Destinations** — Upload backups to S3-compatible storage, SFTP, or Google Drive, in addition to the local copy
+- **Discord Bot Control** — `/start`, `/stop`, `/restart`, `/status` slash commands bound to a specific server
+- **Pterodactyl Migration Wizard** — Pull servers (and their real files) from a source Pterodactyl panel over SFTP
+- **Installable PWA + Push Notifications** — Install to a home screen/desktop; get a real OS notification on crash or suspension
+- **Billing Integrations** — WHMCS/Blesta provisioning modules, Tebex/CraftingStore purchase webhooks
+- **Discord Login (SSO)** and **hCaptcha** — Optional, off by default, configurable from Admin → Settings
+- **Community Egg Store** — One-click import from a ~300-egg catalog (Minecraft, SteamCMD titles, voice servers, databases, and more)
+- **White-Label Theming** — Custom CSS panel-wide and an option to hide panel attribution on public status pages
+- **Multi-language UI** — English, Turkish, German, French, Spanish, Portuguese, Russian, and Chinese
 - **Dark UI** — Modern responsive dark-themed interface
 
 ---
@@ -266,13 +280,12 @@ Full guides live in [`docs/`](./docs):
 
 ## Roadmap
 
-Planned features — contributions welcome:
+Everything that used to be listed here (2FA, Discord notifications, multi-language UI, billing/subscriptions, a bigger egg catalog) has since shipped — see the [changelog](./CHANGELOG.md) for the full history. Known gaps, honestly stated:
 
-- [ ] **2FA / TOTP support** — Two-factor authentication for panel accounts
-- [ ] **Discord webhook notifications** — Server state changes, alerts, and activity events pushed to a Discord channel
-- [ ] **Multi-language UI** — Language switcher (English, Chinese, and more)
-- [ ] **Billing/subscriptions** — Plan-based server provisioning with automated payments
-- [ ] **More egg presets** — Counter-Strike 2, ARK, Rust, Terraria, and community-contributed eggs via a marketplace
+- [ ] **Subuser permission enforcement** — subuser access grants are stored per-server, but no access path (console, file manager, SFTP, backups) actually checks them yet — a subuser currently gets the same access as the owner, or none, not the specific permissions granted. Tracked as the next security-relevant gap to close.
+- [ ] **Broader non-Minecraft game support** — the community egg store already covers a wide range of SteamCMD titles and services, but Minecraft is still where the most polish (world map, player stats, plugin/mod managers) is concentrated.
+
+Contributions on either front are welcome — see below.
 
 ---
 
