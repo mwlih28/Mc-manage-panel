@@ -32,15 +32,6 @@ export function DashboardPage() {
     return acc;
   }, {} as Partial<Record<ServerStatus, number>>);
 
-  const byNode = servers.reduce((acc, s) => {
-    const key = s.node?.name || 'Unassigned';
-    if (!acc[key]) acc[key] = { total: 0, running: 0 };
-    acc[key].total += 1;
-    if (s.status === 'RUNNING') acc[key].running += 1;
-    return acc;
-  }, {} as Record<string, { total: number; running: number }>);
-  const nodeCount = Object.keys(byNode).length;
-
   return (
     <div className="space-y-4 animate-fade-in">
       {/* Header */}
@@ -63,7 +54,6 @@ export function DashboardPage() {
         <Metric label="Total Servers" value={servers.length} color="bg-zinc-400" />
         <Metric label="Running" value={running} color="bg-green-400" />
         <Metric label="Suspended" value={suspended} color="bg-red-400" />
-        <Metric label="Nodes" value={nodeCount} color="bg-yellow-400" />
         <Metric label="Total RAM" value={formatBytes(totalRam)} color="bg-panel-400" />
         <Metric label="Total Disk" value={formatBytes(totalDisk)} color="bg-blue-400" />
       </MetricStrip>
@@ -89,7 +79,6 @@ export function DashboardPage() {
                   <tr>
                     <th>Server</th>
                     <th>Status</th>
-                    <th className="hidden md:table-cell">Node</th>
                     <th className="text-right">RAM</th>
                     <th className="text-right hidden sm:table-cell">Disk</th>
                     <th className="text-right hidden sm:table-cell">CPU</th>
@@ -111,7 +100,6 @@ export function DashboardPage() {
                         </Link>
                       </td>
                       <td><span className={getServerStatusBadge(server.status)}>{server.status}</span></td>
-                      <td className="hidden md:table-cell text-slate-500 text-xs">{server.node?.name || '—'}</td>
                       <td className="text-right font-mono text-xs text-slate-400">{server.memory} MB</td>
                       <td className="text-right hidden sm:table-cell font-mono text-xs text-slate-400">{server.disk} MB</td>
                       <td className="text-right hidden sm:table-cell font-mono text-xs text-slate-400">{server.cpu > 0 ? `${server.cpu}%` : '∞'}</td>
@@ -140,28 +128,6 @@ export function DashboardPage() {
                 counts={statusCounts as Record<string, number>}
                 dotClass={(status) => getServerStatusDot(status as ServerStatus)}
               />
-            </div>
-          </div>
-
-          {/* By node */}
-          <div className="card">
-            <div className="card-header">
-              <h2 className="text-sm font-semibold text-slate-200">Servers by Node</h2>
-            </div>
-            <div className="card-body space-y-2">
-              {Object.keys(byNode).length === 0 ? (
-                <p className="text-xs text-slate-600">No data yet</p>
-              ) : (
-                Object.entries(byNode).map(([node, stat]) => (
-                  <div key={node} className="flex items-center justify-between text-xs">
-                    <span className="text-slate-400 truncate">{node}</span>
-                    <span className="font-mono text-slate-300">
-                      <span className="text-green-400">{stat.running}</span>
-                      <span className="text-slate-600">/{stat.total}</span>
-                    </span>
-                  </div>
-                ))
-              )}
             </div>
           </div>
         </div>
