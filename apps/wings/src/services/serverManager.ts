@@ -165,6 +165,14 @@ class ServerManager extends EventEmitter {
     if (!server) throw new Error(`Server ${uuid} not found`);
     if (server.status === 'running' || server.status === 'starting' || server.status === 'stopping') return;
 
+    // Fresh start, fresh console — otherwise leftover output from a previous
+    // run (a crash, a stuck install, etc.) stays mixed in with the new run's
+    // logs both for reconnecting clients (history replay) and anyone already
+    // sitting on the console tab, making it look like the old problem is
+    // still happening when it's actually just old text.
+    server.logBuffer = [];
+    this.io?.to(`server:${uuid}`).emit('server:console:clear', { uuid });
+
     this.setStatus(uuid, 'starting');
     const cfg = getConfig();
     const dataPath = path.join(cfg.system.data, uuid);

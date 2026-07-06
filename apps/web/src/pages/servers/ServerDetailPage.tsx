@@ -542,6 +542,14 @@ export function ServerDetailPage() {
       }]);
     });
 
+    // Wings clears its own log buffer on every fresh start — mirror that here
+    // so a previous run's leftover output (a crash, a stuck install) doesn't
+    // sit mixed in with the new run and read as if the old problem is still
+    // happening.
+    socket.on('server:console:clear', () => {
+      setConsoleLines([]);
+    });
+
     socket.on('server:players', (msg: { uuid: string; players: { name: string; uuid: string }[] }) => {
       if (msg.uuid === id) {
         setOnlinePlayers(msg.players);

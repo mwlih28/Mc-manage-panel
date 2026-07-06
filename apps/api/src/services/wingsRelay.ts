@@ -188,8 +188,22 @@ export function getOrConnectWings(node: NodeInfo, io: SocketServer): Socket {
 
   // Relay all Wings events to panel clients in the correct room
   wingsSocket.onAny((event: string, data: unknown) => {
-    const handled = ['server:console', 'server:stats', 'server:status', 'server:console:history', 'server:crash', 'server:alert'];
+    const handled = ['server:console', 'server:stats', 'server:status', 'server:console:history', 'server:console:clear', 'server:crash', 'server:alert'];
     if (!handled.includes(event)) return;
+
+    // A fresh start on Wings means a fresh console — our own cached buffer
+    // (served straight to reconnecting clients without re-asking Wings, see
+    // subscribeServerOnWings below) needs to be wiped too, and everyone
+    // already viewing the console told to clear their local view, or the
+    // previous run's leftover lines just sit there looking current.
+    if (event === 'server:console:clear') {
+      const clearData = data as { uuid?: string };
+      if (clearData.uuid) {
+        consoleBuffer.delete(clearData.uuid);
+        io.to(`server:uuid:${clearData.uuid}`).emit('server:console:clear', clearData);
+      }
+      return;
+    }
 
     if (event === 'server:crash' || event === 'server:alert') {
       const alertData = data as { uuid?: string; severity?: string; message?: string };
