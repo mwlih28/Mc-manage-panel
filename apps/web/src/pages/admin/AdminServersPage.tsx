@@ -215,7 +215,7 @@ const TEMPLATE_SERVER_TYPE_TO_EGG_NAME: Record<string, string> = {
 
 function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const [form, setForm] = useState({
-    name: '', description: '', userId: '', nodeId: '', eggId: '',
+    name: '', description: '', userId: '', nodeId: '', eggId: '', allocationId: '',
     memory: '1024', disk: '5120', cpu: '0', backupLimit: '3',
   });
   const [paperVersion, setPaperVersion] = useState('latest');
@@ -243,6 +243,12 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
     queryKey: ['eggs-list'],
     queryFn: () => api.get('/eggs').then((r) => r.data.data),
   });
+  const { data: createAllocationsData } = useQuery({
+    queryKey: ['allocations-list', form.nodeId],
+    queryFn: () => api.get(`/nodes/${form.nodeId}/allocations`, { params: { perPage: 100 } }).then((r) => r.data.data).catch(() => []),
+    enabled: !!form.nodeId,
+  });
+  const createAllocations: { id: string; ip: string; port: number; assigned: boolean }[] = createAllocationsData || [];
 
   // Derive selected egg type
   const eggs: { id: string; name: string; nest?: { name: string } }[] = eggsData || [];
@@ -371,12 +377,32 @@ function CreateServerModal({ onClose, onSuccess }: { onClose: () => void; onSucc
 
           <div>
             <label className="label">Node</label>
-            <select className="input" value={form.nodeId} onChange={f('nodeId')} required>
+            <select
+              className="input"
+              value={form.nodeId}
+              onChange={(e) => setForm({ ...form, nodeId: e.target.value, allocationId: '' })}
+              required
+            >
               <option value="">Select node...</option>
               {(nodesData || []).map((n: { id: string; name: string }) => (
                 <option key={n.id} value={n.id}>{n.name}</option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label className="label">Allocation (IP:Port) <span className="text-slate-500 font-normal">(optional)</span></label>
+            <select className="input" value={form.allocationId} onChange={f('allocationId')} disabled={!form.nodeId}>
+              <option value="">Auto-assign a free port</option>
+              {createAllocations.map((a) => (
+                <option key={a.id} value={a.id} disabled={a.assigned}>
+                  {a.ip}:{a.port}{a.assigned ? ' (in use)' : ''}
+                </option>
+              ))}
+            </select>
+            {form.nodeId && createAllocations.every((a) => a.assigned) && createAllocations.length > 0 && (
+              <p className="text-xs text-yellow-500 mt-1">All existing allocations on this node are in use — leaving this on auto will create a new one.</p>
+            )}
           </div>
 
           <div className="col-span-2">
