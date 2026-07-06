@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="www/assets/brand/kretase-logo-512.png" alt="Kretase" width="120" />
+</div>
+
 ## 🚀 v1.2.0 OUT NOW!
 
 Server migration & cloning, one-click modpack installs, crash auto-restart, auto-optimize on lag, a real working Schedule tab, player leaderboard, server health score, a suspicious-activity alarm, a fully customizable public status page (logo/banner/announcement/custom CSS + live preview), and a real top-down world map rendered from your actual world files. See the [full changelog](./CHANGELOG.md#v120) for every detail.
