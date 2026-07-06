@@ -405,7 +405,16 @@ export function startSftpServer(): void {
   const port = cfg.system.sftp_bind_port || 2022;
 
   const server = new SSHServer(
-    { hostKeys: [getOrCreateHostKey()] },
+    {
+      hostKeys: [getOrCreateHostKey()],
+      // Identify as OpenSSH-flavored so clients that adaptively pick wire
+      // conventions based on the peer's banner (some SFTP libraries,
+      // including ssh2 itself in client mode) use the same OpenSSH-compatible
+      // field order our SYMLINK handler assumes below. Actual OpenSSH clients
+      // and OpenSSH-compatible GUI clients (FileZilla, WinSCP) use that order
+      // unconditionally regardless of banner, so this only helps — it never hurts.
+      ident: 'OpenSSH_8.9',
+    },
     (client: Connection, info) => {
       const ip = info.ip;
       // The serverUuid resolved during authentication is the only thing
