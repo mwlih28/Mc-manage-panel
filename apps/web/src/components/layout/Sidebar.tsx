@@ -1,4 +1,5 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Server, Settings, LogOut, Shield, Sparkles, Image } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/store/authStore';
@@ -7,6 +8,26 @@ import api from '@/lib/axios';
 import toast from 'react-hot-toast';
 import { useQuery } from '@tanstack/react-query';
 import { useUpdateCheck } from '@/hooks/useUpdateCheck';
+
+// Slides a highlight pill behind whichever nav link is currently active,
+// measuring against the scrollable <nav> so it stays correct through
+// collapsible sections instead of a plain per-item background class.
+function useActiveNavPill(navRef: RefObject<HTMLElement>) {
+  const location = useLocation();
+  const [style, setStyle] = useState<{ top: number; height: number; opacity: number }>({ top: 0, height: 0, opacity: 0 });
+
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const active = nav.querySelector<HTMLElement>('a.active');
+    if (!active) { setStyle((s) => ({ ...s, opacity: 0 })); return; }
+    const navRect = nav.getBoundingClientRect();
+    const itemRect = active.getBoundingClientRect();
+    setStyle({ top: itemRect.top - navRect.top + nav.scrollTop, height: itemRect.height, opacity: 1 });
+  }, [location.pathname, navRef]);
+
+  return style;
+}
 
 // PANEL_VERSION is the release tag install/update-panel.sh resolved at
 // deploy time (e.g. "v1.2.0"), or "main" when running an untagged checkout
@@ -21,6 +42,8 @@ export function Sidebar() {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
   const isAdmin = user?.role === 'ADMIN';
+  const navRef = useRef<HTMLElement>(null);
+  const pill = useActiveNavPill(navRef);
 
   const userNavItems = [
     { to: '/dashboard', icon: LayoutDashboard, label: t('sidebar.dashboard') },
@@ -55,10 +78,11 @@ export function Sidebar() {
   };
 
   return (
-    <aside
-      className="fixed inset-y-0 left-0 z-40 w-60 flex flex-col"
-      style={{ background: '#0B0C0E', borderRight: '1px solid #1C1E22' }}
-    >
+    <aside className="fixed inset-y-0 left-0 z-40 w-64 p-2 flex flex-col">
+      <div
+        className="flex flex-col h-full rounded-2xl border overflow-hidden"
+        style={{ background: '#0B0C0E', borderColor: 'rgba(255,255,255,0.06)' }}
+      >
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 py-4" style={{ borderBottom: '1px solid #1C1E22' }}>
         <div className="relative shrink-0">
@@ -75,7 +99,11 @@ export function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-2 py-4 space-y-5 scrollbar-none">
+      <nav ref={navRef} className="relative flex-1 overflow-y-auto px-2 py-4 space-y-5 scrollbar-none">
+        <div
+          className="absolute left-2 right-2 rounded-lg bg-panel-500/[0.12] border-l-2 border-panel-500 pointer-events-none transition-all duration-300 ease-out"
+          style={{ top: pill.top, height: pill.height, opacity: pill.opacity }}
+        />
         <div>
           <p className="px-3 mb-1.5 text-[9px] font-bold uppercase tracking-widest text-zinc-700">{t('sidebar.user')}</p>
           <ul className="space-y-0.5">
@@ -85,10 +113,8 @@ export function Sidebar() {
                   to={to}
                   end
                   className={({ isActive }) => cn(
-                    'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-100',
-                    isActive
-                      ? 'text-white bg-panel-500/[0.12] border-l-2 border-panel-500'
-                      : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.03] border-l-2 border-transparent'
+                    'relative z-10 flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-100',
+                    isActive ? 'text-white' : 'text-zinc-500 hover:text-zinc-200'
                   )}
                 >
                   <Icon size={14} />
@@ -108,10 +134,8 @@ export function Sidebar() {
                   <NavLink
                     to={to}
                     className={({ isActive }) => cn(
-                      'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-100',
-                      isActive
-                        ? 'text-white bg-panel-500/[0.12] border-l-2 border-panel-500'
-                        : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.03] border-l-2 border-transparent'
+                      'relative z-10 flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-100',
+                      isActive ? 'text-white' : 'text-zinc-500 hover:text-zinc-200'
                     )}
                   >
                     <Icon size={14} />
@@ -133,7 +157,7 @@ export function Sidebar() {
                   href="/admin"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-100 text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.03] border-l-2 border-transparent"
+                  className="relative z-10 flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-100 text-zinc-500 hover:text-zinc-200"
                 >
                   <Shield size={14} />
                   <span>{t('sidebar.adminPanel')}</span>
@@ -155,9 +179,11 @@ export function Sidebar() {
           className="flex items-center gap-2.5 px-3 py-2 rounded-lg cursor-pointer transition-colors hover:bg-white/[0.04]"
           onClick={() => navigate('/account')}
         >
-          <div className="h-7 w-7 rounded-full bg-panel-500/15 border border-panel-500/25 flex items-center justify-center text-panel-300 text-[10px] font-bold shrink-0">
-            {user?.firstName?.[0]}{user?.lastName?.[0]}
-          </div>
+          <img
+            src={user?.avatarUrl || `https://api.dicebear.com/9.x/thumbs/svg?seed=${encodeURIComponent(user?.username || user?.email || 'user')}`}
+            alt=""
+            className="h-7 w-7 rounded-lg bg-panel-500/15 border border-panel-500/25 shrink-0 object-cover"
+          />
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-zinc-200 truncate leading-tight">
               {user?.firstName} {user?.lastName}
@@ -174,6 +200,7 @@ export function Sidebar() {
             <LogOut size={13} />
           </button>
         </div>
+      </div>
       </div>
     </aside>
   );

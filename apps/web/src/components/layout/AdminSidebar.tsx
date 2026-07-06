@@ -1,4 +1,5 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Server, Users, Cpu, Package,
   Activity, Wrench, LogOut, ChevronLeft, KeyRound, Code2, Webhook, ArrowRightLeft, CreditCard
@@ -8,6 +9,25 @@ import { cn } from '@/lib/utils';
 import api from '@/lib/axios';
 import toast from 'react-hot-toast';
 import { useQuery } from '@tanstack/react-query';
+
+// Slides a highlight pill behind whichever nav link is currently active,
+// mirroring Sidebar.tsx's user-panel nav so both shells feel like one system.
+function useActiveNavPill(navRef: RefObject<HTMLElement>) {
+  const location = useLocation();
+  const [style, setStyle] = useState<{ top: number; height: number; opacity: number }>({ top: 0, height: 0, opacity: 0 });
+
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const active = nav.querySelector<HTMLElement>('a.active');
+    if (!active) { setStyle((s) => ({ ...s, opacity: 0 })); return; }
+    const navRect = nav.getBoundingClientRect();
+    const itemRect = active.getBoundingClientRect();
+    setStyle({ top: itemRect.top - navRect.top + nav.scrollTop, height: itemRect.height, opacity: 1 });
+  }, [location.pathname, navRef]);
+
+  return style;
+}
 
 const adminNavItems = [
   { to: '/admin',          icon: LayoutDashboard, label: 'Overview',  exact: true },
@@ -27,6 +47,8 @@ const adminNavItems = [
 export function AdminSidebar() {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
+  const navRef = useRef<HTMLElement>(null);
+  const pill = useActiveNavPill(navRef);
 
   const { data: settings } = useQuery({
     queryKey: ['site-settings'],
@@ -44,10 +66,11 @@ export function AdminSidebar() {
   };
 
   return (
-    <aside
-      className="fixed inset-y-0 left-0 z-40 w-60 flex flex-col"
-      style={{ background: '#080a0c', borderRight: '1px solid #1a1f25' }}
-    >
+    <aside className="fixed inset-y-0 left-0 z-40 w-64 p-2 flex flex-col">
+      <div
+        className="flex flex-col h-full rounded-2xl border overflow-hidden"
+        style={{ background: '#080a0c', borderColor: '#1a1f25' }}
+      >
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 py-4" style={{ borderBottom: '1px solid #1a1f25' }}>
         {logoUrl ? (
@@ -64,7 +87,11 @@ export function AdminSidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-2 py-4 scrollbar-none">
+      <nav ref={navRef} className="relative flex-1 overflow-y-auto px-2 py-4 scrollbar-none">
+        <div
+          className="absolute left-2 right-2 rounded-lg bg-amber-500/10 border-l-2 border-amber-400 pointer-events-none transition-all duration-300 ease-out"
+          style={{ top: pill.top, height: pill.height, opacity: pill.opacity }}
+        />
         <p className="px-3 mb-1.5 text-[9px] font-bold uppercase tracking-widest text-zinc-700">Management</p>
         <ul className="space-y-0.5">
           {adminNavItems.map(({ to, icon: Icon, label, exact }) => (
@@ -73,10 +100,8 @@ export function AdminSidebar() {
                 to={to}
                 end={exact}
                 className={({ isActive }) => cn(
-                  'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-100',
-                  isActive
-                    ? 'text-amber-300 bg-amber-500/10 border-l-2 border-amber-400'
-                    : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.03] border-l-2 border-transparent'
+                  'relative z-10 flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-100',
+                  isActive ? 'text-amber-300' : 'text-zinc-500 hover:text-zinc-200'
                 )}
               >
                 <Icon size={14} />
@@ -93,7 +118,7 @@ export function AdminSidebar() {
             <li>
               <a
                 href="/dashboard"
-                className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-100 text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.03] border-l-2 border-transparent"
+                className="relative z-10 flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-100 text-zinc-500 hover:text-zinc-200"
               >
                 <ChevronLeft size={14} />
                 <span>Back to Panel</span>
@@ -106,9 +131,11 @@ export function AdminSidebar() {
       {/* User footer */}
       <div className="p-2" style={{ borderTop: '1px solid #1a1f25' }}>
         <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg">
-          <div className="h-7 w-7 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 text-[10px] font-bold shrink-0">
-            {user?.firstName?.[0]}{user?.lastName?.[0]}
-          </div>
+          <img
+            src={user?.avatarUrl || `https://api.dicebear.com/9.x/thumbs/svg?seed=${encodeURIComponent(user?.username || user?.email || 'admin')}`}
+            alt=""
+            className="h-7 w-7 rounded-lg bg-amber-500/10 border border-amber-500/20 shrink-0 object-cover"
+          />
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-zinc-200 truncate leading-tight">
               {user?.firstName} {user?.lastName}
@@ -123,6 +150,7 @@ export function AdminSidebar() {
             <LogOut size={13} />
           </button>
         </div>
+      </div>
       </div>
     </aside>
   );
