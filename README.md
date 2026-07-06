@@ -253,44 +253,14 @@ cd apps/web && npm install && npm run dev
 
 ---
 
-## API Reference
+## Documentation
 
-```
-GET    /health
+Full guides live in [`docs/`](./docs):
 
-POST   /api/v1/auth/login
-POST   /api/v1/auth/register
-POST   /api/v1/auth/refresh
-GET    /api/v1/auth/me
-GET    /api/v1/auth/setup/status
-POST   /api/v1/auth/setup
-
-GET    /api/v1/servers
-POST   /api/v1/servers          (admin)
-GET    /api/v1/servers/:id
-PATCH  /api/v1/servers/:id      (admin)
-DELETE /api/v1/servers/:id      (admin)
-POST   /api/v1/servers/:id/power
-
-GET    /api/v1/nodes            (admin)
-POST   /api/v1/nodes            (admin)
-GET    /api/v1/nodes/:id/allocations
-POST   /api/v1/nodes/:id/allocations  (admin)
-
-GET    /api/v1/users            (admin)
-POST   /api/v1/users            (admin)
-PATCH  /api/v1/users/:id        (admin)
-DELETE /api/v1/users/:id        (admin)
-
-GET    /api/v1/eggs             (admin)
-GET    /api/v1/stats            (admin)
-GET    /api/v1/stats/overview
-
-# Wings (daemon-to-panel)
-GET    /api/v1/wings/node
-POST   /api/v1/wings/heartbeat
-GET    /api/v1/wings/servers
-```
+- **[Installation](./docs/installation.md)** — detailed install/update/uninstall walkthrough, troubleshooting
+- **[Eggs](./docs/eggs.md)** — writing server templates, importing from Pterodactyl, the community egg store
+- **[SFTP Access](./docs/sftp.md)** — connecting to a server's files over SFTP
+- **[API Guide](./docs/api.md)** — authentication, scopes, and the full endpoint reference (also browsable live in-app at **Admin → API Reference**)
 
 ---
 
