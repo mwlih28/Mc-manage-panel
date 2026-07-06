@@ -120,7 +120,7 @@ export function AdminIntegrationsPage() {
           <a href={BLESTA_MODULE_URL} download className="flex items-center justify-between gap-3 p-4 rounded-lg border border-zinc-800 hover:border-zinc-700 transition-colors">
             <div>
               <p className="text-sm font-medium text-zinc-200">Blesta Module</p>
-              <p className="text-xs text-zinc-600 mt-0.5">components/modules/kretase/</p>
+              <p className="text-xs text-zinc-600 mt-0.5">.zip → unzip into components/modules/kretase/</p>
             </div>
             <Download size={16} className="text-zinc-500 shrink-0" />
           </a>

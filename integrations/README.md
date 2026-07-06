@@ -10,13 +10,16 @@ then assign it to a product. Calls Kretase's existing admin REST API — the
 same one documented under Admin → API Reference in the panel — for account
 creation, suspension, unsuspension, and termination.
 
-## Blesta (`blesta/kretase/kretase_module.php`)
+## Blesta (`blesta/kretase/`)
 
-Implements the same lifecycle against Blesta's module interface. Blesta
-expects a few more scaffolding files (a `kretase_module.json` config file,
-a language file, a logo) that aren't included here — this file is the part
-that actually talks to Kretase and is the one worth reviewing; the rest is
-metadata Blesta needs to display the module in its admin UI.
+Implements the same lifecycle against Blesta's module interface. Unlike
+WHMCS, Blesta requires a whole directory — the module class
+(`kretase_module.php`), a `config.json` (metadata Blesta reads to register
+the module), and `language/en_us/kretase_module.php` (field labels and
+error strings) — all present together, which is why the panel's download
+button for this one gives you a `.zip` instead of a single file. Unzip it
+straight into `components/modules/kretase/`. No logo is bundled; Blesta
+falls back to a generic icon when `config.json` doesn't list one.
 
 ## Tebex / CraftingStore
 

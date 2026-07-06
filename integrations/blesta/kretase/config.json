@@ -1,0 +1,18 @@
+{
+    "version": "1.0.0",
+    "name": "Kretase",
+    "description": "Provision, suspend, and terminate Kretase game servers automatically from Blesta orders.",
+    "type": "generic",
+    "authors": [
+        {
+            "name": "Kretase",
+            "url": "https://kretase.com"
+        }
+    ],
+    "module": {
+        "row": "Panel",
+        "rows": "Panels",
+        "group": "Kretase Panels",
+        "row_key": "panel_url"
+    }
+}

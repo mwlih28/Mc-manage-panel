@@ -19,6 +19,7 @@ import rateLimit from 'express-rate-limit';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import compression from 'compression';
+import archiver from 'archiver';
 
 // Prisma returns BigInt for Backup.bytes (needed since real backup sizes can
 // exceed a 32-bit int), but JSON.stringify throws on BigInt by default —
@@ -166,10 +167,19 @@ api.get('/integrations/whmcs', (_req, res) => {
   if (!fs.existsSync(filePath)) return res.status(404).send('Module not found');
   res.download(filePath, 'kretase.php');
 });
+// Blesta needs the module's whole directory (main class + config.json +
+// language/) dropped into components/modules/kretase/ together, unlike
+// WHMCS which only ever needs the single class file — so this one zips
+// the directory on the fly instead of a plain res.download().
 api.get('/integrations/blesta', (_req, res) => {
-  const filePath = path.join(INTEGRATIONS_DIR, 'blesta', 'kretase', 'kretase_module.php');
-  if (!fs.existsSync(filePath)) return res.status(404).send('Module not found');
-  res.download(filePath, 'kretase_module.php');
+  const moduleDir = path.join(INTEGRATIONS_DIR, 'blesta', 'kretase');
+  if (!fs.existsSync(moduleDir)) return res.status(404).send('Module not found');
+  res.attachment('kretase-blesta-module.zip');
+  const archive = archiver('zip', { zlib: { level: 9 } });
+  archive.on('error', (err) => res.status(500).end(err.message));
+  archive.pipe(res);
+  archive.directory(moduleDir, 'kretase');
+  archive.finalize();
 });
 
 api.use('/auth', authRoutes);

@@ -2,19 +2,20 @@
 /**
  * Kretase provisioning module for Blesta.
  *
- * Blesta modules require more scaffolding than this single file — a real
- * install also needs components/modules/kretase/kretase_module.json,
- * a language file at language/en_us/kretase.php, and a logo/icon. Those are
- * cosmetic/metadata files; this file carries every actual API integration
- * call and is the part worth reviewing carefully before use. Verify the
- * exact Module base-class method signatures against your Blesta version's
- * SDK docs (they've been stable across versions but this hasn't been tested
- * against a live Blesta install).
+ * Ships with the full scaffolding Blesta requires to load this as a real
+ * module: config.json (metadata) and language/en_us/kretase_module.php
+ * (labels/errors) sit alongside this file. No logo is bundled — Blesta
+ * falls back to a generic icon when config.json omits one, which is fine
+ * here rather than shipping a placeholder image. Method signatures were
+ * verified against Blesta's published Module base-class docs, but this
+ * hasn't been exercised against a live Blesta install — test on staging
+ * before relying on it for real orders.
  *
- * Install: copy this directory to components/modules/kretase/ in your
- * Blesta installation, enable it under Settings -> Modules, add a module
- * row with your Kretase panel URL and an admin API key (users:write +
- * servers:write scopes), then use it on a package.
+ * Install: unzip this whole directory to components/modules/kretase/ in
+ * your Blesta installation (so kretase_module.php, config.json, and
+ * language/ all land together), enable it under Settings -> Modules, add
+ * a module row with your Kretase panel URL and an admin API key
+ * (users:write + servers:write scopes), then use it on a package.
  */
 
 App::uses('Module', 'Modules');
@@ -24,23 +25,61 @@ class Kretase_module extends Module
     public function __construct()
     {
         Language::loadLang('kretase_module', null, dirname(__FILE__) . DS . 'language' . DS);
+        $this->loadConfig(dirname(__FILE__) . DS . 'config.json');
+    }
+
+    public function getName()
+    {
+        return Language::_('Kretase_module.name', true);
+    }
+
+    public function getVersion()
+    {
+        return '1.0.0';
+    }
+
+    public function getAuthors()
+    {
+        return [['name' => 'Kretase', 'url' => 'https://kretase.com']];
+    }
+
+    public function moduleRowName()
+    {
+        return Language::_('Kretase_module.module_row', true);
+    }
+
+    public function moduleRowNamePlural()
+    {
+        return Language::_('Kretase_module.module_row_plural', true);
+    }
+
+    public function moduleGroupName()
+    {
+        return Language::_('Kretase_module.module_group', true);
+    }
+
+    // The module row list is keyed/labeled by the panel URL, so admins can
+    // tell panels apart if they ever manage more than one.
+    public function moduleRowMetaKey()
+    {
+        return 'panel_url';
     }
 
     public function getModuleRowMetaFields()
     {
         return [
-            (object) ['key' => 'panel_url', 'label' => 'Panel URL', 'type' => 'text'],
-            (object) ['key' => 'api_key', 'label' => 'Admin API Key', 'type' => 'password'],
+            (object) ['key' => 'panel_url', 'label' => Language::_('Kretase_module.row_meta.panel_url', true), 'type' => 'text'],
+            (object) ['key' => 'api_key', 'label' => Language::_('Kretase_module.row_meta.api_key', true), 'type' => 'password'],
         ];
     }
 
     public function getPackageFields($vars = null)
     {
         $fields = new ModuleFields();
-        $fields->setField($fields->fieldText('meta[node_id]', 'Kretase Node ID', $this->Html->ifSet($vars->meta['node_id'] ?? null)));
-        $fields->setField($fields->fieldText('meta[egg_id]', 'Kretase Egg ID', $this->Html->ifSet($vars->meta['egg_id'] ?? null)));
-        $fields->setField($fields->fieldText('meta[memory]', 'Memory (MB)', $this->Html->ifSet($vars->meta['memory'] ?? 2048)));
-        $fields->setField($fields->fieldText('meta[disk]', 'Disk (MB)', $this->Html->ifSet($vars->meta['disk'] ?? 10000)));
+        $fields->setField($fields->fieldText('meta[node_id]', Language::_('Kretase_module.package_fields.node_id', true), $this->Html->ifSet($vars->meta['node_id'] ?? null)));
+        $fields->setField($fields->fieldText('meta[egg_id]', Language::_('Kretase_module.package_fields.egg_id', true), $this->Html->ifSet($vars->meta['egg_id'] ?? null)));
+        $fields->setField($fields->fieldText('meta[memory]', Language::_('Kretase_module.package_fields.memory', true), $this->Html->ifSet($vars->meta['memory'] ?? 2048)));
+        $fields->setField($fields->fieldText('meta[disk]', Language::_('Kretase_module.package_fields.disk', true), $this->Html->ifSet($vars->meta['disk'] ?? 10000)));
         return $fields;
     }
 
@@ -90,7 +129,7 @@ class Kretase_module extends Module
         $moduleRow = $this->getModuleRow();
         $userId = $this->findOrCreateUser($moduleRow, $vars['client_email'] ?? '', $vars['client_first_name'] ?? '', $vars['client_last_name'] ?? '');
         if (!$userId) {
-            $this->Input->setErrors(['api' => ['create_user' => 'Could not find or create the Kretase user for this client']]);
+            $this->Input->setErrors(['api' => ['create_user' => Language::_('Kretase_module.!error.create_user', true)]]);
             return;
         }
 
@@ -103,7 +142,8 @@ class Kretase_module extends Module
             'disk' => (int) $package->meta->disk,
         ]);
         if ($result['status'] !== 201) {
-            $this->Input->setErrors(['api' => ['create_server' => $result['body']['message'] ?? 'Server creation failed']]);
+            $message = $result['body']['message'] ?? 'Server creation failed';
+            $this->Input->setErrors(['api' => ['create_server' => Language::_('Kretase_module.!error.create_server', true, $message)]]);
             return;
         }
 
