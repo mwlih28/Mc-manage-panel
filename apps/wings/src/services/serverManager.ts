@@ -1010,8 +1010,28 @@ class ServerManager extends EventEmitter {
   }
 
   async deleteServer(uuid: string): Promise<void> {
-    await this.stopServer(uuid, true);
-    this.servers.delete(uuid);
+    if (this.servers.has(uuid)) {
+      await this.stopServer(uuid, true).catch((err) =>
+        logger.warn(`Error stopping ${uuid} during delete (continuing): ${(err as Error).message}`)
+      );
+      this.servers.delete(uuid);
+    } else {
+      // Not tracked in memory — e.g. Wings restarted since this server was
+      // loaded, or the panel is cleaning up a server it already forgot
+      // about. Still remove any container with this server's deterministic
+      // name directly, rather than silently leaving it running forever and
+      // squatting on its port.
+      try {
+        const d = getDocker();
+        const containerName = `mc_${uuid}`;
+        const existing = await d.listContainers({ all: true, filters: { name: [containerName] } });
+        if (existing.length > 0) {
+          await d.getContainer(existing[0].Id).remove({ force: true }).catch(() => { /* best-effort */ });
+        }
+      } catch (err) {
+        logger.warn(`Error force-removing untracked container for ${uuid}: ${(err as Error).message}`);
+      }
+    }
 
     const cfg = getConfig();
     const dataPath = path.join(cfg.system.data, uuid);

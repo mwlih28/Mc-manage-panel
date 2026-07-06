@@ -970,8 +970,24 @@ router.post('/:id/clone', authenticate, requireAdmin, requireScope('servers:writ
 
 // DELETE /servers/:id
 router.delete('/:id', authenticate, requireAdmin, requireScope('servers:write'), async (req: AuthRequest, res: Response) => {
-  const server = await prisma.server.findUnique({ where: { id: req.params.id } });
+  const server = await prisma.server.findUnique({ where: { id: req.params.id }, include: { node: true } });
   if (!server) return res.status(404).json({ message: 'Server not found' });
+
+  // Best-effort: tell Wings to stop and remove the actual container + data
+  // before dropping our own record. Never block the delete on this — if the
+  // node is unreachable the admin still needs to be able to remove the
+  // server from the panel, but a failure here does leave an orphaned
+  // container running on the node, silently holding its port forever.
+  if (server.node) {
+    try {
+      await axios.delete(
+        `${server.node.scheme}://${server.node.fqdn}:${server.node.daemonPort}/api/servers/${server.uuid}`,
+        { headers: { Authorization: `Bearer ${server.node.token}` }, timeout: 15000 }
+      );
+    } catch (err) {
+      logger.warn(`Could not delete Wings container for server ${server.uuid}: ${(err as Error).message}`);
+    }
+  }
 
   if (server.allocationId) {
     await prisma.allocation.update({
