@@ -632,8 +632,12 @@ class ServerManager extends EventEmitter {
 
     // Write install script to data dir. Volume ownership is handled separately by
     // ensureVolumePermissions(), so the install runs as uid 1000 on a writable dir.
+    // Many community-egg install scripts carry CRLF line endings (Windows-authored
+    // source files) — bash chokes on the stray \r with "command not found" and an
+    // "unexpected end of file" syntax error, so normalize before writing to disk.
     const scriptFile = path.join(dataPath, '.wings_install.sh');
-    fs.writeFileSync(scriptFile, config.installScript!, 'utf8');
+    const normalizedScript = config.installScript!.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    fs.writeFileSync(scriptFile, normalizedScript, 'utf8');
 
     const envArray = Object.entries(config.environment).map(([k, v]) => `${k}=${v}`);
 

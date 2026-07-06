@@ -2,6 +2,16 @@ import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import { prisma } from '../utils/prisma';
 
+// Pterodactyl egg exports (and scripts pasted by hand from a Windows editor)
+// frequently carry CRLF line endings — bash chokes on the stray \r at
+// runtime with "command not found" and a trailing "unexpected end of file",
+// so normalize on the way in rather than storing (and re-serving) broken
+// scripts to Wings.
+export function normalizeScript(script: string | null | undefined): string | null {
+  if (!script) return script ?? null;
+  return script.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+}
+
 // Parses a Pterodactyl egg export (the "PTDL_v1"/"PTDL_v2" JSON format every
 // panel in this ecosystem — Pterodactyl, Pelican, and the community egg
 // repos that target them — produces from "Export Egg"). Deliberately
@@ -112,7 +122,8 @@ export async function parsePterodactylEgg(raw: unknown): Promise<ParsedEgg> {
     })
     .filter((v) => v.envVariable);
 
-  const scriptInstall = typeof scripts.script === 'string' && scripts.script ? scripts.script : null;
+  const rawScriptInstall = typeof scripts.script === 'string' && scripts.script ? scripts.script : null;
+  const scriptInstall = normalizeScript(rawScriptInstall);
 
   return {
     name: j.name.trim().slice(0, 191),

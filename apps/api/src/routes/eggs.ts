@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { prisma } from '../utils/prisma';
 import { authenticate, requireAdmin, requireScope } from '../middleware/auth';
 import { AuthRequest } from '../types';
-import { parsePterodactylEgg, resolveNestId, createEggFromParsed, buildEggExportJson } from '../services/eggImport';
+import { parsePterodactylEgg, resolveNestId, createEggFromParsed, buildEggExportJson, normalizeScript } from '../services/eggImport';
 
 const router = Router();
 
@@ -77,7 +77,7 @@ router.post('/', authenticate, requireAdmin, requireScope('eggs:write'), async (
       dockerImage,
       startup,
       configStop: configStop || '^C',
-      scriptInstall: scriptInstall || null,
+      scriptInstall: normalizeScript(scriptInstall),
       variables: variables?.length
         ? {
             create: variables.map((v: {
@@ -142,7 +142,7 @@ router.put('/:id', authenticate, requireAdmin, requireScope('eggs:write'), async
         ...(dockerImage && { dockerImage }),
         ...(startup && { startup }),
         ...(configStop !== undefined && { configStop }),
-        ...(scriptInstall !== undefined && { scriptInstall: scriptInstall || null }),
+        ...(scriptInstall !== undefined && { scriptInstall: normalizeScript(scriptInstall) }),
       },
       include: { variables: true, nest: true },
     });
