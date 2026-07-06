@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Navigate, useNavigate, useLocation, useSearchParams, Link } from 'react-router-dom';
 import { Eye, EyeOff, ShieldCheck, Bot } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import HCaptcha from '@hcaptcha/react-hcaptcha';
 import { useAuthStore } from '@/store/authStore';
 import api from '@/lib/axios';
 import toast from 'react-hot-toast';
@@ -16,6 +17,8 @@ export function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [checkingSetup, setCheckingSetup] = useState(true);
   const [needsSetup, setNeedsSetup] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState('');
+  const captchaRef = useRef<HCaptcha>(null);
   // 2FA state
   const [requiresTwoFactor, setRequiresTwoFactor] = useState(false);
   const [pendingToken, setPendingToken] = useState('');
@@ -64,6 +67,7 @@ export function LoginPage() {
   const siteName = settings?.['app.name'] || 'Kretase';
   const siteDesc = settings?.['app.description'] || 'Game server management';
   const logoUrl  = settings?.['app.logo'];
+  const captchaEnabled = settings?.['captcha.provider'] === 'hcaptcha' && !!settings?.['captcha.siteKey'];
 
   useEffect(() => {
     api.get('/auth/setup/status').then(({ data }) => {
@@ -83,9 +87,13 @@ export function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (captchaEnabled && !captchaToken) {
+      toast.error('Please complete the captcha');
+      return;
+    }
     setIsLoading(true);
     try {
-      const { data } = await api.post('/auth/login', { email, password });
+      const { data } = await api.post('/auth/login', { email, password, captchaToken });
       if (data.requiresTwoFactor) {
         setPendingToken(data.pendingToken);
         setRequiresTwoFactor(true);
@@ -98,6 +106,8 @@ export function LoginPage() {
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } } };
       toast.error(error.response?.data?.message || t('login.loginFailed'));
+      captchaRef.current?.resetCaptcha();
+      setCaptchaToken('');
     } finally {
       setIsLoading(false);
     }
@@ -193,6 +203,19 @@ export function LoginPage() {
                     </button>
                   </div>
                 </div>
+
+                {captchaEnabled && (
+                  <div className="flex justify-center">
+                    <HCaptcha
+                      ref={captchaRef}
+                      sitekey={settings!['captcha.siteKey']}
+                      theme="dark"
+                      onVerify={(token) => setCaptchaToken(token)}
+                      onExpire={() => setCaptchaToken('')}
+                    />
+                  </div>
+                )}
+
                 <button
                   type="submit"
                   className="w-full btn-primary py-2.5 justify-center mt-2"

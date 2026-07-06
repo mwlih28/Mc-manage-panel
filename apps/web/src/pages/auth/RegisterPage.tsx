@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Navigate, useNavigate, Link } from 'react-router-dom';
 import { Server } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import HCaptcha from '@hcaptcha/react-hcaptcha';
 import { useAuthStore } from '@/store/authStore';
 import api from '@/lib/axios';
 import toast from 'react-hot-toast';
@@ -11,23 +13,38 @@ export function RegisterPage() {
     firstName: '', lastName: '', email: '', username: '', password: '',
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState('');
+  const captchaRef = useRef<HCaptcha>(null);
   const { setAuth, isAuthenticated } = useAuthStore();
   const navigate = useNavigate();
+
+  const { data: settings } = useQuery({
+    queryKey: ['site-settings'],
+    queryFn: () => api.get('/settings').then(r => r.data as Record<string, string>),
+    staleTime: 60000,
+  });
+  const captchaEnabled = settings?.['captcha.provider'] === 'hcaptcha' && !!settings?.['captcha.siteKey'];
 
   if (isAuthenticated) return <Navigate to="/dashboard" replace />;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (captchaEnabled && !captchaToken) {
+      toast.error('Please complete the captcha');
+      return;
+    }
     setIsLoading(true);
 
     try {
-      const { data } = await api.post('/auth/register', form);
+      const { data } = await api.post('/auth/register', { ...form, captchaToken });
       setAuth(data.user, data.accessToken, data.refreshToken);
       toast.success('Account created successfully!');
       navigate('/dashboard');
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } } };
       toast.error(error.response?.data?.message || 'Registration failed');
+      captchaRef.current?.resetCaptcha();
+      setCaptchaToken('');
     } finally {
       setIsLoading(false);
     }
@@ -81,6 +98,18 @@ export function RegisterPage() {
                   onChange={(e) => setForm({ ...form, password: e.target.value })} required minLength={8} />
                 <p className="text-xs text-slate-500 mt-1">Minimum 8 characters</p>
               </div>
+
+              {captchaEnabled && (
+                <div className="flex justify-center">
+                  <HCaptcha
+                    ref={captchaRef}
+                    sitekey={settings!['captcha.siteKey']}
+                    theme="dark"
+                    onVerify={(token) => setCaptchaToken(token)}
+                    onExpire={() => setCaptchaToken('')}
+                  />
+                </div>
+              )}
 
               <button type="submit" className="btn-primary w-full justify-center py-2.5" disabled={isLoading}>
                 {isLoading ? <Spinner size="sm" /> : 'Create Account'}

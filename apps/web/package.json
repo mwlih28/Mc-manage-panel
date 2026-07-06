@@ -13,6 +13,7 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
   },
   "dependencies": {
+    "@hcaptcha/react-hcaptcha": "^2.0.2",
     "@tanstack/react-query": "^5.13.4",
     "axios": "^1.6.2",
     "clsx": "^2.0.0",

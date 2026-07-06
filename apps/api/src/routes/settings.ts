@@ -30,6 +30,8 @@ const DEFAULTS: Record<string, string> = {
   'discord.oauth.enabled': 'false',
   'discord.oauth.clientId': '',
   'discord.oauth.clientSecret': '',
+  'captcha.provider': 'none',
+  'captcha.siteKey': '',
 };
 
 const PROVIDER_KEY_SETTING: Record<string, string> = {
@@ -39,11 +41,15 @@ const PROVIDER_KEY_SETTING: Record<string, string> = {
 };
 
 const STORAGE_PROVIDERS = new Set(['none', 's3', 'sftp', 'gdrive']);
+const CAPTCHA_PROVIDERS = new Set(['none', 'hcaptcha']);
 
 // Keys safe to expose without authentication (sidebar/login branding, public
 // feature flags). Everything else (SMTP creds, AI provider keys) is stripped
-// out below unless the request comes from a logged-in admin.
-const PUBLIC_KEYS = new Set(['app.name', 'app.title', 'app.logo', 'app.description', 'app.version', 'features.aiTools', 'ai.provider', 'ai.configured', 'curseforge.configured', 'theme.customCss', 'whitelabel.hidePoweredBy', 'discord.configured', 'discord.oauth.enabled']);
+// out below unless the request comes from a logged-in admin. captcha.siteKey
+// is intentionally public — hCaptcha's own site key is meant to ship to the
+// browser, that's how the widget knows which site it's protecting. Only
+// captcha.secretKey (used server-side to verify a solve) stays admin-only.
+const PUBLIC_KEYS = new Set(['app.name', 'app.title', 'app.logo', 'app.description', 'app.version', 'features.aiTools', 'ai.provider', 'ai.configured', 'curseforge.configured', 'theme.customCss', 'whitelabel.hidePoweredBy', 'discord.configured', 'discord.oauth.enabled', 'captcha.provider', 'captcha.siteKey', 'captcha.configured']);
 
 router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
@@ -55,6 +61,7 @@ router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
     settings['curseforge.configured'] = settings['curseforge.apiKey'] ? 'true' : 'false';
     settings['storage.configured'] = isStorageConfigured(settings) ? 'true' : 'false';
     settings['discord.configured'] = settings['discord.botToken'] ? 'true' : 'false';
+    settings['captcha.configured'] = (settings['captcha.provider'] === 'hcaptcha' && settings['captcha.siteKey'] && settings['captcha.secretKey']) ? 'true' : 'false';
     // Sourced from the deployed .env, not the DB — install/update-panel.sh
     // keep PANEL_VERSION in sync with the actual release tag on every run.
     settings['app.version'] = process.env.PANEL_VERSION || '1.0.0';
@@ -77,6 +84,9 @@ router.put('/', authenticate, requireAdmin, async (req: AuthRequest, res: Respon
   if (req.body['storage.provider'] !== undefined && !STORAGE_PROVIDERS.has(req.body['storage.provider'])) {
     return res.status(422).json({ message: 'Invalid storage.provider — must be none, s3, sftp, or gdrive' });
   }
+  if (req.body['captcha.provider'] !== undefined && !CAPTCHA_PROVIDERS.has(req.body['captcha.provider'])) {
+    return res.status(422).json({ message: 'Invalid captcha.provider — must be none or hcaptcha' });
+  }
   const allowed = [
     'app.name', 'app.title', 'app.logo', 'app.description',
     'smtp.host', 'smtp.port', 'smtp.user', 'smtp.pass', 'smtp.from',
@@ -91,6 +101,7 @@ router.put('/', authenticate, requireAdmin, async (req: AuthRequest, res: Respon
     'storage.gdrive.serviceAccountJson', 'storage.gdrive.folderId',
     'discord.botToken',
     'discord.oauth.enabled', 'discord.oauth.clientId', 'discord.oauth.clientSecret',
+    'captcha.provider', 'captcha.siteKey', 'captcha.secretKey',
   ];
   if (req.body['theme.customCss'] !== undefined) {
     const css = req.body['theme.customCss'];

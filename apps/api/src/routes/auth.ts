@@ -13,6 +13,7 @@ import { verify } from 'otplib';
 import { sendPasswordResetEmail } from '../services/emailService';
 import { logActivity } from '../services/activityService';
 import { logger } from '../utils/logger';
+import { verifyCaptcha } from '../services/captchaService';
 
 const router = Router();
 
@@ -59,7 +60,11 @@ router.post(
       return res.status(422).json({ errors: errors.array() });
     }
 
-    const { email, password } = req.body;
+    const { email, password, captchaToken } = req.body;
+
+    if (!(await verifyCaptcha(captchaToken, req.ip))) {
+      return res.status(422).json({ message: 'Captcha verification failed. Please try again.' });
+    }
 
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
@@ -137,7 +142,11 @@ router.post(
       return res.status(422).json({ errors: errors.array() });
     }
 
-    const { email, username, password, firstName, lastName } = req.body;
+    const { email, username, password, firstName, lastName, captchaToken } = req.body;
+
+    if (!(await verifyCaptcha(captchaToken, req.ip))) {
+      return res.status(422).json({ message: 'Captcha verification failed. Please try again.' });
+    }
 
     const existing = await prisma.user.findFirst({
       where: { OR: [{ email }, { username }] },

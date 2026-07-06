@@ -328,7 +328,6 @@ const prisma = new PrismaClient();
     { key: 'app:name',          value: 'Kretase' },
     { key: 'app:url',           value: process.env.SEED_APP_URL },
     { key: 'app:version',       value: '1.0.0' },
-    { key: 'recaptcha:enabled', value: 'false' },
   ];
   for (const s of settings) {
     await prisma.setting.upsert({ where: { key: s.key }, update: { value: s.value }, create: s });

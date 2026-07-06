@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, Globe, Image, Type, FileText, Mail, Send, Eye, EyeOff, Zap, Sparkles, Mountain, Paintbrush, UploadCloud, PlugZap, Bot } from 'lucide-react';
+import { Save, Globe, Image, Type, FileText, Mail, Send, Eye, EyeOff, Zap, Sparkles, Mountain, Paintbrush, UploadCloud, PlugZap, Bot, ShieldCheck } from 'lucide-react';
 import api from '@/lib/axios';
 import toast from 'react-hot-toast';
 import { Spinner } from '@/components/ui/Spinner';
@@ -89,6 +89,9 @@ export function AdminSettingsPage() {
     'discord.oauth.enabled': 'false',
     'discord.oauth.clientId': '',
     'discord.oauth.clientSecret': '',
+    'captcha.provider': 'none',
+    'captcha.siteKey': '',
+    'captcha.secretKey': '',
   });
   const [showKey, setShowKey] = useState<Record<string, boolean>>({});
   const queryClient = useQueryClient();
@@ -134,6 +137,9 @@ export function AdminSettingsPage() {
         'discord.oauth.enabled': data['discord.oauth.enabled'] || 'false',
         'discord.oauth.clientId': data['discord.oauth.clientId'] || '',
         'discord.oauth.clientSecret': data['discord.oauth.clientSecret'] || '',
+        'captcha.provider': data['captcha.provider'] || 'none',
+        'captcha.siteKey': data['captcha.siteKey'] || '',
+        'captcha.secretKey': data['captcha.secretKey'] || '',
       });
     }).finally(() => setLoading(false));
   }, []);
@@ -776,6 +782,79 @@ export function AdminSettingsPage() {
               {`${window.location.origin}/api/v1/auth/discord/callback`}
             </code>
           </div>
+        </div>
+      </div>
+
+      {/* CAPTCHA */}
+      <div className="card">
+        <div className="card-header">
+          <h2 className="text-sm font-semibold text-zinc-100 flex items-center gap-2"><ShieldCheck size={14} />CAPTCHA</h2>
+          <p className="text-xs text-zinc-500 mt-0.5">
+            Blocks automated bots on the Login and Register forms.
+          </p>
+        </div>
+        <div className="p-6 space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            {([
+              { id: 'none', label: 'None' },
+              { id: 'hcaptcha', label: 'hCaptcha' },
+            ] as const).map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setForm(f => ({ ...f, 'captcha.provider': opt.id }))}
+                className={`rounded-lg border p-3 text-sm font-medium text-left transition-colors ${
+                  form['captcha.provider'] === opt.id
+                    ? 'border-panel-500 bg-panel-500/10 text-panel-300'
+                    : 'border-zinc-800 text-zinc-400 hover:border-zinc-700'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          {form['captcha.provider'] === 'hcaptcha' && (
+            <>
+              <div>
+                <label className="label">Site Key</label>
+                <input
+                  className="input font-mono text-sm"
+                  value={form['captcha.siteKey']}
+                  onChange={e => setForm(f => ({ ...f, 'captcha.siteKey': e.target.value }))}
+                  placeholder="10000000-ffff-ffff-ffff-000000000001"
+                />
+              </div>
+              <div>
+                <label className="label">Secret Key</label>
+                <div className="relative">
+                  <input
+                    type={showKey['captchaSecret'] ? 'text' : 'password'}
+                    className="input font-mono text-sm pr-10"
+                    value={form['captcha.secretKey']}
+                    onChange={e => setForm(f => ({ ...f, 'captcha.secretKey': e.target.value }))}
+                    placeholder="0x0000000000000000000000000000000000000"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowKey(s => ({ ...s, captchaSecret: !s.captchaSecret }))}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-300 transition-colors"
+                  >
+                    {showKey['captchaSecret'] ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+              </div>
+              <div className="rounded-lg border border-zinc-800 p-4">
+                <p className="text-xs text-zinc-500">
+                  Get your site key and secret key at{' '}
+                  <a href="https://www.hcaptcha.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">
+                    hcaptcha.com
+                  </a>{' '}
+                  — register your domain, then copy both keys here.
+                </p>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
