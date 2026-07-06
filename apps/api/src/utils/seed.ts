@@ -804,14 +804,23 @@ echo "TShock installed."`;
   // Terraria / TShock
   const tshockEgg = await prisma.egg.upsert({
     where: { uuid: '00000000-0000-0000-0001-000000000005' },
-    update: { scriptInstall: TSHOCK_INSTALL, scriptContainer: 'ghcr.io/pterodactyl/installers:alpine', author: 'support@kretase.com' },
+    update: {
+      scriptInstall: TSHOCK_INSTALL,
+      scriptContainer: 'ghcr.io/pterodactyl/installers:alpine',
+      // dotnet runtime images only exist under parkervcp/yolks — pterodactyl/yolks
+      // never shipped a dotnet tag, so any egg created with the old value below
+      // 404'd on every pull. Included in `update` (unlike most fields here) so
+      // re-running the seed script actually heals an already-broken existing egg.
+      dockerImage: 'ghcr.io/parkervcp/yolks:dotnet_6',
+      author: 'support@kretase.com',
+    },
     create: {
       uuid: '00000000-0000-0000-0001-000000000005',
       nestId: gamesNest.id,
       author: 'support@kretase.com',
       name: 'Terraria (TShock)',
       description: 'Terraria server with TShock plugin API',
-      dockerImage: 'ghcr.io/pterodactyl/yolks:dotnet_6',
+      dockerImage: 'ghcr.io/parkervcp/yolks:dotnet_6',
       startup: './TShock.Server -port {{SERVER_PORT}} -maxplayers {{MAX_PLAYERS}} -world {{WORLD_NAME}}.wld -autocreate {{WORLD_SIZE}} -worldname {{WORLD_NAME}}',
       configStop: 'exit',
       scriptInstall: TSHOCK_INSTALL,
