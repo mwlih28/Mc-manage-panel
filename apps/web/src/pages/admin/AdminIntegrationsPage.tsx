@@ -44,7 +44,7 @@ interface StoreIntegrationRow {
 }
 
 function StatusDot({ status }: { status: StoreIntegrationRow['lastStatus'] }) {
-  const color = status === 'success' ? 'bg-panel-500' : status === 'failed' ? 'bg-red-500' : status === 'skipped' ? 'bg-amber-500' : 'bg-zinc-600';
+  const color = status === 'success' ? 'bg-[#3EC896]' : status === 'failed' ? 'bg-red-500' : status === 'skipped' ? 'bg-amber-500' : 'bg-zinc-600';
   const title = status === 'success' ? 'Last purchase ran successfully' : status === 'failed' ? 'Last purchase failed' : status === 'skipped' ? 'Last purchase had no matching package mapping' : 'Never triggered';
   return <span className={`inline-block h-2 w-2 rounded-full ${color}`} title={title} />;
 }

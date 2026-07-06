@@ -34,10 +34,10 @@
 
   .btn-primary {
     @apply btn text-white;
-    background: #22A878;
+    background: #2E6FEE;
   }
   .btn-primary:hover:not(:disabled) {
-    background: #2BC98C;
+    background: #4C8DFF;
   }
 
   .btn-secondary {
@@ -51,22 +51,24 @@
   }
 
   .btn-danger {
-    @apply btn text-red-400;
-    border: 1px solid rgba(239,68,68,0.25);
-    background: rgba(239,68,68,0.06);
+    @apply btn;
+    color: #F27074;
+    border: 1px solid rgba(229,72,77,0.25);
+    background: rgba(229,72,77,0.06);
   }
   .btn-danger:hover:not(:disabled) {
-    background: rgba(239,68,68,0.12);
-    border-color: rgba(239,68,68,0.4);
+    background: rgba(229,72,77,0.12);
+    border-color: rgba(229,72,77,0.4);
   }
 
   .btn-success {
-    @apply btn text-emerald-400;
-    border: 1px solid rgba(34,197,94,0.25);
-    background: rgba(34,197,94,0.06);
+    @apply btn;
+    color: #3EC896;
+    border: 1px solid rgba(62,200,150,0.25);
+    background: rgba(62,200,150,0.06);
   }
   .btn-success:hover:not(:disabled) {
-    background: rgba(34,197,94,0.12);
+    background: rgba(62,200,150,0.12);
   }
 
   .btn-sm { @apply px-3 py-1.5 text-xs; }
@@ -93,8 +95,8 @@
   }
   .input:focus {
     @apply outline-none;
-    border-color: #22A878;
-    box-shadow: 0 0 0 3px rgba(34,168,120,0.14);
+    border-color: #2E6FEE;
+    box-shadow: 0 0 0 3px rgba(46,111,238,0.16);
   }
 
   .label { @apply block text-sm font-medium text-zinc-400 mb-1.5; }
@@ -106,7 +108,8 @@
   .badge-green  { @apply badge; background: rgba(34,168,120,0.12); color: #3EC896; }
   .badge-red    { @apply badge; background: rgba(229,72,77,0.12);  color: #F27074; }
   .badge-yellow { @apply badge; background: rgba(229,160,0,0.12);  color: #F0B93D; }
-  .badge-blue   { @apply badge; background: rgba(59,130,246,0.12); color: #60a5fa; }
+  .badge-blue   { @apply badge; background: rgba(46,111,238,0.12); color: #6B9BFF; }
+  .badge-indigo { @apply badge; background: rgba(124,92,240,0.14); color: #A78BFA; }
   .badge-gray   { @apply badge; background: rgba(255,255,255,0.05); color: #9A9CA3; }
 
   /* ── Tables ─────────────────────────────────────────────────────────── */
@@ -125,7 +128,7 @@
     border-left: 2px solid transparent;
   }
   .sidebar-item:hover  { background: rgba(255,255,255,0.03); }
-  .sidebar-item.active { @apply text-white; background: rgba(34,168,120,0.12); border-left-color: #22A878; }
+  .sidebar-item.active { @apply text-white; background: rgba(46,111,238,0.14); border-left-color: #2E6FEE; }
 
   /* ── Progress ────────────────────────────────────────────────────────── */
   .progress-bar {
@@ -175,4 +178,4 @@
 .pixelated { image-rendering: pixelated; }
 
 .card { transition: border-color 0.15s; }
-.player-card:hover { border-color: rgba(34,197,94,0.3); }
+.player-card:hover { border-color: rgba(62,200,150,0.3); }

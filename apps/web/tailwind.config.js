@@ -27,21 +27,19 @@ export default {
         },
         // "panel" is this app's brand/accent color, referenced across the
         // codebase (sidebar active state, buttons, badges, progress bars).
-        // It was previously an alias for plain gray — i.e. the UI had no
-        // real accent color at all. Now a muted teal-green (not neon, not
-        // the default Tailwind emerald every AI-generated dashboard uses).
+        // Vercel/Stripe-style blue — vivid but not the raw Tailwind default.
         panel: {
-          50:  '#E8FBF3',
-          100: '#C7F3E1',
-          200: '#9FE8CB',
-          300: '#6FD9B0',
-          400: '#3EC896',
-          500: '#22A878',
-          600: '#1C8C66',
-          700: '#167056',
-          800: '#115646',
-          900: '#0B3D33',
-          950: '#06231A',
+          50:  '#EAF1FF',
+          100: '#D0E1FF',
+          200: '#A3C4FF',
+          300: '#6FA1FF',
+          400: '#4C8DFF',
+          500: '#2E6FEE',
+          600: '#2457C4',
+          700: '#1C4399',
+          800: '#173571',
+          900: '#122850',
+          950: '#0B1830',
         },
         dark: {
           50:  '#EDEDEF',

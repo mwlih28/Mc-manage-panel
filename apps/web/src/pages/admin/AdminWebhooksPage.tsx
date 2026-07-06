@@ -29,7 +29,7 @@ interface WebhookRow {
 }
 
 function StatusDot({ status }: { status: WebhookRow['lastStatus'] }) {
-  const color = status === 'success' ? 'bg-panel-500' : status === 'failed' ? 'bg-red-500' : 'bg-zinc-600';
+  const color = status === 'success' ? 'bg-[#3EC896]' : status === 'failed' ? 'bg-red-500' : 'bg-zinc-600';
   const title = status === 'success' ? 'Last delivery succeeded' : status === 'failed' ? 'Last delivery failed' : 'Never triggered';
   return <span className={`inline-block h-2 w-2 rounded-full ${color}`} title={title} />;
 }

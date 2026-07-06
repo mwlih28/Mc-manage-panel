@@ -987,7 +987,7 @@ export function ServerDetailPage() {
             label="Memory"
             value={`${formatBytes(stats.memoryBytes)} / ${formatBytes(stats.memoryLimitBytes)}`}
             percent={memUsage}
-            color="blue"
+            color="violet"
           />
           <MiniStat
             icon={<HardDrive size={14} />}
@@ -2548,7 +2548,7 @@ function MiniStat({ icon, label, value, percent, color, noBar }: {
   percent: number; color: string; noBar?: boolean;
 }) {
   const colorMap: Record<string, string> = {
-    panel: 'bg-panel-500', blue: 'bg-blue-500', green: 'bg-green-500', orange: 'bg-orange-500',
+    panel: 'bg-panel-500', violet: 'bg-[#A78BFA]', green: 'bg-[#3EC896]', orange: 'bg-[#F0954D]',
   };
 
   return (

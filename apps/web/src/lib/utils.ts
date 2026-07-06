@@ -29,22 +29,22 @@ export function formatUptime(seconds: number): string {
 
 export function getServerStatusColor(status: ServerStatus): string {
   const colors: Record<ServerStatus, string> = {
-    RUNNING: 'text-green-400',
-    STARTING: 'text-yellow-400',
-    STOPPING: 'text-orange-400',
-    OFFLINE: 'text-slate-400',
-    INSTALLING: 'text-blue-400',
-    INSTALL_FAILED: 'text-red-400',
-    REINSTALLING: 'text-blue-400',
-    SUSPENDED: 'text-red-400',
-    RESTORING_BACKUP: 'text-purple-400',
-    MIGRATING: 'text-cyan-400',
-    MIGRATION_FAILED: 'text-red-400',
-    CLONING: 'text-cyan-400',
-    CLONE_FAILED: 'text-red-400',
-    UNKNOWN: 'text-slate-500',
+    RUNNING: 'text-[#3EC896]',
+    STARTING: 'text-[#F0B93D]',
+    STOPPING: 'text-[#F0B93D]',
+    OFFLINE: 'text-zinc-500',
+    INSTALLING: 'text-[#A78BFA]',
+    INSTALL_FAILED: 'text-[#F27074]',
+    REINSTALLING: 'text-[#A78BFA]',
+    SUSPENDED: 'text-[#F27074]',
+    RESTORING_BACKUP: 'text-[#A78BFA]',
+    MIGRATING: 'text-[#4DD9E8]',
+    MIGRATION_FAILED: 'text-[#F27074]',
+    CLONING: 'text-[#4DD9E8]',
+    CLONE_FAILED: 'text-[#F27074]',
+    UNKNOWN: 'text-zinc-600',
   };
-  return colors[status] || 'text-slate-400';
+  return colors[status] || 'text-zinc-500';
 }
 
 export function getServerStatusBadge(status: ServerStatus): string {
@@ -53,14 +53,14 @@ export function getServerStatusBadge(status: ServerStatus): string {
     STARTING: 'badge-yellow',
     STOPPING: 'badge-yellow',
     OFFLINE: 'badge-gray',
-    INSTALLING: 'badge-blue',
+    INSTALLING: 'badge-indigo',
     INSTALL_FAILED: 'badge-red',
-    REINSTALLING: 'badge-blue',
+    REINSTALLING: 'badge-indigo',
     SUSPENDED: 'badge-red',
-    RESTORING_BACKUP: 'badge bg-purple-500/20 text-purple-400',
-    MIGRATING: 'badge bg-cyan-500/20 text-cyan-400',
+    RESTORING_BACKUP: 'badge-indigo',
+    MIGRATING: 'badge bg-[#4DD9E8]/15 text-[#4DD9E8]',
     MIGRATION_FAILED: 'badge-red',
-    CLONING: 'badge bg-cyan-500/20 text-cyan-400',
+    CLONING: 'badge bg-[#4DD9E8]/15 text-[#4DD9E8]',
     CLONE_FAILED: 'badge-red',
     UNKNOWN: 'badge-gray',
   };
@@ -69,22 +69,22 @@ export function getServerStatusBadge(status: ServerStatus): string {
 
 export function getServerStatusDot(status: ServerStatus): string {
   const dots: Record<ServerStatus, string> = {
-    RUNNING: 'bg-green-400',
-    STARTING: 'bg-yellow-400 animate-pulse',
-    STOPPING: 'bg-orange-400 animate-pulse',
-    OFFLINE: 'bg-slate-500',
-    INSTALLING: 'bg-blue-400 animate-pulse',
-    INSTALL_FAILED: 'bg-red-400',
-    REINSTALLING: 'bg-blue-400 animate-pulse',
-    SUSPENDED: 'bg-red-400',
-    RESTORING_BACKUP: 'bg-purple-400 animate-pulse',
-    MIGRATING: 'bg-cyan-400 animate-pulse',
-    MIGRATION_FAILED: 'bg-red-400',
-    CLONING: 'bg-cyan-400 animate-pulse',
-    CLONE_FAILED: 'bg-red-400',
-    UNKNOWN: 'bg-slate-600',
+    RUNNING: 'bg-[#3EC896]',
+    STARTING: 'bg-[#F0B93D] animate-pulse',
+    STOPPING: 'bg-[#F0B93D] animate-pulse',
+    OFFLINE: 'bg-zinc-600',
+    INSTALLING: 'bg-[#A78BFA] animate-pulse',
+    INSTALL_FAILED: 'bg-[#F27074]',
+    REINSTALLING: 'bg-[#A78BFA] animate-pulse',
+    SUSPENDED: 'bg-[#F27074]',
+    RESTORING_BACKUP: 'bg-[#A78BFA] animate-pulse',
+    MIGRATING: 'bg-[#4DD9E8] animate-pulse',
+    MIGRATION_FAILED: 'bg-[#F27074]',
+    CLONING: 'bg-[#4DD9E8] animate-pulse',
+    CLONE_FAILED: 'bg-[#F27074]',
+    UNKNOWN: 'bg-zinc-700',
   };
-  return dots[status] || 'bg-slate-500';
+  return dots[status] || 'bg-zinc-600';
 }
 
 export function formatDate(dateString: string): string {
