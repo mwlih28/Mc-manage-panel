@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, Globe, Image, Type, FileText, Mail, Send, Eye, EyeOff, Zap, Sparkles, Mountain, Paintbrush, UploadCloud, PlugZap, Bot, ShieldCheck } from 'lucide-react';
+import { Save, Globe, Image, Type, FileText, Mail, Send, Eye, EyeOff, Sparkles, Mountain, Paintbrush, UploadCloud, PlugZap, Bot, ShieldCheck } from 'lucide-react';
 import api from '@/lib/axios';
 import toast from 'react-hot-toast';
 import { Spinner } from '@/components/ui/Spinner';
@@ -28,6 +28,18 @@ const STORAGE_PROVIDERS: { id: StorageProvider; label: string }[] = [
   { id: 's3', label: 'S3-Compatible' },
   { id: 'sftp', label: 'SFTP' },
   { id: 'gdrive', label: 'Google Drive' },
+];
+
+type SettingsTab = 'branding' | 'ai' | 'world' | 'backups' | 'discord' | 'security' | 'email';
+
+const SETTINGS_TABS: { id: SettingsTab; label: string; icon: typeof Globe }[] = [
+  { id: 'branding', label: 'Branding & Theme', icon: Paintbrush },
+  { id: 'ai',       label: 'AI Tools',         icon: Sparkles },
+  { id: 'world',    label: 'World Manager',    icon: Mountain },
+  { id: 'backups',  label: 'Cloud Backups',    icon: UploadCloud },
+  { id: 'discord',  label: 'Discord',          icon: Bot },
+  { id: 'security', label: 'Security',         icon: ShieldCheck },
+  { id: 'email',    label: 'Email / SMTP',     icon: Mail },
 ];
 
 // A Discord bot token is `<base64url(bot user id)>.<random>.<random>` — the
@@ -94,6 +106,7 @@ export function AdminSettingsPage() {
     'captcha.secretKey': '',
   });
   const [showKey, setShowKey] = useState<Record<string, boolean>>({});
+  const [tab, setTab] = useState<SettingsTab>('branding');
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -195,12 +208,34 @@ export function AdminSettingsPage() {
   );
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
-      <div>
+    <div className="max-w-5xl mx-auto animate-fade-in">
+      <div className="mb-6">
         <h1 className="text-xl font-bold text-white">Site Settings</h1>
-        <p className="text-sm text-zinc-500 mt-1">Customize your panel's branding and appearance.</p>
+        <p className="text-sm text-zinc-500 mt-1">Customize your panel's branding, integrations, and security.</p>
       </div>
 
+      <div className="flex items-start gap-6">
+        <nav className="w-52 shrink-0 space-y-0.5 sticky top-6">
+          {SETTINGS_TABS.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setTab(id)}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium text-left transition-all duration-100 border-l-2 ${
+                tab === id
+                  ? 'text-white bg-panel-500/[0.12] border-panel-500'
+                  : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.03] border-transparent'
+              }`}
+            >
+              <Icon size={14} className="shrink-0" />
+              <span className="truncate">{label}</span>
+            </button>
+          ))}
+        </nav>
+
+        <div className="flex-1 min-w-0 space-y-6">
+
+      {tab === 'branding' && <>
       <div className="card">
         <div className="card-header">
           <h2 className="text-sm font-semibold text-zinc-100 flex items-center gap-2"><Globe size={14} />Branding</h2>
@@ -299,7 +334,9 @@ export function AdminSettingsPage() {
           </div>
         </div>
       </div>
+      </>}
 
+      {tab === 'ai' && <>
       {/* AI Tools */}
       <div className="card">
         <div className="card-header">
@@ -377,7 +414,9 @@ export function AdminSettingsPage() {
           })}
         </div>
       </div>
+      </>}
 
+      {tab === 'world' && <>
       {/* World Manager / CurseForge */}
       <div className="card">
         <div className="card-header">
@@ -411,7 +450,9 @@ export function AdminSettingsPage() {
           </p>
         </div>
       </div>
+      </>}
 
+      {tab === 'backups' && <>
       {/* Cloud Backups */}
       <div className="card">
         <div className="card-header">
@@ -651,7 +692,9 @@ export function AdminSettingsPage() {
           )}
         </div>
       </div>
+      </>}
 
+      {tab === 'discord' && <>
       {/* Discord Bot */}
       <div className="card">
         <div className="card-header">
@@ -784,7 +827,9 @@ export function AdminSettingsPage() {
           </div>
         </div>
       </div>
+      </>}
 
+      {tab === 'security' && <>
       {/* CAPTCHA */}
       <div className="card">
         <div className="card-header">
@@ -857,7 +902,9 @@ export function AdminSettingsPage() {
           )}
         </div>
       </div>
+      </>}
 
+      {tab === 'email' && <>
       {/* SMTP Settings */}
       <div className="card">
         <div className="card-header">
@@ -954,14 +1001,20 @@ export function AdminSettingsPage() {
           </div>
         </div>
       </div>
+      </>}
 
       <div className="flex justify-end gap-3">
-        <button className="btn-secondary" onClick={testSmtp} disabled={testingSmtp || !form['smtp.host']}>
-          {testingSmtp ? <><Spinner size="sm" />Testing...</> : <><Send size={13} />Send Test Email</>}
-        </button>
+        {tab === 'email' && (
+          <button className="btn-secondary" onClick={testSmtp} disabled={testingSmtp || !form['smtp.host']}>
+            {testingSmtp ? <><Spinner size="sm" />Testing...</> : <><Send size={13} />Send Test Email</>}
+          </button>
+        )}
         <button className="btn-primary" onClick={save} disabled={saving}>
           {saving ? <><Spinner size="sm" />Saving...</> : <><Save size={14} />Save Changes</>}
         </button>
+      </div>
+
+        </div>
       </div>
     </div>
   );

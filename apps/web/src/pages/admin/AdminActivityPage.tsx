@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Activity, CheckCircle, XCircle, Server, Shield, Gauge, AlertTriangle, Flame } from 'lucide-react';
 import api from '@/lib/axios';
@@ -12,38 +11,26 @@ function PropertiesSummary({ properties }: { properties: string }) {
   const entries = Object.entries(parsed).filter(([, v]) => v !== null && v !== undefined && v !== '');
   if (entries.length === 0) return null;
   return (
-    <p className="text-xs text-slate-500 mt-0.5">
+    <p className="text-xs text-slate-600 mt-0.5 truncate">
       {entries.map(([k, v]) => `${k}: ${v}`).join(' · ')}
     </p>
   );
 }
 
 function getEventIcon(event: string) {
-  if (event.startsWith('auth:')) return <Shield size={14} className="text-blue-400" />;
-  if (event === 'server:security-alert') return <AlertTriangle size={14} className="text-orange-400" />;
-  if (event === 'server:crash') return <Flame size={14} className="text-red-400" />;
-  if (event === 'server:auto-optimize') return <Gauge size={14} className="text-cyan-400" />;
-  if (event.startsWith('server:power')) return <Activity size={14} className="text-yellow-400" />;
-  if (event.includes('delete')) return <XCircle size={14} className="text-red-400" />;
-  if (event.includes('create')) return <CheckCircle size={14} className="text-green-400" />;
+  if (event.startsWith('auth:')) return <Shield size={14} className="text-zinc-500" />;
+  if (event === 'server:security-alert') return <AlertTriangle size={14} className="text-[#F0954D]" />;
+  if (event === 'server:crash') return <Flame size={14} className="text-[#F27074]" />;
+  if (event === 'server:auto-optimize') return <Gauge size={14} className="text-[#4DD9E8]" />;
+  if (event.startsWith('server:power')) return <Activity size={14} className="text-[#F0B93D]" />;
+  if (event.includes('delete')) return <XCircle size={14} className="text-[#F27074]" />;
+  if (event.includes('create')) return <CheckCircle size={14} className="text-[#3EC896]" />;
   return <Server size={14} className="text-panel-400" />;
 }
 
-function getEventColor(event: string): string {
-  if (event.startsWith('auth:')) return 'bg-blue-500/10 border-blue-500/20';
-  if (event === 'server:security-alert') return 'bg-orange-500/10 border-orange-500/20';
-  if (event === 'server:crash') return 'bg-red-500/10 border-red-500/20';
-  if (event === 'server:auto-optimize') return 'bg-cyan-500/10 border-cyan-500/20';
-  if (event.includes('delete')) return 'bg-red-500/10 border-red-500/20';
-  if (event.includes('create')) return 'bg-green-500/10 border-green-500/20';
-  return 'bg-dark-900 border-dark-800';
-}
-
 export function AdminActivityPage() {
-  const [page, setPage] = useState(1);
-
   const { data, isLoading } = useQuery({
-    queryKey: ['admin-stats', page],
+    queryKey: ['admin-stats'],
     queryFn: () => api.get('/stats').then((r) => r.data.data),
   });
 
@@ -53,19 +40,24 @@ export function AdminActivityPage() {
     <div className="space-y-6 animate-fade-in">
       <div>
         <h1 className="text-2xl font-bold text-slate-100">Activity Log</h1>
-        <p className="text-slate-400 text-sm mt-1">Recent panel activity</p>
+        <p className="text-slate-400 text-sm mt-1">Most recent {activities.length ? activities.length : ''} panel events</p>
       </div>
 
       {isLoading ? (
         <div className="flex justify-center py-12"><Spinner size="lg" /></div>
+      ) : activities.length === 0 ? (
+        <div className="card p-10 text-center text-slate-600">
+          <Activity size={36} className="mx-auto mb-3 opacity-20" />
+          <p className="text-sm">No activity yet</p>
+        </div>
       ) : (
-        <div className="space-y-2">
+        <div className="card divide-y divide-dark-800">
           {activities.map((activity) => (
             <div
               key={activity.id}
-              className={`flex items-start gap-4 p-4 rounded-xl border ${getEventColor(activity.event)}`}
+              className="flex items-start gap-3 px-4 py-3 hover:bg-white/[0.02] transition-colors"
             >
-              <div className="mt-0.5">{getEventIcon(activity.event)}</div>
+              <div className="mt-0.5 shrink-0">{getEventIcon(activity.event)}</div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-medium text-slate-200">{activity.event}</span>
@@ -76,11 +68,11 @@ export function AdminActivityPage() {
                   )}
                 </div>
                 {activity.ip && (
-                  <p className="text-xs text-slate-500 mt-0.5">from {activity.ip}</p>
+                  <p className="text-xs text-slate-600 mt-0.5">{activity.ip}</p>
                 )}
                 <PropertiesSummary properties={activity.properties} />
               </div>
-              <time className="text-xs text-slate-500 shrink-0">
+              <time className="text-xs text-slate-600 shrink-0 font-mono">
                 {formatDateTime(activity.timestamp)}
               </time>
             </div>
