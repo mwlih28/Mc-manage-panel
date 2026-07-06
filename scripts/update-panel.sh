@@ -140,6 +140,17 @@ cd "${PANEL_DIR}/apps/api"
 "$PRISMA_BIN" db push --accept-data-loss
 success "Schema up to date"
 
+# ── One-off data fixes ──────────────────────────────────────────────────
+# Scoped to the exact known-bad value on the exact built-in egg it affects —
+# never touches an admin's own eggs or any customization of this one. Safe
+# to run on every update: a no-op once already fixed, and a no-op on any
+# install that never had this egg. Not run via a full seed re-run because
+# that could clobber real admin customizations to other eggs.
+step "Applying known data fixes"
+PG psql -d mcpanel -c "UPDATE \"Egg\" SET \"dockerImage\" = 'ghcr.io/parkervcp/yolks:dotnet_6' WHERE uuid = '00000000-0000-0000-0001-000000000005' AND \"dockerImage\" = 'ghcr.io/pterodactyl/yolks:dotnet_6';" >/dev/null 2>&1 \
+  && success "Data fixes applied" \
+  || warn "Data fix step failed (non-fatal) — check manually if the built-in Terraria egg fails to install"
+
 # ── Fix permissions & restart ─────────────────────────────────────────
 step "Restarting service"
 chown -R "${PANEL_USER}:${PANEL_USER}" "$PANEL_DIR"
