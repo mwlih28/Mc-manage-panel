@@ -75,14 +75,20 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # GHCR/Docker image names must be lowercase, but this repo's name
+      # (Mc-manage-panel) isn't — ${{ github.repository }} used directly
+      # in a tag fails with "repository name must be lowercase".
+      - name: Compute lowercase image repository
+        run: echo "IMAGE_REPO=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
       - name: Build and push API
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5.4.0
         with:
           context: apps/api
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}/api:latest
-            ghcr.io/${{ github.repository }}/api:${{ github.sha }}
+            ghcr.io/${{ env.IMAGE_REPO }}/api:latest
+            ghcr.io/${{ env.IMAGE_REPO }}/api:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -94,7 +100,7 @@ jobs:
           build-args: |
             VITE_API_URL=${{ vars.API_URL }}
           tags: |
-            ghcr.io/${{ github.repository }}/web:latest
-            ghcr.io/${{ github.repository }}/web:${{ github.sha }}
+            ghcr.io/${{ env.IMAGE_REPO }}/web:latest
+            ghcr.io/${{ env.IMAGE_REPO }}/web:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
