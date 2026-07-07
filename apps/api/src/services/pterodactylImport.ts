@@ -14,6 +14,15 @@ const APP_API_TIMEOUT_MS = 15000;
 // not to abort a legitimately slow transfer, matching this codebase's
 // existing backup/restore/migration timeout norm.
 const TRANSFER_TIMEOUT_MS = 30 * 60 * 1000;
+// Covers the SFTP pull off the source host (buildImportArchive) — the step
+// that actually takes the longest for a many-GB world with thousands of
+// region files, and unlike the upload-to-Wings step below had no timeout at
+// all: a stalled source connection would hang the background job forever
+// with nothing surfaced to the admin. Longer than TRANSFER_TIMEOUT_MS since
+// pulling thousands of small files one SFTP round-trip at a time is
+// inherently slower than one streamed upload.
+const SFTP_PULL_TIMEOUT_MS = 45 * 60 * 1000;
+const SFTP_CONNECT_TIMEOUT_MS = 20 * 1000;
 
 export interface PterodactylServerSummary {
   id: number;
@@ -119,6 +128,7 @@ async function buildImportArchive(ssh: SourceSftpConfig, sourceUuid: string): Pr
     username: ssh.username,
     password: ssh.password || undefined,
     privateKey: ssh.privateKey || undefined,
+    readyTimeout: SFTP_CONNECT_TIMEOUT_MS,
   });
 
   const volumesPath = (ssh.volumesPath || '/var/lib/pterodactyl/volumes').replace(/\/+$/, '');
@@ -127,15 +137,29 @@ async function buildImportArchive(ssh: SourceSftpConfig, sourceUuid: string): Pr
 
   try {
     await new Promise<void>((resolve, reject) => {
+      // A stalled source connection (network blip, source host hangs
+      // mid-directory) would otherwise leave this promise — and the whole
+      // background job — pending forever with nothing surfaced to the admin.
+      const timer = setTimeout(
+        () => reject(new Error(`SFTP transfer from source host timed out after ${SFTP_PULL_TIMEOUT_MS / 60000} minutes`)),
+        SFTP_PULL_TIMEOUT_MS
+      );
       const output = fs.createWriteStream(tmpFile);
       const archive = archiver('tar', { gzip: true, gzipOptions: { level: 6 } });
-      output.on('close', resolve);
-      archive.on('error', reject);
+      output.on('close', () => { clearTimeout(timer); resolve(); });
+      archive.on('error', (err) => { clearTimeout(timer); reject(err); });
       archive.pipe(output);
       archiveRemoteDir(client, remoteDir, remoteDir, archive)
         .then(() => archive.finalize())
-        .catch(reject);
+        .catch((err) => { clearTimeout(timer); reject(err); });
     });
+  } catch (err) {
+    // The caller only unlinks tmpFile on the happy path (it never learns
+    // the path if this function throws) — clean up the partial file
+    // ourselves so a timeout or mid-transfer failure doesn't leak a
+    // multi-GB half-written archive in the OS temp dir.
+    fs.unlink(tmpFile, () => {});
+    throw err;
   } finally {
     await client.end().catch(() => {});
   }
