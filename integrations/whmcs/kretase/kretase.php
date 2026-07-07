@@ -13,6 +13,17 @@
  * Written against Kretase's existing admin REST API (see Admin -> API
  * Reference in the panel for the exact, versioned contract) rather than a
  * separate WHMCS-specific endpoint — the same API third-party tools use.
+ *
+ * This module is free to download and resell with — Kretase does not gate
+ * or license the software itself, and nothing here enforces certification.
+ * The optional "Kretase Certificate ID" field only controls a cosmetic
+ * "Certified" badge shown to your own customers in their client area
+ * (kretase_ClientArea below); leaving it blank shows nothing negative,
+ * it just omits the badge. Entering a certificate ID you were not actually
+ * issued by the Kretase Core Team is a straightforward misrepresentation to
+ * your customers — that's on you, not something this code checks. Kretase
+ * is not responsible for the performance, uptime, or support quality of any
+ * deployment, certified or not.
  */
 
 if (!defined('WHMCS')) {
@@ -35,6 +46,7 @@ function kretase_ConfigOptions()
         'Egg ID' => ['Type' => 'text', 'Size' => '40', 'Description' => 'Kretase egg id for this product (Admin -> Eggs)'],
         'Memory (MB)' => ['Type' => 'text', 'Size' => '10', 'Default' => '2048'],
         'Disk (MB)' => ['Type' => 'text', 'Size' => '10', 'Default' => '10000'],
+        'Kretase Certificate ID' => ['Type' => 'text', 'Size' => '20', 'Description' => 'Optional. Only fill this in if the Kretase Core Team actually issued you a certificate (see kretase.com/partners.html) — it shows a verified badge to your customers.'],
     ];
 }
 
@@ -147,15 +159,29 @@ function kretase_TerminateAccount(array $params)
     return ($result['status'] === 204 || $result['status'] === 404) ? 'success' : ($result['body']['message'] ?? 'Terminate failed');
 }
 
+// Plain HTML string rather than a 'templatefile' reference — that variant
+// needs a matching templates/clientarea.tpl shipped alongside this file,
+// which adds a second file to install for no real benefit here.
 function kretase_ClientArea(array $params)
 {
     $serverId = kretase_getServerId($params);
     if (!$serverId) return '';
     $panelUrl = rtrim($params['serverhostname'], '/');
-    return [
-        'templatefile' => 'clientarea',
-        'vars' => [
-            'manageUrl' => $panelUrl . '/servers/' . $serverId,
-        ],
-    ];
+    $manageUrl = htmlspecialchars($panelUrl . '/servers/' . $serverId, ENT_QUOTES);
+
+    $html = '<a href="' . $manageUrl . '" target="_blank" style="display:inline-block;padding:8px 14px;background:#2E6FEE;color:#fff;border-radius:6px;text-decoration:none;font-size:13px;font-weight:600">Manage Server</a>';
+
+    // Cosmetic only — see the note at the top of this file. Blank unless
+    // the admin filled in a real certificate ID; no badge is shown at all
+    // for uncertified deployments, nothing negative either way.
+    $certId = trim($params['configoption5'] ?? '');
+    if ($certId !== '') {
+        $safeCertId = htmlspecialchars($certId, ENT_QUOTES);
+        $verifyUrl = 'https://kretase.com/verify.html?id=' . urlencode($certId);
+        $html .= '<div style="margin-top:10px;font-size:12px;color:#2E6FEE">'
+            . '&#10003; Kretase Certified Partner &mdash; <a href="' . $verifyUrl . '" target="_blank" style="color:inherit">' . $safeCertId . '</a>'
+            . '</div>';
+    }
+
+    return $html;
 }

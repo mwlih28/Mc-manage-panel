@@ -153,38 +153,15 @@
   <!-- PARTNERS GRID -->
   <section class="section" style="padding-top:0">
     <div class="container">
-
-      <!--
-        PARTNER-CARD TEMPLATE — copy this block per certified provider and
-        drop the Canva-exported certificate image in assets/certificates/.
-
-        <div class="partner-card">
-          <img src="assets/certificates/<slug>.jpg" alt="<Company Name> — Kretase Certified Partner" loading="lazy" />
-          <div class="partner-card-body">
-            <div class="partner-card-name"><Company Name></div>
-            <div class="partner-card-meta">
-              <span>KRT-2026-000X</span>
-              <span>07 / 2026</span>
-            </div>
-            <div class="partner-card-verified">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
-              Verified deployment
-            </div>
-          </div>
-        </div>
-      -->
-
-      <div class="partners-empty">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin:0 auto"><path d="M12 15a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"/><path d="M8.5 13.5 6 22l6-3 6 3-2.5-8.5"/></svg>
-        <p>No certified partners yet — this page goes live as soon as the first provider is accredited.</p>
-      </div>
-
+      <div id="partnersGrid"></div>
     </div>
   </section>
 
   <!-- CTA -->
   <div class="partners-cta">
     <a href="mailto:contact@kretase.com">Run a hosting business on Kretase? Apply for certification &rarr;</a>
+    &nbsp;&middot;&nbsp;
+    <a href="/verify.html">Verify a certificate ID &rarr;</a>
   </div>
 
   <!-- FOOTER -->
@@ -217,6 +194,7 @@
             <a href="https://github.com/mwlih28/mc-manage-panel/releases" target="_blank">Changelog</a>
             <a href="https://github.com/mwlih28/mc-manage-panel/issues" target="_blank">Bug Reports</a>
             <a href="/partners.html">Certified Partners</a>
+            <a href="/verify.html">Verify Certificate</a>
           </div>
           <div class="footer-col">
             <h4>Community</h4>
@@ -245,6 +223,44 @@
       document.getElementById('mobileMenu').classList.toggle('open');
       document.getElementById('mobileMenuBtn').classList.toggle('open');
     });
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    fetch('assets/certificates/registry.json')
+      .then((r) => r.json())
+      .then((certs) => {
+        const active = certs.filter((c) => c.status === 'active');
+        const grid = document.getElementById('partnersGrid');
+        if (active.length === 0) {
+          grid.innerHTML = `
+            <div class="partners-empty">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin:0 auto"><path d="M12 15a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"/><path d="M8.5 13.5 6 22l6-3 6 3-2.5-8.5"/></svg>
+              <p>No certified partners yet — this page goes live as soon as the first provider is accredited.</p>
+            </div>`;
+          return;
+        }
+        grid.className = 'partners-grid';
+        grid.innerHTML = active.map((c) => `
+          <div class="partner-card">
+            <img src="${escapeHtml(c.image)}" alt="${escapeHtml(c.company)} — Kretase Certified Partner" loading="lazy" />
+            <div class="partner-card-body">
+              <div class="partner-card-name">${escapeHtml(c.company)}</div>
+              <div class="partner-card-meta">
+                <span>${escapeHtml(c.id)}</span>
+                <span>${escapeHtml(c.issued)}</span>
+              </div>
+              <a class="partner-card-verified" href="/verify.html?id=${encodeURIComponent(c.id)}" style="text-decoration:none">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+                Verified deployment
+              </a>
+            </div>
+          </div>`).join('');
+      })
+      .catch(() => {
+        document.getElementById('partnersGrid').innerHTML = '<div class="partners-empty"><p>Could not load the partner registry — try again shortly.</p></div>';
+      });
   </script>
 </body>
 </html>

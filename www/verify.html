@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Verify a Certificate — Kretase</title>
+  <meta name="description" content="Look up a Kretase certificate ID to confirm it was actually issued by the Kretase Core Team." />
+  <meta property="og:title" content="Verify a Certificate — Kretase" />
+  <meta property="og:url" content="https://kretase.com/verify.html" />
+  <link rel="icon" type="image/png" href="favicon-32.png" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://api.fontshare.com" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://api.fontshare.com/v2/css?f[]=general-sans@300,400,500,600,700,800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .verify-hero { padding: 140px 0 20px; text-align: center; }
+    .verify-hero .section-tag { justify-content: center; display: inline-flex; }
+    .verify-hero h1 { font-size: 36px; font-weight: 700; letter-spacing: -0.5px; margin: 16px 0; }
+    .verify-hero p { color: var(--muted); max-width: 520px; margin: 0 auto; font-size: 15px; line-height: 1.7; }
+
+    .verify-box { max-width: 480px; margin: 40px auto 100px; padding: 0 20px; }
+
+    .verify-form { display: flex; gap: 10px; }
+    .verify-form input {
+      flex: 1;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 13px 16px;
+      color: var(--text);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      outline: none;
+      transition: border-color .2s;
+    }
+    .verify-form input:focus { border-color: var(--accent); }
+    .verify-form button {
+      background: var(--accent);
+      color: #000;
+      border: none;
+      border-radius: 10px;
+      padding: 0 22px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity .2s;
+    }
+    .verify-form button:hover { opacity: .88; }
+
+    .verify-result {
+      margin-top: 24px;
+      padding: 22px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--bg2);
+      display: none;
+    }
+    .verify-result.show { display: block; }
+    .verify-result.valid { border-color: rgba(46,111,238,0.35); }
+    .verify-result.invalid { border-color: rgba(239,68,68,0.35); }
+
+    .verify-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      font-size: 15px;
+      margin-bottom: 14px;
+    }
+    .verify-status.valid { color: var(--accent); }
+    .verify-status.revoked { color: #f59e0b; }
+    .verify-status.invalid { color: #ef4444; }
+
+    .verify-row { display: flex; justify-content: space-between; padding: 8px 0; border-top: 1px solid var(--border); font-size: 13px; }
+    .verify-row:first-of-type { border-top: none; }
+    .verify-row span:first-child { color: var(--muted); }
+    .verify-row span:last-child { font-weight: 500; }
+
+    .verify-note { text-align: center; color: var(--muted); font-size: 12px; margin-top: 18px; line-height: 1.6; }
+  </style>
+</head>
+<body>
+
+  <nav id="navbar" class="scrolled">
+    <div class="nav-inner">
+      <a href="/" class="logo">
+        <img src="assets/brand/kretase-logo-128.png" alt="Kretase" class="logo-mark" style="object-fit:contain;background:none" />
+        <span class="logo-text">Kretase</span>
+      </a>
+      <div class="nav-links">
+        <a href="/#about">About</a>
+        <a href="/#features">Features</a>
+        <a href="/#how-it-works">How it works</a>
+        <a href="/#security">Security</a>
+        <a href="/partners.html">Partners</a>
+        <a href="https://github.com/mwlih28/mc-manage-panel" target="_blank">Docs</a>
+      </div>
+      <div class="nav-actions">
+        <a href="https://github.com/mwlih28/mc-manage-panel" target="_blank" class="btn-ghost">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+          GitHub
+        </a>
+        <a href="/#install" class="btn-primary-sm">Get Started</a>
+      </div>
+      <button class="nav-mobile-btn" id="mobileMenuBtn" aria-label="Menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+    <div class="mobile-menu" id="mobileMenu">
+      <a href="/#about">About</a>
+      <a href="/#features">Features</a>
+      <a href="/#how-it-works">How it works</a>
+      <a href="/#security">Security</a>
+      <a href="/partners.html">Partners</a>
+      <a href="https://github.com/mwlih28/mc-manage-panel" target="_blank">Docs</a>
+      <a href="/#install" class="btn-primary-sm">Get Started</a>
+    </div>
+  </nav>
+
+  <section class="verify-hero">
+    <div class="container">
+      <div class="section-tag">Certificate Verification</div>
+      <h1>Verify a Kretase certificate</h1>
+      <p>Enter the Certificate ID printed on a Kretase certificate to confirm it was actually issued by the Kretase Core Team.</p>
+    </div>
+  </section>
+
+  <div class="verify-box">
+    <form class="verify-form" id="verifyForm">
+      <input type="text" id="certId" placeholder="e.g. KRT-2026-0001" autocomplete="off" autocapitalize="characters" />
+      <button type="submit">Verify</button>
+    </form>
+
+    <div class="verify-result" id="result"></div>
+
+    <p class="verify-note">
+      Anyone can download and use Kretase's WHMCS/Blesta modules — that part is free and open.
+      A certificate here means that specific provider's deployment was additionally reviewed and
+      accredited by the Kretase Core Team. No certificate doesn't mean anything is wrong with a
+      provider — it just means they haven't gone through accreditation.
+    </p>
+  </div>
+
+  <footer>
+    <div class="footer-inner">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <a href="/" class="logo">
+            <img src="assets/brand/kretase-logo-128.png" alt="Kretase" class="logo-mark sm" style="object-fit:contain;background:none" />
+            <span class="logo-text">Kretase</span>
+          </a>
+          <p>Open-source game server management panel. Built for developers and server owners who value simplicity and transparency.</p>
+        </div>
+        <div class="footer-cols">
+          <div class="footer-col">
+            <h4>Product</h4>
+            <a href="/#features">Features</a>
+            <a href="/#how-it-works">Installation</a>
+            <a href="/#compare">vs Pterodactyl</a>
+          </div>
+          <div class="footer-col">
+            <h4>Resources</h4>
+            <a href="https://github.com/mwlih28/mc-manage-panel" target="_blank">Documentation</a>
+            <a href="/partners.html">Certified Partners</a>
+            <a href="/verify.html">Verify Certificate</a>
+          </div>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>&copy; 2026 Kretase. Released under the <a href="https://github.com/mwlih28/mc-manage-panel/blob/main/LICENSE" target="_blank">MIT License</a>.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    document.getElementById('mobileMenuBtn').addEventListener('click', () => {
+      document.getElementById('mobileMenu').classList.toggle('open');
+      document.getElementById('mobileMenuBtn').classList.toggle('open');
+    });
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    let registry = null;
+    const registryReady = fetch('assets/certificates/registry.json').then((r) => r.json()).then((data) => { registry = data; });
+
+    function renderResult(id) {
+      const box = document.getElementById('result');
+      const match = (registry || []).find((c) => c.id.toLowerCase() === id.toLowerCase());
+
+      if (!match) {
+        box.className = 'verify-result show invalid';
+        box.innerHTML = `
+          <div class="verify-status invalid">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg>
+            No certificate found for "${escapeHtml(id)}"
+          </div>
+          <p style="color:var(--muted);font-size:13px;line-height:1.6">
+            This ID doesn't match any certificate the Kretase Core Team has issued. Double-check the ID,
+            or this provider may not be certified.
+          </p>`;
+        return;
+      }
+
+      if (match.status === 'revoked') {
+        box.className = 'verify-result show invalid';
+        box.innerHTML = `
+          <div class="verify-status revoked">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+            Certificate revoked
+          </div>
+          <div class="verify-row"><span>Company</span><span>${escapeHtml(match.company)}</span></div>
+          <div class="verify-row"><span>Certificate ID</span><span>${escapeHtml(match.id)}</span></div>
+          <div class="verify-row"><span>Originally issued</span><span>${escapeHtml(match.issued)}</span></div>`;
+        return;
+      }
+
+      box.className = 'verify-result show valid';
+      box.innerHTML = `
+        <div class="verify-status valid">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+          Valid Kretase certificate
+        </div>
+        <div class="verify-row"><span>Company</span><span>${escapeHtml(match.company)}</span></div>
+        <div class="verify-row"><span>Certificate ID</span><span>${escapeHtml(match.id)}</span></div>
+        <div class="verify-row"><span>Issued</span><span>${escapeHtml(match.issued)}</span></div>
+        <div class="verify-row"><span>Status</span><span style="color:var(--accent)">Active</span></div>`;
+    }
+
+    document.getElementById('verifyForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const id = document.getElementById('certId').value.trim();
+      if (!id) return;
+      registryReady.then(() => renderResult(id));
+    });
+
+    const params = new URLSearchParams(location.search);
+    const prefill = params.get('id');
+    if (prefill) {
+      document.getElementById('certId').value = prefill;
+      registryReady.then(() => renderResult(prefill));
+    }
+  </script>
+</body>
+</html>

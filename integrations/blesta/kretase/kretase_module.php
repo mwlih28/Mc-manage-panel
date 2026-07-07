@@ -16,6 +16,16 @@
  * language/ all land together), enable it under Settings -> Modules, add
  * a module row with your Kretase panel URL and an admin API key
  * (users:write + servers:write scopes), then use it on a package.
+ *
+ * This module is free to download and resell with — Kretase does not gate
+ * or license the software itself. The optional "certificate_id" package
+ * field only controls a cosmetic "Certified" badge shown to your own
+ * customers via getClientServiceInfo() below; leaving it blank shows
+ * nothing negative, it just omits the badge. Entering a certificate ID you
+ * were not actually issued by the Kretase Core Team is a straightforward
+ * misrepresentation to your customers — that's on you, not something this
+ * code checks. Kretase is not responsible for the performance, uptime, or
+ * support quality of any deployment, certified or not.
  */
 
 App::uses('Module', 'Modules');
@@ -80,7 +90,35 @@ class Kretase_module extends Module
         $fields->setField($fields->fieldText('meta[egg_id]', Language::_('Kretase_module.package_fields.egg_id', true), $this->Html->ifSet($vars->meta['egg_id'] ?? null)));
         $fields->setField($fields->fieldText('meta[memory]', Language::_('Kretase_module.package_fields.memory', true), $this->Html->ifSet($vars->meta['memory'] ?? 2048)));
         $fields->setField($fields->fieldText('meta[disk]', Language::_('Kretase_module.package_fields.disk', true), $this->Html->ifSet($vars->meta['disk'] ?? 10000)));
+        // Cosmetic only — see the note at the top of this file. Blank
+        // unless this deployment was actually issued a certificate by the
+        // Kretase Core Team; controls a badge in getClientServiceInfo()
+        // below, nothing more.
+        $fields->setField($fields->fieldText('meta[certificate_id]', Language::_('Kretase_module.package_fields.certificate_id', true), $this->Html->ifSet($vars->meta['certificate_id'] ?? null)));
         return $fields;
+    }
+
+    // Plain HTML string rather than a view-template render — keeps this
+    // module to the single file, same choice made for the WHMCS variant.
+    public function getClientServiceInfo($service, $package)
+    {
+        $serverId = $this->serviceServerId($service);
+        if (!$serverId) return '';
+
+        $moduleRow = $this->getModuleRow();
+        $manageUrl = htmlspecialchars(rtrim($moduleRow->meta->panel_url, '/') . '/servers/' . $serverId, ENT_QUOTES);
+        $html = '<a href="' . $manageUrl . '" target="_blank" style="display:inline-block;padding:8px 14px;background:#2E6FEE;color:#fff;border-radius:6px;text-decoration:none;font-size:13px;font-weight:600">' . Language::_('Kretase_module.manage_button', true) . '</a>';
+
+        $certId = trim($package->meta->certificate_id ?? '');
+        if ($certId !== '') {
+            $safeCertId = htmlspecialchars($certId, ENT_QUOTES);
+            $verifyUrl = 'https://kretase.com/verify.html?id=' . urlencode($certId);
+            $html .= '<div style="margin-top:10px;font-size:12px;color:#2E6FEE">'
+                . '&#10003; ' . Language::_('Kretase_module.certified_badge', true) . ' &mdash; <a href="' . $verifyUrl . '" target="_blank" style="color:inherit">' . $safeCertId . '</a>'
+                . '</div>';
+        }
+
+        return $html;
     }
 
     private function request($moduleRow, $method, $path, $body = null)

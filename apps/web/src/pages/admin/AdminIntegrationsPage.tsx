@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Plus, Trash2, Pencil, Copy, Eye, EyeOff, RefreshCw, Download, ShoppingCart, X, Gauge,
+  Plus, Trash2, Pencil, Copy, Eye, EyeOff, RefreshCw, Download, ShoppingCart, X, Gauge, Info,
 } from 'lucide-react';
 import api from '@/lib/axios';
 import { Spinner } from '@/components/ui/Spinner';
@@ -124,6 +124,17 @@ export function AdminIntegrationsPage() {
             </div>
             <Download size={16} className="text-zinc-500 shrink-0" />
           </a>
+        </div>
+        <div className="mx-6 mb-6 flex items-start gap-2.5 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-4 py-3">
+          <Info size={14} className="text-amber-400 shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-200/80 leading-relaxed">
+            These modules are free for anyone to download and resell with — Kretase doesn't gate or license the
+            software itself. Downloading one doesn't make a deployment "Kretase Certified": that's a separate,
+            manual accreditation the Kretase Core Team issues after reviewing an installation. Kretase isn't
+            responsible for the performance, uptime, or support quality of an uncertified provider's deployment.
+            Certified providers get a Certificate ID they can enter in their module settings to show a verified
+            badge to their own customers — see <a href="https://kretase.com/partners.html" target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-100">kretase.com/partners.html</a>.
+          </p>
         </div>
       </div>
 

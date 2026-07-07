@@ -18,6 +18,11 @@ $lang['Kretase_module.package_fields.node_id'] = "Kretase Node ID";
 $lang['Kretase_module.package_fields.egg_id'] = "Kretase Egg ID";
 $lang['Kretase_module.package_fields.memory'] = "Memory (MB)";
 $lang['Kretase_module.package_fields.disk'] = "Disk (MB)";
+$lang['Kretase_module.package_fields.certificate_id'] = "Kretase Certificate ID (optional — only if actually issued one)";
+
+// Client area
+$lang['Kretase_module.manage_button'] = "Manage Server";
+$lang['Kretase_module.certified_badge'] = "Kretase Certified Partner";
 
 // Errors
 $lang['Kretase_module.!error.create_user'] = "Could not find or create the Kretase user for this client.";
