@@ -16,7 +16,12 @@ Add one entry per issued certificate:
 }
 ```
 
-- `id` — exact Certificate ID as printed on the certificate (`KRT-YYYY-NNNN`).
+- `id` — `KRT-YYYY-NNNN`. YYYY is the issue year; NNNN is a 4-digit
+  sequential counter starting at `0001` on Jan 1 each year, counting every
+  certificate issued that year (revoked ones included — a number is never
+  reused). To get the next ID: filter this array for entries whose `id`
+  starts with `KRT-{current year}-`, take the highest NNNN, add 1. First
+  certificate of 2026 is `KRT-2026-0001`.
 - `company` — the accredited company's public name.
 - `issued` — `YYYY-MM`, matches the "Issue Date" on the certificate.
 - `status` — `active` or `revoked`. Revoked certs stay in the registry (for
