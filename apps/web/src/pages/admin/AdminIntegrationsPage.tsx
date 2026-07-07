@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, Trash2, Pencil, Copy, Eye, EyeOff, RefreshCw, Download, ShoppingCart, X, Gauge, Info,
-  CreditCard, Unlink,
+  CreditCard, Unlink, Landmark, Save,
 } from 'lucide-react';
 import api from '@/lib/axios';
 import { Spinner } from '@/components/ui/Spinner';
@@ -39,7 +39,7 @@ interface PlanRow {
 
 interface StoreIntegrationRow {
   id: string;
-  provider: 'tebex' | 'craftingstore' | 'stripe';
+  provider: 'tebex' | 'craftingstore' | 'stripe' | 'paytr';
   name: string;
   serverId: string;
   server: { id: string; name: string };
@@ -168,6 +168,105 @@ function StripeSection() {
   );
 }
 
+// PayTR is a plain Settings-form card, not an OAuth button — no platform
+// account, no relay, admins just paste the 3 credentials from their own
+// PayTR merchant panel (issued after PayTR's own KYC approval, entirely on
+// their side). Same shape as smtp.*/discord.botToken elsewhere in Settings.
+function PaytrSection() {
+  const queryClient = useQueryClient();
+  const [merchantId, setMerchantId] = useState('');
+  const [merchantKey, setMerchantKey] = useState('');
+  const [merchantSalt, setMerchantSalt] = useState('');
+  const [testMode, setTestMode] = useState(false);
+  const [showSecrets, setShowSecrets] = useState(false);
+
+  const { data: settings } = useQuery({
+    queryKey: ['site-settings'],
+    queryFn: () => api.get('/settings').then((r) => r.data as Record<string, string>),
+  });
+
+  useEffect(() => {
+    if (!settings) return;
+    setMerchantId(settings['paytr.merchantId'] || '');
+    setMerchantKey(settings['paytr.merchantKey'] || '');
+    setMerchantSalt(settings['paytr.merchantSalt'] || '');
+    setTestMode(settings['paytr.testMode'] === 'true');
+  }, [settings]);
+
+  const saveMutation = useMutation({
+    mutationFn: () => api.put('/settings', {
+      'paytr.merchantId': merchantId.trim(),
+      'paytr.merchantKey': merchantKey.trim(),
+      'paytr.merchantSalt': merchantSalt.trim(),
+      'paytr.testMode': String(testMode),
+    }),
+    onSuccess: () => {
+      toast.success('PayTR settings saved');
+      queryClient.invalidateQueries({ queryKey: ['site-settings'] });
+    },
+    onError: () => toast.error('Failed to save PayTR settings'),
+  });
+
+  const API_ORIGIN = import.meta.env.VITE_API_URL || '';
+  // Unlike Tebex/CraftingStore/Stripe, PayTR's notify_url is a single
+  // account-wide setting configured once in the merchant's own PayTR panel
+  // — not per-integration. Every PayTR purchase across every integration
+  // on this install posts here; merchant_oid is what tells them apart.
+  const notifyUrl = `${API_ORIGIN}/api/v1/store-webhooks/paytr`;
+
+  return (
+    <div className="card">
+      <div className="card-header flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-zinc-100">PayTR</h2>
+          <p className="text-xs text-zinc-500 mt-0.5">
+            Turkish payment processor — paste the credentials from your own PayTR merchant panel. Payments go straight to your PayTR account.
+          </p>
+        </div>
+        <Landmark size={18} className="text-zinc-600 shrink-0" />
+      </div>
+      <div className="p-6 space-y-4">
+        <div>
+          <label className="label">Merchant ID</label>
+          <input className="input font-mono text-xs" value={merchantId} onChange={(e) => setMerchantId(e.target.value)} placeholder="123456" />
+        </div>
+        <div>
+          <label className="label">Merchant Key</label>
+          <div className="flex items-center gap-2">
+            <input className="input font-mono text-xs flex-1" type={showSecrets ? 'text' : 'password'} value={merchantKey} onChange={(e) => setMerchantKey(e.target.value)} />
+            <button type="button" className="btn-secondary btn-sm shrink-0" onClick={() => setShowSecrets((s) => !s)}>
+              {showSecrets ? <EyeOff size={13} /> : <Eye size={13} />}
+            </button>
+          </div>
+        </div>
+        <div>
+          <label className="label">Merchant Salt</label>
+          <input className="input font-mono text-xs" type={showSecrets ? 'text' : 'password'} value={merchantSalt} onChange={(e) => setMerchantSalt(e.target.value)} />
+        </div>
+        <label className="flex items-center gap-2 text-sm text-zinc-300">
+          <input type="checkbox" checked={testMode} onChange={(e) => setTestMode(e.target.checked)} />
+          Test mode
+        </label>
+        <div className="rounded-lg border border-zinc-800 p-4 space-y-2">
+          <label className="label">Notification URL</label>
+          <div className="flex items-center gap-2">
+            <code className="input font-mono text-xs flex-1 select-all truncate">{notifyUrl}</code>
+            <button className="btn-secondary btn-sm shrink-0" onClick={() => { navigator.clipboard.writeText(notifyUrl); toast.success('Copied'); }}>
+              <Copy size={13} />
+            </button>
+          </div>
+          <p className="text-[11px] text-zinc-600">
+            Paste this once into your PayTR merchant panel's Notification URL setting — it's account-wide, not per-integration.
+          </p>
+        </div>
+        <button className="btn-primary" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+          {saveMutation.isPending ? <Spinner size="sm" /> : <Save size={16} />} Save
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function AdminIntegrationsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [editIntegration, setEditIntegration] = useState<StoreIntegrationRow | null>(null);
@@ -260,10 +359,13 @@ export function AdminIntegrationsPage() {
       {/* Stripe */}
       <StripeSection />
 
+      {/* PayTR */}
+      <PaytrSection />
+
       {/* Resource Plans */}
       <PlansSection plans={plans} onChanged={() => queryClient.invalidateQueries({ queryKey: ['admin-plans'] })} />
 
-      {/* Tebex / CraftingStore / Stripe */}
+      {/* Tebex / CraftingStore / Stripe / PayTR */}
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-zinc-100">Store Integrations</h2>
         <button className="btn-primary" onClick={() => setShowCreate(true)}>
@@ -277,7 +379,7 @@ export function AdminIntegrationsPage() {
         <div className="card p-12 text-center">
           <ShoppingCart size={48} className="mx-auto text-slate-600 mb-4" />
           <p className="text-slate-300 font-medium">No store integrations yet</p>
-          <p className="text-slate-500 text-sm mt-2">Map a Tebex, CraftingStore, or Stripe package to a console command — like granting a rank on purchase.</p>
+          <p className="text-slate-500 text-sm mt-2">Map a Tebex, CraftingStore, Stripe, or PayTR package to a console command — like granting a rank on purchase.</p>
           <button className="btn-primary mt-4 mx-auto" onClick={() => setShowCreate(true)}>
             <Plus size={16} /> Create First Integration
           </button>
@@ -306,6 +408,7 @@ export function AdminIntegrationsPage() {
                       <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
                         i.provider === 'tebex' ? 'bg-blue-500/10 text-blue-400'
                           : i.provider === 'stripe' ? 'bg-indigo-500/10 text-indigo-400'
+                          : i.provider === 'paytr' ? 'bg-red-500/10 text-red-400'
                           : 'bg-emerald-500/10 text-emerald-400'
                       }`}>
                         {i.provider}
@@ -367,7 +470,7 @@ function StoreIntegrationModal({ servers, plans, existing, onClose, onSaved }: {
   onSaved: () => void;
 }) {
   const [name, setName] = useState(existing?.name || '');
-  const [provider, setProvider] = useState<'tebex' | 'craftingstore' | 'stripe'>(existing?.provider || 'tebex');
+  const [provider, setProvider] = useState<'tebex' | 'craftingstore' | 'stripe' | 'paytr'>(existing?.provider || 'tebex');
   const [serverId, setServerId] = useState(existing?.serverId || '');
   const [mappings, setMappings] = useState<CommandMapping[]>(existing?.commandMappings?.length ? existing.commandMappings : [{ packageId: '', command: '', planId: '' }]);
   const [loading, setLoading] = useState(false);
@@ -379,6 +482,11 @@ function StoreIntegrationModal({ servers, plans, existing, onClose, onSaved }: {
     queryFn: () => api.get('/settings').then((r) => r.data as Record<string, string>),
   });
   const stripeConnected = !!settings?.['stripe.connect.accountId'];
+  const paytrConfigured = settings?.['paytr.configured'] === 'true';
+  // Stripe and PayTR share the same UX shape: the admin picks a price, not
+  // a pre-existing external package id — see resolveMappings in
+  // storeIntegrations.ts for what each does with that server-side.
+  const usesPriceMapping = provider === 'stripe' || provider === 'paytr';
 
   const webhookUrl = existing ? `${window.location.origin}/api/v1/store-webhooks/${existing.id}` : null;
 
@@ -410,17 +518,18 @@ function StoreIntegrationModal({ servers, plans, existing, onClose, onSaved }: {
     if (!name.trim()) { toast.error('Name is required'); return; }
     if (!serverId) { toast.error('Pick a server'); return; }
     if (provider === 'stripe' && !stripeConnected) { toast.error('Connect Stripe first (above) before creating a Stripe integration'); return; }
+    if (provider === 'paytr' && !paytrConfigured) { toast.error('Save your PayTR credentials first (above) before creating a PayTR integration'); return; }
     const cleanMappings = mappings
-      .filter((m) => (provider === 'stripe' ? (!!m.packageId || !!m.unitAmount) : m.packageId.trim()))
+      .filter((m) => (usesPriceMapping ? (!!m.packageId || !!m.unitAmount) : m.packageId.trim()))
       .filter((m) => m.command?.trim() || m.planId)
       .map((m) => ({
         packageId: m.packageId.trim(),
         command: m.command?.trim() || undefined,
         planId: m.planId || undefined,
-        // Only sent for a mapping that still needs its Price created —
-        // once packageId is set the amount/currency are inert (Prices are
-        // immutable on Stripe's side).
-        ...(provider === 'stripe' && !m.packageId ? { unitAmount: m.unitAmount, currency: m.currency || 'usd' } : {}),
+        // Only sent for a mapping that still needs its Price/id created —
+        // once packageId is set the amount/currency are inert (Stripe
+        // Prices are immutable; PayTR mappings just never revisit this).
+        ...(usesPriceMapping && !m.packageId ? { unitAmount: m.unitAmount, currency: provider === 'stripe' ? (m.currency || 'usd') : 'try' } : {}),
       }));
     setLoading(true);
     try {
@@ -454,9 +563,13 @@ function StoreIntegrationModal({ servers, plans, existing, onClose, onSaved }: {
             <button type="button" className={provider === 'tebex' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setProvider('tebex')}>Tebex</button>
             <button type="button" className={provider === 'craftingstore' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setProvider('craftingstore')}>CraftingStore</button>
             <button type="button" className={provider === 'stripe' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setProvider('stripe')}>Stripe</button>
+            <button type="button" className={provider === 'paytr' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setProvider('paytr')}>PayTR</button>
           </div>
           {provider === 'stripe' && !stripeConnected && (
             <p className="text-[11px] text-amber-400 mt-1.5">Connect Stripe in the card above before creating a Stripe integration.</p>
+          )}
+          {provider === 'paytr' && !paytrConfigured && (
+            <p className="text-[11px] text-amber-400 mt-1.5">Save your PayTR credentials in the card above before creating a PayTR integration.</p>
           )}
         </div>
 
@@ -470,7 +583,13 @@ function StoreIntegrationModal({ servers, plans, existing, onClose, onSaved }: {
           </select>
         </div>
 
-        {existing && webhookUrl && (
+        {provider === 'paytr' && (
+          <p className="text-[11px] text-zinc-600 -mt-2">
+            PayTR notifications use the single account-wide URL shown in the PayTR card above — no per-integration webhook to configure here.
+          </p>
+        )}
+
+        {existing && webhookUrl && provider !== 'paytr' && (
           <div className="rounded-lg border border-zinc-800 p-4 space-y-2">
             <label className="label">Webhook URL</label>
             <div className="flex items-center gap-2">
@@ -498,21 +617,23 @@ function StoreIntegrationModal({ servers, plans, existing, onClose, onSaved }: {
         )}
 
         <div>
-          <label className="label">{provider === 'stripe' ? 'Price → Command / Plan Mappings' : 'Package → Command / Plan Mappings'}</label>
+          <label className="label">{usesPriceMapping ? 'Price → Command / Plan Mappings' : 'Package → Command / Plan Mappings'}</label>
           <div className="space-y-2">
             {mappings.map((m, idx) => (
               <div key={idx} className="flex gap-2 items-center">
-                {provider === 'stripe' ? (
+                {usesPriceMapping ? (
                   m.packageId ? (
                     <code className="input font-mono text-[10px] w-28 shrink-0 truncate" title={m.packageId}>{m.packageId}</code>
                   ) : (
                     <>
                       <input
-                        className="input text-xs w-20 shrink-0" type="number" step="0.01" min="0" placeholder="9.99"
+                        className="input text-xs w-20 shrink-0" type="number" step="0.01" min="0" placeholder={provider === 'paytr' ? '9.99 TL' : '9.99'}
                         value={m.unitAmount != null ? String(m.unitAmount / 100) : ''}
                         onChange={(e) => updatePrice(idx, Math.round((parseFloat(e.target.value) || 0) * 100))}
                       />
-                      <input className="input text-xs w-14 shrink-0" placeholder="usd" value={m.currency || 'usd'} onChange={(e) => updateMapping(idx, 'currency', e.target.value)} />
+                      {provider === 'stripe' && (
+                        <input className="input text-xs w-14 shrink-0" placeholder="usd" value={m.currency || 'usd'} onChange={(e) => updateMapping(idx, 'currency', e.target.value)} />
+                      )}
                     </>
                   )
                 ) : (
@@ -535,6 +656,7 @@ function StoreIntegrationModal({ servers, plans, existing, onClose, onSaved }: {
           <p className="text-[11px] text-zinc-600 mt-2">
             <code>{'{username}'}</code> in a command is replaced with the buyer's in-game name. Picking a plan upgrades the server's resources (RAM/CPU/disk) live on purchase — command and plan can be combined, or either left empty.
             {provider === 'stripe' && ' The price creates a real Stripe Product/Price on save and can\'t be edited afterward — remove and re-add the mapping to change it.'}
+            {provider === 'paytr' && ' The price is charged in Turkish Lira and can\'t be edited afterward — remove and re-add the mapping to change it.'}
           </p>
         </div>
 

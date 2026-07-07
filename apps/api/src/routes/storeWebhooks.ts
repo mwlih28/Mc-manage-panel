@@ -3,7 +3,7 @@ import Stripe from 'stripe';
 import { prisma } from '../utils/prisma';
 import {
   verifyTebexSignature, verifyCraftingStoreSignature, parseStorePayload, handleStorePurchase,
-  getConnectedStripeClient,
+  getConnectedStripeClient, getPaytrConf, verifyPaytrCallback, PaytrCallbackBody,
 } from '../services/storeIntegrationService';
 import { logger } from '../utils/logger';
 
@@ -11,6 +11,44 @@ import { logger } from '../utils/logger';
 // session or API key, only the shared secret configured on both sides.
 // Every request is verified against that secret before anything runs.
 const router = Router();
+
+// PayTR is unlike every other provider here: its notify_url is a single
+// account-wide setting in the merchant's own PayTR panel, not something
+// passed per-transaction or registered per-integration (confirmed against
+// PayTR's real request contract — merchant_ok_url/merchant_fail_url are
+// browser-redirect targets, there's no separate per-request notify_url
+// field at all). So this can't be scoped by a :id path param the way
+// Tebex/CraftingStore/Stripe are — one Kretase install has exactly one
+// PayTR callback URL, and every callback carries only a merchant_oid,
+// which PayTrOrder resolves back to the actual integration it belongs to.
+// Registered before the generic /:id route below so Express doesn't treat
+// "paytr" as an :id value.
+router.post('/paytr', async (req: Request, res: Response) => {
+  const conf = await getPaytrConf();
+  if (!conf) return res.status(404).json({ message: 'PayTR is not configured' });
+
+  const body = req.body as PaytrCallbackBody;
+  if (!verifyPaytrCallback(body, conf.merchantKey, conf.merchantSalt)) {
+    logger.warn('Rejected PayTR webhook: invalid hash');
+    return res.status(401).send('Invalid hash');
+  }
+
+  const order = await prisma.payTrOrder.findUnique({ where: { merchantOid: body.merchant_oid! } });
+  if (!order) {
+    logger.warn(`PayTR webhook for unknown merchant_oid ${body.merchant_oid}`);
+    return res.type('text').send('OK'); // hash-valid but nothing to retry
+  }
+
+  if (body.status === 'success') {
+    handleStorePurchase(order.integrationId, order.packageId, null).catch((err) => {
+      logger.error(`Store webhook handling failed for ${order.integrationId}: ${(err as Error).message}`);
+    });
+  }
+
+  // PayTR's documented contract requires the literal plaintext body "OK" —
+  // never JSON — on any hash-valid notification, or it retries indefinitely.
+  return res.type('text').send('OK');
+});
 
 router.post('/:id', async (req: Request, res: Response) => {
   const integration = await prisma.storeIntegration.findUnique({ where: { id: req.params.id } });

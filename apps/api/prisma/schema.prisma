@@ -461,7 +461,7 @@ model PushSubscription {
 // console command on the mapped server (e.g. granting an in-game rank).
 model StoreIntegration {
   id              String    @id @default(uuid())
-  provider        String    // "tebex" | "craftingstore"
+  provider        String    // "tebex" | "craftingstore" | "stripe" | "paytr"
   name            String
   serverId        String
   webhookSecret   String
@@ -496,4 +496,18 @@ model StripeConnectExchange {
   publishableKey   String
   createdAt        DateTime @default(now())
   expiresAt        DateTime
+}
+
+// PayTR's payment notification carries only merchant_oid/status/total_amount
+// — no metadata field like Stripe's Checkout Session has — so this is how a
+// callback gets mapped back to which StoreIntegration/mapping it belongs to.
+// Written when a checkout token is requested, read (possibly more than
+// once — PayTR can retry its own notification) when the callback arrives.
+model PayTrOrder {
+  id            String   @id @default(uuid())
+  merchantOid   String   @unique
+  integrationId String
+  packageId     String
+  createdAt     DateTime @default(now())
+  expiresAt     DateTime
 }

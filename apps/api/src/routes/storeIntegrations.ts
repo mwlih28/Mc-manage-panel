@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import axios from 'axios';
 import { Router, Response } from 'express';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import { AuthRequest } from '../types';
@@ -6,19 +7,33 @@ import { prisma } from '../utils/prisma';
 import {
   CommandMapping, resolveStripeMapping, getConnectedStripeClient,
   ensureStripeWebhookEndpoint, deleteStripeWebhookEndpoint,
+  getPaytrConf, computePaytrToken,
 } from '../services/storeIntegrationService';
 import { getFrontendOrigin } from './auth';
 import { logger } from '../utils/logger';
 
-const PROVIDERS = new Set(['tebex', 'craftingstore', 'stripe']);
+const PROVIDERS = new Set(['tebex', 'craftingstore', 'stripe', 'paytr']);
+const PROVIDERS_MESSAGE = 'provider must be "tebex", "craftingstore", "stripe", or "paytr"';
 
 // Stripe mappings don't arrive with a packageId (the admin picks a Plan +
 // price, not a pre-existing external package) — this fills it in by
-// creating the matching Stripe Product/Price. Left as a no-op for
+// creating the matching Stripe Product/Price. PayTR mappings also arrive
+// without one (same "admin picks a price, not an external package" UX) but
+// need no network call — PayTR has no Product/Price API, so a locally
+// generated id is all a mapping needs. Left as a no-op for
 // tebex/craftingstore, whose mappings already carry a real packageId.
 async function resolveMappings(provider: string, mappings: CommandMapping[]): Promise<CommandMapping[]> {
-  if (provider !== 'stripe') return mappings;
-  return Promise.all(mappings.map(resolveStripeMapping));
+  if (provider === 'stripe') return Promise.all(mappings.map(resolveStripeMapping));
+  if (provider === 'paytr') {
+    return mappings.map((m) => {
+      if (m.packageId) return m;
+      if (!m.unitAmount || !m.currency) {
+        throw new Error('A PayTR mapping needs both a price (unitAmount) and a currency');
+      }
+      return { ...m, packageId: crypto.randomBytes(8).toString('hex') };
+    });
+  }
+  return mappings;
 }
 
 const router = Router();
@@ -30,11 +45,11 @@ const router = Router();
 router.get('/:id/checkout', authenticate, async (req: AuthRequest, res: Response) => {
   const integration = await prisma.storeIntegration.findUnique({
     where: { id: req.params.id },
-    include: { server: true },
+    include: { server: { include: { user: true } } },
   });
   if (!integration || !integration.enabled) return res.status(404).json({ message: 'Integration not found' });
-  if (integration.provider !== 'stripe') {
-    return res.status(422).json({ message: 'Checkout is only available for Stripe integrations' });
+  if (integration.provider !== 'stripe' && integration.provider !== 'paytr') {
+    return res.status(422).json({ message: 'Checkout is only available for Stripe or PayTR integrations' });
   }
 
   const isAdmin = req.user!.role === 'ADMIN';
@@ -48,24 +63,84 @@ router.get('/:id/checkout', authenticate, async (req: AuthRequest, res: Response
   const mapping = packageId ? mappings.find((m) => m.packageId === packageId) : mappings[0];
   if (!mapping?.packageId) return res.status(422).json({ message: 'No purchasable package configured for this integration' });
 
-  const stripe = await getConnectedStripeClient();
-  if (!stripe) return res.status(502).json({ message: 'Stripe is not connected on this panel' });
-
   const frontend = getFrontendOrigin();
+
+  if (integration.provider === 'stripe') {
+    const stripe = await getConnectedStripeClient();
+    if (!stripe) return res.status(502).json({ message: 'Stripe is not connected on this panel' });
+    try {
+      const session = await stripe.checkout.sessions.create({
+        mode: 'payment',
+        line_items: [{ price: mapping.packageId, quantity: 1 }],
+        // Read back directly off the webhook event's session object — simpler
+        // and more reliable than expanding/re-fetching line_items, since
+        // metadata is always present on the base Checkout Session payload.
+        metadata: { integrationId: integration.id, packageId: mapping.packageId },
+        success_url: `${frontend}/servers/${integration.serverId}?stripeCheckout=success`,
+        cancel_url: `${frontend}/servers/${integration.serverId}?stripeCheckout=cancelled`,
+      });
+      return res.json({ url: session.url });
+    } catch (err) {
+      return res.status(502).json({ message: `Failed to start checkout: ${(err as Error).message}` });
+    }
+  }
+
+  // provider === 'paytr'
+  const conf = await getPaytrConf();
+  if (!conf) return res.status(502).json({ message: 'PayTR is not connected on this panel' });
+  if (!mapping.unitAmount) return res.status(422).json({ message: 'This package has no price configured' });
+
+  const buyer = integration.server.user;
+  const merchantOid = crypto.randomBytes(16).toString('hex'); // alphanumeric-only per PayTR's requirement
+  await prisma.payTrOrder.create({
+    data: { merchantOid, integrationId: integration.id, packageId: mapping.packageId, expiresAt: new Date(Date.now() + 60 * 60 * 1000) },
+  });
+
+  const userIp = req.ip || '127.0.0.1';
+  const userBasketBase64 = Buffer.from(JSON.stringify([[integration.name, (mapping.unitAmount / 100).toFixed(2), 1]])).toString('base64');
+  const testMode = conf.testMode ? 1 : 0;
+  const paytrToken = computePaytrToken(
+    {
+      merchantId: conf.merchantId, userIp, merchantOid, email: buyer.email, paymentAmount: mapping.unitAmount,
+      userBasketBase64, noInstallment: 0, maxInstallment: 0, currency: 'TL', testMode,
+    },
+    conf.merchantKey, conf.merchantSalt
+  );
+
   try {
-    const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
-      line_items: [{ price: mapping.packageId, quantity: 1 }],
-      // Read back directly off the webhook event's session object — simpler
-      // and more reliable than expanding/re-fetching line_items, since
-      // metadata is always present on the base Checkout Session payload.
-      metadata: { integrationId: integration.id, packageId: mapping.packageId },
-      success_url: `${frontend}/servers/${integration.serverId}?stripeCheckout=success`,
-      cancel_url: `${frontend}/servers/${integration.serverId}?stripeCheckout=cancelled`,
+    const body = new URLSearchParams({
+      merchant_id: conf.merchantId,
+      user_ip: userIp,
+      merchant_oid: merchantOid,
+      email: buyer.email,
+      payment_amount: String(mapping.unitAmount),
+      paytr_token: paytrToken,
+      user_basket: userBasketBase64,
+      debug_on: '0',
+      no_installment: '0',
+      max_installment: '0',
+      // Kretase doesn't collect a billing address/phone from users today —
+      // PayTR requires non-empty strings here but doesn't hard-reject
+      // placeholders for the iframe flow. Worth revisiting if PayTR's own
+      // fraud scoring turns out to weight these fields meaningfully.
+      user_name: `${buyer.firstName} ${buyer.lastName}`.trim() || buyer.username,
+      user_address: 'N/A',
+      user_phone: 'N/A',
+      merchant_ok_url: `${frontend}/servers/${integration.serverId}?paytrCheckout=success`,
+      merchant_fail_url: `${frontend}/servers/${integration.serverId}?paytrCheckout=failed`,
+      timeout_limit: '30',
+      currency: 'TL',
+      test_mode: String(testMode),
     });
-    return res.json({ url: session.url });
+    const resp = await axios.post('https://www.paytr.com/odeme/api/get-token', body, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    });
+    if (resp.data?.status !== 'success' || !resp.data?.token) {
+      return res.status(502).json({ message: resp.data?.reason || 'PayTR rejected the checkout request' });
+    }
+    return res.json({ iframeUrl: `https://www.paytr.com/odeme/guvenli/${resp.data.token}` });
   } catch (err) {
-    return res.status(502).json({ message: `Failed to start checkout: ${(err as Error).message}` });
+    return res.status(502).json({ message: `Failed to start PayTR checkout: ${(err as Error).message}` });
   }
 });
 
@@ -89,7 +164,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
     provider?: string; name?: string; serverId?: string; commandMappings?: CommandMapping[];
   };
   if (!provider || !PROVIDERS.has(provider)) {
-    return res.status(422).json({ message: 'provider must be "tebex", "craftingstore", or "stripe"' });
+    return res.status(422).json({ message: PROVIDERS_MESSAGE });
   }
   if (!name?.trim()) return res.status(422).json({ message: 'Name is required' });
   if (!serverId) return res.status(422).json({ message: 'serverId is required' });

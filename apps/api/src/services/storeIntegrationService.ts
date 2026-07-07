@@ -127,6 +127,75 @@ export function verifyCraftingStoreSignature(rawBody: string, secret: string, si
   return verifyTebexSignature(rawBody, secret, signatureHeader);
 }
 
+export interface PaytrConf {
+  merchantId: string;
+  merchantKey: string;
+  merchantSalt: string;
+  testMode: boolean;
+}
+
+// Feature no-ops when unconfigured, same pattern as getConnectedStripeClient
+// above and getStorageConf() in services/storage/index.ts.
+export async function getPaytrConf(): Promise<PaytrConf | null> {
+  const rows = await prisma.setting.findMany({ where: { key: { startsWith: 'paytr.' } } });
+  const conf: Record<string, string> = {};
+  for (const r of rows) conf[r.key] = r.value;
+  if (!conf['paytr.merchantId'] || !conf['paytr.merchantKey'] || !conf['paytr.merchantSalt']) return null;
+  return {
+    merchantId: conf['paytr.merchantId'],
+    merchantKey: conf['paytr.merchantKey'],
+    merchantSalt: conf['paytr.merchantSalt'],
+    testMode: conf['paytr.testMode'] === 'true',
+  };
+}
+
+export interface PaytrTokenFields {
+  merchantId: string;
+  userIp: string;
+  merchantOid: string;
+  email: string;
+  paymentAmount: number; // kuruş — lira × 100, same "smallest unit" convention as Stripe's unitAmount
+  userBasketBase64: string; // base64(JSON.stringify(basket)), computed by the caller
+  noInstallment: number;
+  maxInstallment: number;
+  currency: string; // PayTR's own convention is the literal string "TL", not ISO "TRY"
+  testMode: number;
+}
+
+// Verified against two independent, code-level PayTR reference
+// implementations (a PHP client and the node-paytr npm package's compiled
+// source) that agree exactly on field order and algorithm — not guessed.
+// merchant_key/merchant_salt are never sent to PayTR over the wire; they
+// only ever feed this local HMAC computation.
+export function computePaytrToken(fields: PaytrTokenFields, merchantKey: string, merchantSalt: string): string {
+  const hashStr = [
+    fields.merchantId, fields.userIp, fields.merchantOid, fields.email, fields.paymentAmount,
+    fields.userBasketBase64, fields.noInstallment, fields.maxInstallment, fields.currency, fields.testMode,
+  ].join('');
+  return crypto.createHmac('sha256', merchantKey).update(hashStr + merchantSalt).digest('base64');
+}
+
+export interface PaytrCallbackBody {
+  merchant_oid?: string;
+  status?: string;
+  total_amount?: string | number;
+  hash?: string;
+}
+
+// Same verified contract as computePaytrToken above, but PayTR's own
+// documented field order for callbacks (merchant_oid + salt + status +
+// total_amount) differs from the token request's order — don't conflate them.
+export function verifyPaytrCallback(body: PaytrCallbackBody, merchantKey: string, merchantSalt: string): boolean {
+  if (!body.hash || !body.merchant_oid || body.status === undefined || body.total_amount === undefined) return false;
+  const hashStr = `${body.merchant_oid}${merchantSalt}${body.status}${body.total_amount}`;
+  const expected = crypto.createHmac('sha256', merchantKey).update(hashStr).digest('base64');
+  try {
+    return crypto.timingSafeEqual(Buffer.from(body.hash), Buffer.from(expected));
+  } catch {
+    return false; // length mismatch — timingSafeEqual throws rather than returning false
+  }
+}
+
 // Extracts { packageId, username } from a store's webhook payload. Both
 // providers nest this differently — kept isolated here so a real payload
 // shape mismatch only needs a fix in one place.

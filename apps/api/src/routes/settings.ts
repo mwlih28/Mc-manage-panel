@@ -36,6 +36,10 @@ const DEFAULTS: Record<string, string> = {
   'stripe.connect.accessToken': '',
   'stripe.connect.refreshToken': '',
   'stripe.connect.publishableKey': '',
+  'paytr.merchantId': '',
+  'paytr.merchantKey': '',
+  'paytr.merchantSalt': '',
+  'paytr.testMode': 'false',
 };
 
 const PROVIDER_KEY_SETTING: Record<string, string> = {
@@ -53,7 +57,7 @@ const CAPTCHA_PROVIDERS = new Set(['none', 'hcaptcha']);
 // is intentionally public — hCaptcha's own site key is meant to ship to the
 // browser, that's how the widget knows which site it's protecting. Only
 // captcha.secretKey (used server-side to verify a solve) stays admin-only.
-const PUBLIC_KEYS = new Set(['app.name', 'app.title', 'app.logo', 'app.description', 'app.version', 'features.aiTools', 'ai.provider', 'ai.configured', 'curseforge.configured', 'theme.customCss', 'whitelabel.hidePoweredBy', 'discord.configured', 'discord.oauth.enabled', 'captcha.provider', 'captcha.siteKey', 'captcha.configured', 'stripe.configured']);
+const PUBLIC_KEYS = new Set(['app.name', 'app.title', 'app.logo', 'app.description', 'app.version', 'features.aiTools', 'ai.provider', 'ai.configured', 'curseforge.configured', 'theme.customCss', 'whitelabel.hidePoweredBy', 'discord.configured', 'discord.oauth.enabled', 'captcha.provider', 'captcha.siteKey', 'captcha.configured', 'stripe.configured', 'paytr.configured']);
 
 router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
@@ -67,6 +71,7 @@ router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
     settings['discord.configured'] = settings['discord.botToken'] ? 'true' : 'false';
     settings['captcha.configured'] = (settings['captcha.provider'] === 'hcaptcha' && settings['captcha.siteKey'] && settings['captcha.secretKey']) ? 'true' : 'false';
     settings['stripe.configured'] = settings['stripe.connect.accountId'] ? 'true' : 'false';
+    settings['paytr.configured'] = (settings['paytr.merchantId'] && settings['paytr.merchantKey'] && settings['paytr.merchantSalt']) ? 'true' : 'false';
     // Sourced from the deployed .env, not the DB — install/update-panel.sh
     // keep PANEL_VERSION in sync with the actual release tag on every run.
     settings['app.version'] = process.env.PANEL_VERSION || '1.0.0';
@@ -107,6 +112,11 @@ router.put('/', authenticate, requireAdmin, async (req: AuthRequest, res: Respon
     'discord.botToken',
     'discord.oauth.enabled', 'discord.oauth.clientId', 'discord.oauth.clientSecret',
     'captcha.provider', 'captcha.siteKey', 'captcha.secretKey',
+    // Unlike stripe.connect.* (OAuth-derived, written only by
+    // stripeConnect.ts's /complete handler), these are plain admin-typed
+    // credentials from the merchant's own PayTR panel — same category as
+    // smtp.pass/discord.botToken, so they belong in this form.
+    'paytr.merchantId', 'paytr.merchantKey', 'paytr.merchantSalt', 'paytr.testMode',
   ];
   if (req.body['theme.customCss'] !== undefined) {
     const css = req.body['theme.customCss'];
