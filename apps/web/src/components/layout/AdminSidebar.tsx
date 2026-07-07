@@ -29,9 +29,7 @@ function useActiveNavPill(navRef: RefObject<HTMLElement>) {
   return style;
 }
 
-// TODO: swap for the real Kretase Discord invite once it exists — this is
-// a temporary fallback so the link isn't dead in the meantime.
-const DISCORD_INVITE_URL = 'https://github.com/mwlih28/mc-manage-panel';
+const DISCORD_INVITE_URL = 'https://discord.gg/kretasecom';
 
 function DiscordIcon({ size = 14 }: { size?: number }) {
   return (
