@@ -1,6 +1,6 @@
 # node:20-slim, pinned by digest so a compromised/retagged upstream image
 # can't silently change what CI builds and ships.
-FROM node:20-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0 AS builder
+FROM node:26-slim@sha256:a1d9d671994fc2d26e297ac56b4b1522a8bc7fa71c43b14cd1b1fe6c5116f7dc AS builder
 WORKDIR /app
 
 COPY package.json ./
@@ -11,7 +11,7 @@ ARG VITE_API_URL
 ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build
 
-FROM node:20-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0 AS runner
+FROM node:26-slim@sha256:a1d9d671994fc2d26e297ac56b4b1522a8bc7fa71c43b14cd1b1fe6c5116f7dc AS runner
 WORKDIR /app
 RUN npm install -g serve
 COPY --from=builder /app/dist ./dist
