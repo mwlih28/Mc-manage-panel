@@ -59,6 +59,8 @@ import storeIntegrationRoutes from './routes/storeIntegrations';
 import storeWebhookRoutes from './routes/storeWebhooks';
 import planRoutes from './routes/plans';
 import eggStoreRoutes from './routes/eggStore';
+import stripeConnectRoutes from './routes/stripeConnect';
+import stripeConnectRelayRoutes from './routes/stripeConnectRelay';
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -147,6 +149,13 @@ app.get('/update-panel', serveInstallScript('update-panel.sh'));
 app.get('/update-wings', serveInstallScript('update-wings.sh'));
 app.get('/uninstall-panel', serveInstallScript('uninstall-panel.sh'));
 
+// Stripe Connect OAuth relay — inert on every deployment except the
+// project's own canonical one (see stripeConnectRelay.ts). Top-level like
+// the install scripts above since Stripe's redirect_uri must be a fixed,
+// pre-registered URL, and this needs to be reachable regardless of which
+// domain (panel.kretase.com or get.kretase.com) actually answers it.
+app.use('/stripe-connect', stripeConnectRelayRoutes);
+
 // Templates endpoint
 import serverTemplates from './data/serverTemplates.json';
 import { fetchPaperVersions } from './services/paperApi';
@@ -217,6 +226,7 @@ api.use('/store-integrations', storeIntegrationRoutes);
 api.use('/store-webhooks', storeWebhookRoutes);
 api.use('/plans', planRoutes);
 api.use('/egg-store', eggStoreRoutes);
+api.use('/stripe-connect', stripeConnectRoutes);
 
 app.use('/api/v1', api);
 

@@ -32,6 +32,10 @@ const DEFAULTS: Record<string, string> = {
   'discord.oauth.clientSecret': '',
   'captcha.provider': 'none',
   'captcha.siteKey': '',
+  'stripe.connect.accountId': '',
+  'stripe.connect.accessToken': '',
+  'stripe.connect.refreshToken': '',
+  'stripe.connect.publishableKey': '',
 };
 
 const PROVIDER_KEY_SETTING: Record<string, string> = {
@@ -49,7 +53,7 @@ const CAPTCHA_PROVIDERS = new Set(['none', 'hcaptcha']);
 // is intentionally public — hCaptcha's own site key is meant to ship to the
 // browser, that's how the widget knows which site it's protecting. Only
 // captcha.secretKey (used server-side to verify a solve) stays admin-only.
-const PUBLIC_KEYS = new Set(['app.name', 'app.title', 'app.logo', 'app.description', 'app.version', 'features.aiTools', 'ai.provider', 'ai.configured', 'curseforge.configured', 'theme.customCss', 'whitelabel.hidePoweredBy', 'discord.configured', 'discord.oauth.enabled', 'captcha.provider', 'captcha.siteKey', 'captcha.configured']);
+const PUBLIC_KEYS = new Set(['app.name', 'app.title', 'app.logo', 'app.description', 'app.version', 'features.aiTools', 'ai.provider', 'ai.configured', 'curseforge.configured', 'theme.customCss', 'whitelabel.hidePoweredBy', 'discord.configured', 'discord.oauth.enabled', 'captcha.provider', 'captcha.siteKey', 'captcha.configured', 'stripe.configured']);
 
 router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
@@ -62,6 +66,7 @@ router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
     settings['storage.configured'] = isStorageConfigured(settings) ? 'true' : 'false';
     settings['discord.configured'] = settings['discord.botToken'] ? 'true' : 'false';
     settings['captcha.configured'] = (settings['captcha.provider'] === 'hcaptcha' && settings['captcha.siteKey'] && settings['captcha.secretKey']) ? 'true' : 'false';
+    settings['stripe.configured'] = settings['stripe.connect.accountId'] ? 'true' : 'false';
     // Sourced from the deployed .env, not the DB — install/update-panel.sh
     // keep PANEL_VERSION in sync with the actual release tag on every run.
     settings['app.version'] = process.env.PANEL_VERSION || '1.0.0';

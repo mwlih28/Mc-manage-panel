@@ -477,3 +477,23 @@ model StoreIntegration {
 
   server          Server    @relation(fields: [serverId], references: [id], onDelete: Cascade)
 }
+
+// Escrow for the Stripe Connect OAuth relay hop. Only ever populated/read on
+// the Kretase project's own canonical deployment (the one with
+// STRIPE_CONNECT_PLATFORM_SECRET_KEY set) — every other self-hosted install
+// ships this table unused since their relay routes 404 without that secret.
+// A row is written once by the relay's /stripe-connect/oauth/callback and
+// consumed exactly once by /stripe-connect/oauth/exchange, closing the
+// window where a Stripe Connect access token (which can create charges on
+// the connected account) would otherwise have to travel through a browser
+// redirect URL and land in history/access logs.
+model StripeConnectExchange {
+  id               String   @id @default(uuid())
+  code             String   @unique
+  stripeUserId     String
+  accessToken      String
+  refreshToken     String
+  publishableKey   String
+  createdAt        DateTime @default(now())
+  expiresAt        DateTime
+}

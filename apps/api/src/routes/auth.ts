@@ -19,7 +19,7 @@ const router = Router();
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 
-function getFrontendOrigin(): string {
+export function getFrontendOrigin(): string {
   return process.env.CORS_ORIGIN || 'http://localhost:5173';
 }
 
@@ -27,8 +27,8 @@ function getFrontendOrigin(): string {
 // after authorization, so it must be reachable from the outside, not the
 // frontend origin. Same domain in the common single-nginx-proxy deploy
 // (install-panel.sh sets APP_URL to that domain), separate in a split
-// frontend/API deploy.
-function getApiBaseUrl(): string {
+// frontend/API deploy. Also reused by stripeConnect.ts for the same reason.
+export function getApiBaseUrl(): string {
   return (process.env.APP_URL || getFrontendOrigin()).replace(/\/$/, '');
 }
 

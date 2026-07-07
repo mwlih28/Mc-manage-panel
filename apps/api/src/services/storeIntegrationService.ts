@@ -1,7 +1,53 @@
 import crypto from 'crypto';
+import Stripe from 'stripe';
 import { prisma } from '../utils/prisma';
 import { sendCommand, updateServerBuild } from './wingsClient';
 import { logger } from '../utils/logger';
+import { getApiBaseUrl } from '../routes/auth';
+
+// Stripe Connect Standard's OAuth access token IS itself a live secret key
+// scoped to the connected account (per Stripe's own docs: "Use it as you
+// would any Stripe secret API key") — no platform secret and no
+// {stripeAccount: ...} request option needed here, unlike Express/Custom
+// Connect. This is exactly what keeps money flowing straight to the
+// admin's own account: this install authenticates AS that account, not as
+// a platform acting on its behalf.
+export async function getConnectedStripeClient(): Promise<Stripe | null> {
+  const row = await prisma.setting.findUnique({ where: { key: 'stripe.connect.accessToken' } });
+  return row?.value ? new Stripe(row.value) : null;
+}
+
+function stripeWebhookUrl(integrationId: string): string {
+  return `${getApiBaseUrl()}/api/v1/store-webhooks/${integrationId}`;
+}
+
+// Stripe's own webhook signing secret (whsec_...) only exists once a
+// Webhook Endpoint is registered on the connected account — a random hex
+// string (fine for Tebex/CraftingStore's simple HMAC-over-shared-secret
+// scheme) would never actually verify against Stripe's signatures. This
+// auto-creates the endpoint so the admin never has to touch Stripe's own
+// dashboard, matching the auto-created Product/Price above.
+export async function ensureStripeWebhookEndpoint(integrationId: string): Promise<string | null> {
+  const stripe = await getConnectedStripeClient();
+  if (!stripe) return null;
+  const endpoint = await stripe.webhookEndpoints.create({
+    url: stripeWebhookUrl(integrationId),
+    enabled_events: ['checkout.session.completed'],
+  });
+  return endpoint.secret || null;
+}
+
+// Best-effort cleanup on delete/secret-rotation — looked up by URL rather
+// than a stored endpoint id, since StoreIntegration has no field for it and
+// a connected account will only ever have a handful of these endpoints.
+export async function deleteStripeWebhookEndpoint(integrationId: string): Promise<void> {
+  const stripe = await getConnectedStripeClient();
+  if (!stripe) return;
+  const url = stripeWebhookUrl(integrationId);
+  const list = await stripe.webhookEndpoints.list({ limit: 100 });
+  const match = list.data.find((e) => e.url === url);
+  if (match) await stripe.webhookEndpoints.del(match.id).catch(() => {});
+}
 
 export interface CommandMapping {
   packageId: string;
@@ -11,6 +57,50 @@ export interface CommandMapping {
   // needs no command, and a rank-grant package needs no plan.
   command?: string;
   planId?: string;
+  // Stripe-only, used once when the mapping is first created (see
+  // resolveStripeMapping below) to create the Product/Price that becomes
+  // this mapping's packageId. Ignored for tebex/craftingstore, whose
+  // packages already carry their own price on the store's own dashboard.
+  // Stripe Prices are immutable — changing the charged amount means adding
+  // a new mapping (a fresh Price), not editing an existing one.
+  unitAmount?: number; // smallest currency unit, e.g. cents for USD
+  currency?: string; // ISO 4217, lowercase, e.g. "usd"
+}
+
+// Auto-creates a Stripe Product+Price on the connected account for a
+// newly-added Stripe mapping so the Price always matches what the admin
+// configured, instead of admins hand-copying Price IDs from their own
+// Stripe dashboard (and them silently drifting out of sync with the Plan).
+// A mapping that already has a packageId is left untouched — see the
+// immutability note on CommandMapping above.
+export async function resolveStripeMapping(mapping: CommandMapping): Promise<CommandMapping> {
+  // A Stripe mapping always needs a Price to sell, whether or not it also
+  // applies a resource Plan — a command-only mapping (e.g. grant a rank) is
+  // just as valid over Stripe as a plan-upgrade one, it just prices
+  // differently. Only skip work once a Price has actually been created.
+  if (mapping.packageId) return mapping;
+
+  const stripe = await getConnectedStripeClient();
+  if (!stripe) throw new Error('Stripe is not connected — connect it from Admin → Billing & Store first');
+  if (!mapping.unitAmount || !mapping.currency) {
+    throw new Error('A Stripe mapping needs both a price (unitAmount) and a currency');
+  }
+
+  let productName = 'Kretase Purchase';
+  if (mapping.planId) {
+    const plan = await prisma.plan.findUnique({ where: { id: mapping.planId } });
+    if (!plan) throw new Error(`Plan ${mapping.planId} not found`);
+    productName = `Kretase — ${plan.name}`;
+  }
+
+  const product = await stripe.products.create({ name: productName });
+  const price = await stripe.prices.create({
+    product: product.id,
+    unit_amount: mapping.unitAmount,
+    currency: mapping.currency,
+  });
+
+  return { ...mapping, packageId: price.id };
 }
 
 // Tebex signs the raw request body with HMAC-SHA256 using the store's

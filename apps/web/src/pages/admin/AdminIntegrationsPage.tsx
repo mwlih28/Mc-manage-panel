@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, Trash2, Pencil, Copy, Eye, EyeOff, RefreshCw, Download, ShoppingCart, X, Gauge, Info,
+  CreditCard, Unlink,
 } from 'lucide-react';
 import api from '@/lib/axios';
 import { Spinner } from '@/components/ui/Spinner';
@@ -15,6 +17,11 @@ interface CommandMapping {
   // plan upgrade, or both from a single purchase.
   command?: string;
   planId?: string;
+  // Stripe-only — the price to charge, used once to auto-create the
+  // Product/Price that becomes this mapping's packageId. Not sent again
+  // once packageId is set (Stripe Prices are immutable).
+  unitAmount?: number;
+  currency?: string;
 }
 
 interface PlanRow {
@@ -32,7 +39,7 @@ interface PlanRow {
 
 interface StoreIntegrationRow {
   id: string;
-  provider: 'tebex' | 'craftingstore';
+  provider: 'tebex' | 'craftingstore' | 'stripe';
   name: string;
   serverId: string;
   server: { id: string; name: string };
@@ -47,6 +54,118 @@ function StatusDot({ status }: { status: StoreIntegrationRow['lastStatus'] }) {
   const color = status === 'success' ? 'bg-[#3EC896]' : status === 'failed' ? 'bg-red-500' : status === 'skipped' ? 'bg-amber-500' : 'bg-zinc-600';
   const title = status === 'success' ? 'Last purchase ran successfully' : status === 'failed' ? 'Last purchase failed' : status === 'skipped' ? 'Last purchase had no matching package mapping' : 'Never triggered';
   return <span className={`inline-block h-2 w-2 rounded-full ${color}`} title={title} />;
+}
+
+// "Connect with Stripe" — a real OAuth round trip through a central relay
+// (Stripe requires a fixed, pre-registered redirect_uri, which can't be
+// every self-hosted admin's own domain). This component only ever sees the
+// tail end of that flow: the API's /stripe-connect/finish route redirects
+// the browser back here with a short-lived, single-use exchange code, which
+// gets traded (server-to-server, from this install's own backend) for the
+// real connection — nothing sensitive ever reaches this component directly.
+function StripeSection() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const queryClient = useQueryClient();
+  const [connecting, setConnecting] = useState(false);
+
+  const { data: settings } = useQuery({
+    queryKey: ['site-settings'],
+    queryFn: () => api.get('/settings').then((r) => r.data as Record<string, string>),
+  });
+  const accountId = settings?.['stripe.connect.accountId'];
+  const connected = !!accountId;
+
+  useEffect(() => {
+    const exchangeCode = searchParams.get('stripeExchangeCode');
+    const state = searchParams.get('stripeState');
+    const error = searchParams.get('stripeError');
+
+    if (error) {
+      const messages: Record<string, string> = {
+        not_configured: 'Stripe Connect is not set up on this deployment yet.',
+        stripe_exchange_failed: 'Stripe was unable to complete the connection. Please try again.',
+        invalid: 'The Stripe connection attempt was invalid or expired.',
+      };
+      toast.error(messages[error] || 'Failed to connect Stripe.');
+      setSearchParams({}, { replace: true });
+    } else if (exchangeCode && state) {
+      setConnecting(true);
+      api.post('/stripe-connect/complete', { exchangeCode, state })
+        .then(() => {
+          toast.success('Stripe connected');
+          queryClient.invalidateQueries({ queryKey: ['site-settings'] });
+        })
+        .catch((err) => {
+          const e = err as { response?: { data?: { message?: string } } };
+          toast.error(e.response?.data?.message || 'Failed to complete the Stripe connection');
+        })
+        .finally(() => {
+          setConnecting(false);
+          setSearchParams({}, { replace: true });
+        });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const disconnectMutation = useMutation({
+    mutationFn: () => api.post('/stripe-connect/disconnect'),
+    onSuccess: () => {
+      toast.success('Stripe disconnected');
+      queryClient.invalidateQueries({ queryKey: ['site-settings'] });
+    },
+    onError: () => toast.error('Failed to disconnect Stripe'),
+  });
+
+  // /stripe-connect/start needs the admin's JWT (axios attaches it to a
+  // normal fetch automatically) — a plain <a href> navigation wouldn't carry
+  // it, since this panel keeps its session token in localStorage rather
+  // than a cookie. So this fetches the authorize URL first, then navigates
+  // the browser there itself once it has it.
+  const [startingConnect, setStartingConnect] = useState(false);
+  const startConnect = async () => {
+    setStartingConnect(true);
+    try {
+      const { data } = await api.get('/stripe-connect/start');
+      window.location.href = data.url;
+    } catch (err) {
+      const e = err as { response?: { data?: { message?: string } } };
+      toast.error(e.response?.data?.message || 'Failed to start the Stripe connection');
+      setStartingConnect(false);
+    }
+  };
+
+  return (
+    <div className="card">
+      <div className="card-header flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-zinc-100">Stripe</h2>
+          <p className="text-xs text-zinc-500 mt-0.5">
+            Connect your own Stripe account to sell resource upgrades or ranks through a real checkout — payments go straight to your account, Kretase never touches the money.
+          </p>
+        </div>
+        <CreditCard size={18} className="text-zinc-600 shrink-0" />
+      </div>
+      <div className="p-6">
+        {connecting ? (
+          <div className="flex items-center gap-2 text-sm text-zinc-400"><Spinner size="sm" /> Completing connection…</div>
+        ) : connected ? (
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm text-zinc-200">Connected</p>
+              <p className="text-xs text-zinc-600 font-mono mt-0.5">{accountId}</p>
+            </div>
+            <button className="btn-secondary btn-sm" onClick={() => disconnectMutation.mutate()} disabled={disconnectMutation.isPending}>
+              <Unlink size={13} /> Disconnect
+            </button>
+          </div>
+        ) : (
+          <button className="btn-primary" onClick={startConnect} disabled={startingConnect}>
+            {startingConnect ? <Spinner size="sm" /> : <CreditCard size={16} />} Connect with Stripe
+          </button>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export function AdminIntegrationsPage() {
@@ -138,10 +257,13 @@ export function AdminIntegrationsPage() {
         </div>
       </div>
 
+      {/* Stripe */}
+      <StripeSection />
+
       {/* Resource Plans */}
       <PlansSection plans={plans} onChanged={() => queryClient.invalidateQueries({ queryKey: ['admin-plans'] })} />
 
-      {/* Tebex / CraftingStore */}
+      {/* Tebex / CraftingStore / Stripe */}
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-zinc-100">Store Integrations</h2>
         <button className="btn-primary" onClick={() => setShowCreate(true)}>
@@ -155,7 +277,7 @@ export function AdminIntegrationsPage() {
         <div className="card p-12 text-center">
           <ShoppingCart size={48} className="mx-auto text-slate-600 mb-4" />
           <p className="text-slate-300 font-medium">No store integrations yet</p>
-          <p className="text-slate-500 text-sm mt-2">Map a Tebex or CraftingStore package to a console command — like granting a rank on purchase.</p>
+          <p className="text-slate-500 text-sm mt-2">Map a Tebex, CraftingStore, or Stripe package to a console command — like granting a rank on purchase.</p>
           <button className="btn-primary mt-4 mx-auto" onClick={() => setShowCreate(true)}>
             <Plus size={16} /> Create First Integration
           </button>
@@ -181,7 +303,11 @@ export function AdminIntegrationsPage() {
                     <td><StatusDot status={i.lastStatus} /></td>
                     <td className="font-medium text-zinc-200">{i.name}{!i.enabled && <span className="ml-2 text-[10px] text-zinc-600">(disabled)</span>}</td>
                     <td>
-                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${i.provider === 'tebex' ? 'bg-blue-500/10 text-blue-400' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                        i.provider === 'tebex' ? 'bg-blue-500/10 text-blue-400'
+                          : i.provider === 'stripe' ? 'bg-indigo-500/10 text-indigo-400'
+                          : 'bg-emerald-500/10 text-emerald-400'
+                      }`}>
                         {i.provider}
                       </span>
                     </td>
@@ -241,12 +367,18 @@ function StoreIntegrationModal({ servers, plans, existing, onClose, onSaved }: {
   onSaved: () => void;
 }) {
   const [name, setName] = useState(existing?.name || '');
-  const [provider, setProvider] = useState<'tebex' | 'craftingstore'>(existing?.provider || 'tebex');
+  const [provider, setProvider] = useState<'tebex' | 'craftingstore' | 'stripe'>(existing?.provider || 'tebex');
   const [serverId, setServerId] = useState(existing?.serverId || '');
   const [mappings, setMappings] = useState<CommandMapping[]>(existing?.commandMappings?.length ? existing.commandMappings : [{ packageId: '', command: '', planId: '' }]);
   const [loading, setLoading] = useState(false);
   const [secret, setSecret] = useState<string | null>(null);
   const [showSecret, setShowSecret] = useState(false);
+
+  const { data: settings } = useQuery({
+    queryKey: ['site-settings'],
+    queryFn: () => api.get('/settings').then((r) => r.data as Record<string, string>),
+  });
+  const stripeConnected = !!settings?.['stripe.connect.accountId'];
 
   const webhookUrl = existing ? `${window.location.origin}/api/v1/store-webhooks/${existing.id}` : null;
 
@@ -261,19 +393,35 @@ function StoreIntegrationModal({ servers, plans, existing, onClose, onSaved }: {
     if (!existing) return;
     await api.put(`/store-integrations/${existing.id}`, { regenerateSecret: true });
     await loadSecret();
-    toast.success('Secret regenerated — update it in your store dashboard too');
+    toast.success(provider === 'stripe' ? 'Webhook secret rotated' : 'Secret regenerated — update it in your store dashboard too');
   };
 
   const updateMapping = (idx: number, field: keyof CommandMapping, value: string) => {
     setMappings((prev) => prev.map((m, i) => (i === idx ? { ...m, [field]: value } : m)));
   };
 
+  // Kept separate from updateMapping since unitAmount is stored in cents
+  // (a number) while every other mapping field is a plain string.
+  const updatePrice = (idx: number, cents: number) => {
+    setMappings((prev) => prev.map((m, i) => (i === idx ? { ...m, unitAmount: cents } : m)));
+  };
+
   const submit = async () => {
     if (!name.trim()) { toast.error('Name is required'); return; }
     if (!serverId) { toast.error('Pick a server'); return; }
+    if (provider === 'stripe' && !stripeConnected) { toast.error('Connect Stripe first (above) before creating a Stripe integration'); return; }
     const cleanMappings = mappings
-      .filter((m) => m.packageId.trim() && (m.command?.trim() || m.planId))
-      .map((m) => ({ packageId: m.packageId.trim(), command: m.command?.trim() || undefined, planId: m.planId || undefined }));
+      .filter((m) => (provider === 'stripe' ? (!!m.packageId || !!m.unitAmount) : m.packageId.trim()))
+      .filter((m) => m.command?.trim() || m.planId)
+      .map((m) => ({
+        packageId: m.packageId.trim(),
+        command: m.command?.trim() || undefined,
+        planId: m.planId || undefined,
+        // Only sent for a mapping that still needs its Price created —
+        // once packageId is set the amount/currency are inert (Prices are
+        // immutable on Stripe's side).
+        ...(provider === 'stripe' && !m.packageId ? { unitAmount: m.unitAmount, currency: m.currency || 'usd' } : {}),
+      }));
     setLoading(true);
     try {
       const payload = { name: name.trim(), provider, serverId, commandMappings: cleanMappings };
@@ -305,7 +453,11 @@ function StoreIntegrationModal({ servers, plans, existing, onClose, onSaved }: {
           <div className="flex gap-2">
             <button type="button" className={provider === 'tebex' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setProvider('tebex')}>Tebex</button>
             <button type="button" className={provider === 'craftingstore' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setProvider('craftingstore')}>CraftingStore</button>
+            <button type="button" className={provider === 'stripe' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setProvider('stripe')}>Stripe</button>
           </div>
+          {provider === 'stripe' && !stripeConnected && (
+            <p className="text-[11px] text-amber-400 mt-1.5">Connect Stripe in the card above before creating a Stripe integration.</p>
+          )}
         </div>
 
         <div>
@@ -338,17 +490,34 @@ function StoreIntegrationModal({ servers, plans, existing, onClose, onSaved }: {
               </button>
             </div>
             <p className="text-[11px] text-zinc-600">
-              Paste both into your {provider === 'tebex' ? 'Tebex' : 'CraftingStore'} webhook settings.
+              {provider === 'stripe'
+                ? 'Registered automatically on your connected Stripe account — nothing to paste anywhere.'
+                : `Paste both into your ${provider === 'tebex' ? 'Tebex' : 'CraftingStore'} webhook settings.`}
             </p>
           </div>
         )}
 
         <div>
-          <label className="label">Package → Command / Plan Mappings</label>
+          <label className="label">{provider === 'stripe' ? 'Price → Command / Plan Mappings' : 'Package → Command / Plan Mappings'}</label>
           <div className="space-y-2">
             {mappings.map((m, idx) => (
               <div key={idx} className="flex gap-2 items-center">
-                <input className="input font-mono text-xs w-24 shrink-0" placeholder="Package ID" value={m.packageId} onChange={(e) => updateMapping(idx, 'packageId', e.target.value)} />
+                {provider === 'stripe' ? (
+                  m.packageId ? (
+                    <code className="input font-mono text-[10px] w-28 shrink-0 truncate" title={m.packageId}>{m.packageId}</code>
+                  ) : (
+                    <>
+                      <input
+                        className="input text-xs w-20 shrink-0" type="number" step="0.01" min="0" placeholder="9.99"
+                        value={m.unitAmount != null ? String(m.unitAmount / 100) : ''}
+                        onChange={(e) => updatePrice(idx, Math.round((parseFloat(e.target.value) || 0) * 100))}
+                      />
+                      <input className="input text-xs w-14 shrink-0" placeholder="usd" value={m.currency || 'usd'} onChange={(e) => updateMapping(idx, 'currency', e.target.value)} />
+                    </>
+                  )
+                ) : (
+                  <input className="input font-mono text-xs w-24 shrink-0" placeholder="Package ID" value={m.packageId} onChange={(e) => updateMapping(idx, 'packageId', e.target.value)} />
+                )}
                 <input className="input font-mono text-xs flex-1 min-w-0" placeholder="lp user {username} parent addtemp vip 30d" value={m.command || ''} onChange={(e) => updateMapping(idx, 'command', e.target.value)} />
                 <select className="input text-xs w-32 shrink-0" value={m.planId || ''} onChange={(e) => updateMapping(idx, 'planId', e.target.value)}>
                   <option value="">No plan</option>
@@ -365,6 +534,7 @@ function StoreIntegrationModal({ servers, plans, existing, onClose, onSaved }: {
           </button>
           <p className="text-[11px] text-zinc-600 mt-2">
             <code>{'{username}'}</code> in a command is replaced with the buyer's in-game name. Picking a plan upgrades the server's resources (RAM/CPU/disk) live on purchase — command and plan can be combined, or either left empty.
+            {provider === 'stripe' && ' The price creates a real Stripe Product/Price on save and can\'t be edited afterward — remove and re-add the mapping to change it.'}
           </p>
         </div>
 
