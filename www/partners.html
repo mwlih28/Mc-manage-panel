@@ -196,10 +196,14 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
           Send Application
         </button>
-        <p class="nl-note">Sent straight to our team's inbox. Prefer plain email? Write to <a href="mailto:mwlih28@gmail.com">mwlih28@gmail.com</a> directly.</p>
+        <p class="nl-note">Sent straight to our team's inbox via Resend. Prefer plain email? Write to <a href="mailto:mwlih28@gmail.com">mwlih28@gmail.com</a> directly.</p>
+        <p class="pa-error" id="paError" style="display:none"></p>
       </form>
       <div class="nl-success" id="paSuccess" style="display:none">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M20 6L9 17l-5-5"/></svg>
+        <svg id="paTick" width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle id="paTickCircle" cx="12" cy="12" r="10"/>
+          <path id="paTickCheck" d="M8 12.5l2.7 2.7L16 9.5"/>
+        </svg>
         <h3 id="paSuccessTitle">Application sent</h3>
         <p id="paSuccessMsg">We've received your application and will review your deployment shortly.</p>
       </div>
@@ -320,15 +324,34 @@
         document.getElementById('partnersGrid').innerHTML = '<div class="partners-empty"><p>Could not load the partner registry — try again shortly.</p></div>';
       });
 
-    // Real delivery: POST to the Cloudflare Pages Function at
+    // Real delivery only — POSTs to the Cloudflare Pages Function at
     // /api/partner-application, which sends the application to
-    // mwlih28@gmail.com via Resend (see www/functions/api/partner-application.js).
-    // mailto: is only a fallback — used if that request fails, e.g. the
-    // RESEND_API_KEY env var isn't set on this deployment yet — so an
-    // application is never silently lost.
+    // mwlih28@gmail.com via Resend, server-side (see
+    // www/functions/api/partner-application.js). No mailto: fallback: if
+    // the request fails we say so and let the applicant retry or email
+    // manually, instead of silently yanking them into their own mail app.
+    function animateSuccessTick() {
+      const svg = document.getElementById('paTick');
+      const shapes = [document.getElementById('paTickCircle'), document.getElementById('paTickCheck')];
+      shapes.forEach((el) => {
+        const length = el.getTotalLength();
+        el.style.strokeDasharray = length;
+        el.style.strokeDashoffset = length;
+      });
+      if (window.gsap) {
+        gsap.set(svg, { scale: 0.6, opacity: 0, transformOrigin: '50% 50%' });
+        gsap.to(svg, { scale: 1, opacity: 1, duration: 0.35, ease: 'back.out(2.5)' });
+        gsap.to(shapes[0], { strokeDashoffset: 0, duration: 0.5, ease: 'power2.out', delay: 0.05 });
+        gsap.to(shapes[1], { strokeDashoffset: 0, duration: 0.35, ease: 'power2.out', delay: 0.4 });
+      } else {
+        shapes.forEach((el) => { el.style.strokeDashoffset = 0; });
+      }
+    }
+
     async function submitPartnerApplication(e) {
       e.preventDefault();
       const btn = document.getElementById('paBtn');
+      const errorEl = document.getElementById('paError');
       const company = document.getElementById('paCompany').value.trim();
       const name = document.getElementById('paName').value.trim();
       const email = document.getElementById('paEmail').value.trim();
@@ -339,6 +362,7 @@
 
       btn.disabled = true;
       btn.textContent = 'Sending…';
+      errorEl.style.display = 'none';
 
       try {
         const res = await fetch('/api/partner-application', {
@@ -346,18 +370,18 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ company, name, email, url, why, website }),
         });
-        if (!res.ok) throw new Error('request failed');
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || 'Failed to send');
+        }
         document.getElementById('partnerForm').style.display = 'none';
         document.getElementById('paSuccess').style.display = 'flex';
+        animateSuccessTick();
       } catch (err) {
-        const subject = `Kretase Partner Application — ${company}`;
-        const body = `Company: ${company}\nContact: ${name}\nEmail: ${email}\nPanel URL: ${url}\n\nWhy applying:\n${why}`;
-        const mailto = `mailto:mwlih28@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-        document.getElementById('paSuccessTitle').textContent = 'Almost there';
-        document.getElementById('paSuccessMsg').innerHTML = 'Couldn\'t reach our server, so we opened your email client instead — hit send there to submit your application. Didn\'t open? Email us directly at <a href="mailto:mwlih28@gmail.com">mwlih28@gmail.com</a>.';
-        document.getElementById('partnerForm').style.display = 'none';
-        document.getElementById('paSuccess').style.display = 'flex';
-        window.location.href = mailto;
+        errorEl.textContent = 'Couldn\'t send your application — please try again in a moment, or email mwlih28@gmail.com directly.';
+        errorEl.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Send Application';
       }
     }
   </script>

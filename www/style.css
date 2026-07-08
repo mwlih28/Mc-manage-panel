@@ -1439,6 +1439,18 @@ footer {
 .nl-success h3 { font-size: 20px; font-weight: 700; color: #fff; }
 .nl-success p { font-size: 14px; color: var(--muted); }
 
+#paTick circle, #paTick path {
+  fill: none;
+  stroke: var(--green);
+}
+
+.pa-error {
+  font-size: 13px;
+  color: var(--rose);
+  text-align: center;
+  margin-top: -6px;
+}
+
 /* ── FOOTER LINK VISIBILITY ───────────────────────────────── */
 .footer-col a {
   display: block;
