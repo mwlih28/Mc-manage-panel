@@ -306,6 +306,15 @@
               </a>
             </div>
           </div>`).join('');
+
+        // Cards are inserted after animations.js has already run its
+        // one-time scroll-reveal setup, so they'd otherwise render fully
+        // visible with no entrance — animate them directly instead, and
+        // let ScrollTrigger re-measure the page now that it's taller.
+        if (window.gsap) {
+          gsap.from(grid.children, { y: 26, opacity: 0, duration: 0.6, ease: 'power3.out', stagger: 0.07 });
+        }
+        if (window.ScrollTrigger) ScrollTrigger.refresh();
       })
       .catch(() => {
         document.getElementById('partnersGrid').innerHTML = '<div class="partners-empty"><p>Could not load the partner registry — try again shortly.</p></div>';
@@ -352,5 +361,8 @@
       }
     }
   </script>
+  <script src="assets/vendor/gsap/gsap.min.js"></script>
+  <script src="assets/vendor/gsap/ScrollTrigger.min.js"></script>
+  <script src="animations.js"></script>
 </body>
 </html>

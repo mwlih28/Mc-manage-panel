@@ -1501,3 +1501,71 @@ footer {
   .cta-links { flex-direction: column; width: 100%; }
   .cta-links a { width: 100%; justify-content: center; }
 }
+
+/* ── ANIMATION LAYER ──────────────────────────────────────── */
+/* Floating gradient orbs behind the hero — GSAP gently drifts these */
+.hero-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  pointer-events: none;
+}
+
+.hero-orb.orb-1 {
+  top: -60px;
+  left: 6%;
+  width: 340px;
+  height: 340px;
+  background: radial-gradient(circle, rgba(46, 111, 238, 0.32), transparent 70%);
+}
+
+.hero-orb.orb-2 {
+  top: 40px;
+  right: 4%;
+  width: 280px;
+  height: 280px;
+  background: radial-gradient(circle, rgba(76, 141, 255, 0.26), transparent 70%);
+}
+
+.hero-orb.orb-3 {
+  top: 240px;
+  left: 44%;
+  width: 220px;
+  height: 220px;
+  background: radial-gradient(circle, rgba(129, 140, 248, 0.2), transparent 70%);
+}
+
+/* Subtle animated shimmer across the hero gradient headline */
+.gradient-text {
+  background-size: 200% auto;
+  animation: gradientShimmer 7s ease-in-out infinite;
+}
+
+@keyframes gradientShimmer {
+  0%, 100% { background-position: 0% center; }
+  50% { background-position: 100% center; }
+}
+
+/* Colored glow ring on hover — layered on top of each card's existing
+   hover treatment, not replacing it */
+.feat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 0 0 1px rgba(46, 111, 238, 0.22), 0 20px 40px -16px rgba(46, 111, 238, 0.28);
+}
+
+.game-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 32px -18px rgba(46, 111, 238, 0.25);
+}
+
+/* Tilt-ready cards — JS applies rotationX/rotationY on mousemove */
+.feat-card, .screenshot-card, .community-card, .game-card, .partner-card {
+  transform-style: preserve-3d;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gradient-text { animation: none; }
+  .badge-dot { animation: none; }
+  * { scroll-behavior: auto !important; }
+}
+
