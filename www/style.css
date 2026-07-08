@@ -1439,9 +1439,49 @@ footer {
 .nl-success h3 { font-size: 20px; font-weight: 700; color: #fff; }
 .nl-success p { font-size: 14px; color: var(--muted); }
 
-#paTick circle, #paTick path {
-  fill: none;
-  stroke: var(--green);
+.tick-wrap {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 4px;
+}
+
+#paTick {
+  position: relative;
+  z-index: 2;
+  color: var(--green);
+  overflow: visible;
+}
+
+#paTickCircle, #paTickCheck { stroke: var(--green); }
+
+.tick-ripple {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--green);
+  opacity: 0;
+  transform: scale(0.6);
+  pointer-events: none;
+}
+
+.tick-particles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.tick-particle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+  background: var(--green);
+  border-radius: 50%;
+  opacity: 0;
+  transform: rotate(var(--angle)) translate(0, 0);
 }
 
 .pa-error {

@@ -200,10 +200,24 @@
         <p class="pa-error" id="paError" style="display:none"></p>
       </form>
       <div class="nl-success" id="paSuccess" style="display:none">
-        <svg id="paTick" width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle id="paTickCircle" cx="12" cy="12" r="10"/>
-          <path id="paTickCheck" d="M8 12.5l2.7 2.7L16 9.5"/>
-        </svg>
+        <div class="tick-wrap">
+          <div class="tick-ripple"></div>
+          <div class="tick-particles">
+            <span class="tick-particle" style="--angle:0deg"></span>
+            <span class="tick-particle" style="--angle:45deg"></span>
+            <span class="tick-particle" style="--angle:90deg"></span>
+            <span class="tick-particle" style="--angle:135deg"></span>
+            <span class="tick-particle" style="--angle:180deg"></span>
+            <span class="tick-particle" style="--angle:225deg"></span>
+            <span class="tick-particle" style="--angle:270deg"></span>
+            <span class="tick-particle" style="--angle:315deg"></span>
+          </div>
+          <svg id="paTick" width="72" height="72" viewBox="0 0 24 24">
+            <circle id="paTickBg" cx="12" cy="12" r="11" fill="var(--green)" fill-opacity="0.12" stroke="none"/>
+            <circle id="paTickCircle" cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.6"/>
+            <path id="paTickCheck" d="M7.5 12.5l3 3L16.5 9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
         <h3 id="paSuccessTitle">Application sent</h3>
         <p id="paSuccessMsg">We've received your application and will review your deployment shortly.</p>
       </div>
@@ -332,20 +346,51 @@
     // manually, instead of silently yanking them into their own mail app.
     function animateSuccessTick() {
       const svg = document.getElementById('paTick');
-      const shapes = [document.getElementById('paTickCircle'), document.getElementById('paTickCheck')];
-      shapes.forEach((el) => {
+      const bg = document.getElementById('paTickBg');
+      const ring = document.getElementById('paTickCircle');
+      const check = document.getElementById('paTickCheck');
+      const ripple = document.querySelector('.tick-ripple');
+      const particles = document.querySelectorAll('.tick-particle');
+      const title = document.getElementById('paSuccessTitle');
+      const msg = document.getElementById('paSuccessMsg');
+
+      [ring, check].forEach((el) => {
         const length = el.getTotalLength();
         el.style.strokeDasharray = length;
         el.style.strokeDashoffset = length;
       });
-      if (window.gsap) {
-        gsap.set(svg, { scale: 0.6, opacity: 0, transformOrigin: '50% 50%' });
-        gsap.to(svg, { scale: 1, opacity: 1, duration: 0.35, ease: 'back.out(2.5)' });
-        gsap.to(shapes[0], { strokeDashoffset: 0, duration: 0.5, ease: 'power2.out', delay: 0.05 });
-        gsap.to(shapes[1], { strokeDashoffset: 0, duration: 0.35, ease: 'power2.out', delay: 0.4 });
-      } else {
-        shapes.forEach((el) => { el.style.strokeDashoffset = 0; });
+
+      if (!window.gsap) {
+        [ring, check].forEach((el) => { el.style.strokeDashoffset = 0; });
+        return;
       }
+
+      const angle = (el) => parseFloat(getComputedStyle(el).getPropertyValue('--angle')) || 0;
+
+      gsap.timeline()
+        .set(svg, { scale: 0.4, opacity: 0, transformOrigin: '50% 50%' })
+        .set(bg, { scale: 0, transformOrigin: '50% 50%' })
+        .set([title, msg], { opacity: 0, y: 14 })
+        .set(ripple, { scale: 0.6, opacity: 0 })
+        .set(particles, { opacity: 0, x: 0, y: 0, scale: 1 })
+        .to(svg, { opacity: 1, scale: 1, duration: 0.4, ease: 'back.out(3)' })
+        .to(bg, { scale: 1, duration: 0.5, ease: 'elastic.out(1, 0.6)' }, '<')
+        .to(ring, { strokeDashoffset: 0, duration: 0.45, ease: 'power2.out' }, '-=0.25')
+        .to(check, { strokeDashoffset: 0, duration: 0.35, ease: 'power2.out' }, '-=0.1')
+        .to(svg, { scale: 1.14, duration: 0.12, ease: 'power1.out' })
+        .to(svg, { scale: 1, duration: 0.3, ease: 'elastic.out(1, 0.45)' })
+        .to(ripple, { opacity: 0.55, duration: 0.01 }, '<')
+        .to(ripple, { scale: 2.6, opacity: 0, duration: 0.75, ease: 'power2.out' }, '<')
+        .to(particles, { opacity: 1, duration: 0.05 }, '<')
+        .to(particles, {
+          x: (i, el) => Math.cos((angle(el) * Math.PI) / 180) * 46,
+          y: (i, el) => Math.sin((angle(el) * Math.PI) / 180) * 46,
+          scale: 0.3,
+          opacity: 0,
+          duration: 0.65,
+          ease: 'power2.out',
+        }, '<')
+        .to([title, msg], { opacity: 1, y: 0, duration: 0.4, stagger: 0.08, ease: 'power2.out' }, '-=0.45');
     }
 
     async function submitPartnerApplication(e) {
