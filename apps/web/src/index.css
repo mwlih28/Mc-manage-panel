@@ -50,6 +50,24 @@
     border-color: #3a3a3e;
   }
 
+  /* Stripe's brand purple (#635BFF) — used on the "Connect with Stripe" button */
+  .btn-stripe {
+    @apply btn text-white;
+    background: #635BFF;
+  }
+  .btn-stripe:hover:not(:disabled) {
+    background: #7A73FF;
+  }
+
+  /* PayTR's brand navy (#0F2666) — used on their save/notify actions */
+  .btn-paytr {
+    @apply btn text-white;
+    background: #0F2666;
+  }
+  .btn-paytr:hover:not(:disabled) {
+    background: #17357F;
+  }
+
   .btn-danger {
     @apply btn;
     color: #F27074;

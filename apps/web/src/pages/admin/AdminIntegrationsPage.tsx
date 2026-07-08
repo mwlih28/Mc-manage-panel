@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, Trash2, Pencil, Copy, Eye, EyeOff, RefreshCw, Download, ShoppingCart, X, Gauge, Info,
-  CreditCard, Unlink, Landmark, Save,
+  Unlink, Save,
 } from 'lucide-react';
 import api from '@/lib/axios';
 import { Spinner } from '@/components/ui/Spinner';
@@ -54,6 +54,44 @@ function StatusDot({ status }: { status: StoreIntegrationRow['lastStatus'] }) {
   const color = status === 'success' ? 'bg-[#3EC896]' : status === 'failed' ? 'bg-red-500' : status === 'skipped' ? 'bg-amber-500' : 'bg-zinc-600';
   const title = status === 'success' ? 'Last purchase ran successfully' : status === 'failed' ? 'Last purchase failed' : status === 'skipped' ? 'Last purchase had no matching package mapping' : 'Never triggered';
   return <span className={`inline-block h-2 w-2 rounded-full ${color}`} title={title} />;
+}
+
+// Stripe's own logomark (the "S" wordmark), on their brand purple (#635BFF).
+export function StripeMark({ size = 20, className = '' }: { size?: number; className?: string }) {
+  return (
+    <span
+      className={`inline-flex items-center justify-center rounded-md shrink-0 ${className}`}
+      style={{ width: size + 10, height: size + 10, backgroundColor: '#635BFF' }}
+    >
+      <svg width={size * 0.55} height={size * 0.55} viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
+        <path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.975 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.545-2.354 1.545-1.875 0-4.965-.921-6.99-2.109l-.9 5.555C5.175 22.99 8.385 24 11.714 24c2.641 0 4.843-.624 6.328-1.813 1.664-1.305 2.525-3.236 2.525-5.732 0-4.128-2.524-5.851-6.594-7.305h.003z" />
+      </svg>
+    </span>
+  );
+}
+
+// PayTR's own wordmark, on their brand navy (#0F2666) — matches how PayTR
+// displays it themselves (white logo on a dark header).
+export function PaytrMark({ height = 20, className = '' }: { height?: number; className?: string }) {
+  return (
+    <span
+      className={`inline-flex items-center justify-center rounded-md shrink-0 px-2.5 ${className}`}
+      style={{ height: height + 10, backgroundColor: '#0F2666' }}
+    >
+      <svg height={height * 0.7} viewBox="0 0 135 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path fillRule="evenodd" clipRule="evenodd" d="M22.9758 12.9827H16.8273C16.0221 12.9827 15.2901 13.5683 15.1071 14.3734L13.6798 20.8513C13.4236 21.9493 14.485 23.0107 15.5829 23.0107H34.0285C35.5657 23.0107 36.9198 21.8761 37.1394 20.339L38.6399 11.1527L39.8111 3.94285C40.1405 2.00313 38.6399 0.283005 36.7002 0.283005H18.95C18.0716 0.283005 17.3396 0.905179 17.1932 1.74694L17.0468 2.7351C16.8639 3.79645 17.7056 4.78461 18.8036 4.78461H23.8542C25.9769 4.78461 27.5872 6.72433 27.1846 8.77384L26.965 10.5306C26.6722 12.1409 25.4645 13.0193 23.8176 13.0193" fill="white" />
+        <path fillRule="evenodd" clipRule="evenodd" d="M8.95858 19.2776H5.88431C5.15234 19.2776 4.49356 19.7168 4.31057 20.3024L4.01778 21.2905C3.76159 22.1323 4.53016 22.9741 5.59152 22.9741H8.66579C9.39776 22.9741 10.0565 22.5349 10.2395 21.9493L10.5323 20.9611C10.7885 20.0828 10.0199 19.2776 8.95858 19.2776Z" fill="white" />
+        <path fillRule="evenodd" clipRule="evenodd" d="M10.1297 13.0193H2.48065C1.74868 13.0193 1.0899 13.5316 0.906912 14.227L0.614123 15.3616C0.357933 16.3497 1.1265 17.3013 2.18786 17.3013H9.83694C10.5689 17.3013 11.2277 16.7889 11.4107 16.0935L11.7035 14.959C11.9597 14.0074 11.1911 13.0193 10.1297 13.0193Z" fill="white" />
+        <path fillRule="evenodd" clipRule="evenodd" d="M6.0673 4.63821H11.9597C12.6916 4.63821 13.3504 4.12583 13.5334 3.39386L13.8262 2.22271C14.0824 1.19795 13.3138 0.209793 12.2524 0.209793H6.36008C5.62811 0.209793 4.96934 0.722169 4.78635 1.45414L4.49356 2.62529C4.27397 3.65005 5.04254 4.63821 6.0673 4.63821Z" fill="white" />
+        <path fillRule="evenodd" clipRule="evenodd" d="M6.76267 7.93207L6.46988 9.10323C6.21369 10.128 6.98226 11.1161 8.04362 11.1161H19.5721C20.3041 11.1161 20.9629 10.6038 21.1459 9.87179L21.4387 8.70064C21.6949 7.67589 20.9263 6.68773 19.8649 6.68773H8.33641C7.60444 6.68773 6.94566 7.20011 6.76267 7.93207Z" fill="white" />
+        <path d="M46.472 0.100006H54.2675C59.7207 0.100006 62.8681 2.91808 62.8681 7.67588C62.8681 12.5435 59.6841 15.325 54.2675 15.325H51.3762V22.8643H46.472V0.100006ZM54.1577 11.3357C56.4634 11.3357 57.8541 10.0182 57.8541 7.74909C57.8541 5.47998 56.4634 4.16244 54.1577 4.16244H51.3396V11.3723H54.1577V11.3357Z" fill="white" />
+        <path d="M75.6776 17.9967H66.7842L65.2104 22.8643H60.0867L68.2115 0.100006H74.6528L82.7777 22.8643H77.2879L75.6776 17.9967ZM74.4699 14.3734L71.3224 4.74801H71.0662L67.9187 14.3734H74.4699Z" fill="white" />
+        <path d="M85.2298 14.2636L77.1781 0.136612H82.6679L87.6087 9.65222H87.9015L92.9521 0.136612H98.1125L90.0974 14.2636V22.9009H85.2298V14.2636Z" fill="white" />
+        <path d="M104.041 4.16244H97.6733L99.9424 0.136612H115.314V4.16244H108.909V22.9009H104.041V4.16244Z" fill="white" />
+        <path d="M129.221 22.9009L124.829 15.3616H124.683H121.792V22.9009H116.924V0.136612H124.72C130.173 0.136612 133.32 2.95469 133.32 7.71249C133.32 11.0795 131.82 13.4585 129.038 14.593L134.565 22.9009H129.221ZM121.792 11.3357H124.61C126.915 11.3357 128.306 9.9816 128.306 7.71249C128.306 5.47998 126.915 4.16244 124.61 4.16244H121.792V11.3357Z" fill="white" />
+      </svg>
+    </span>
+  );
 }
 
 // "Connect with Stripe" — a real OAuth round trip through a central relay
@@ -143,7 +181,7 @@ function StripeSection() {
             Connect your own Stripe account to sell resource upgrades or ranks through a real checkout — payments go straight to your account, Kretase never touches the money.
           </p>
         </div>
-        <CreditCard size={18} className="text-zinc-600 shrink-0" />
+        <StripeMark />
       </div>
       <div className="p-6">
         {connecting ? (
@@ -159,8 +197,8 @@ function StripeSection() {
             </button>
           </div>
         ) : (
-          <button className="btn-primary" onClick={startConnect} disabled={startingConnect}>
-            {startingConnect ? <Spinner size="sm" /> : <CreditCard size={16} />} Connect with Stripe
+          <button className="btn-stripe" onClick={startConnect} disabled={startingConnect}>
+            {startingConnect && <Spinner size="sm" />} Connect with Stripe
           </button>
         )}
       </div>
@@ -223,7 +261,7 @@ function PaytrSection() {
             Turkish payment processor — paste the credentials from your own PayTR merchant panel. Payments go straight to your PayTR account.
           </p>
         </div>
-        <Landmark size={18} className="text-zinc-600 shrink-0" />
+        <PaytrMark />
       </div>
       <div className="p-6 space-y-4">
         <div>
@@ -259,7 +297,7 @@ function PaytrSection() {
             Paste this once into your PayTR merchant panel's Notification URL setting — it's account-wide, not per-integration.
           </p>
         </div>
-        <button className="btn-primary" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+        <button className="btn-paytr" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
           {saveMutation.isPending ? <Spinner size="sm" /> : <Save size={16} />} Save
         </button>
       </div>
@@ -405,12 +443,15 @@ export function AdminIntegrationsPage() {
                     <td><StatusDot status={i.lastStatus} /></td>
                     <td className="font-medium text-zinc-200">{i.name}{!i.enabled && <span className="ml-2 text-[10px] text-zinc-600">(disabled)</span>}</td>
                     <td>
-                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
-                        i.provider === 'tebex' ? 'bg-blue-500/10 text-blue-400'
-                          : i.provider === 'stripe' ? 'bg-indigo-500/10 text-indigo-400'
-                          : i.provider === 'paytr' ? 'bg-red-500/10 text-red-400'
-                          : 'bg-emerald-500/10 text-emerald-400'
-                      }`}>
+                      <span
+                        className="text-[10px] font-mono px-1.5 py-0.5 rounded"
+                        style={
+                          i.provider === 'tebex' ? { background: 'rgba(59,130,246,0.1)', color: '#60a5fa' }
+                            : i.provider === 'stripe' ? { background: 'rgba(99,91,255,0.12)', color: '#8B85FF' }
+                            : i.provider === 'paytr' ? { background: 'rgba(15,38,102,0.25)', color: '#5B9BE8' }
+                            : { background: 'rgba(16,185,129,0.1)', color: '#34d399' }
+                        }
+                      >
                         {i.provider}
                       </span>
                     </td>
@@ -562,8 +603,12 @@ function StoreIntegrationModal({ servers, plans, existing, onClose, onSaved }: {
           <div className="flex gap-2">
             <button type="button" className={provider === 'tebex' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setProvider('tebex')}>Tebex</button>
             <button type="button" className={provider === 'craftingstore' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setProvider('craftingstore')}>CraftingStore</button>
-            <button type="button" className={provider === 'stripe' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setProvider('stripe')}>Stripe</button>
-            <button type="button" className={provider === 'paytr' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setProvider('paytr')}>PayTR</button>
+            <button type="button" className={provider === 'stripe' ? 'btn-stripe btn-sm' : 'btn-secondary btn-sm'} onClick={() => setProvider('stripe')}>
+              <StripeMark size={10} className="!rounded" /> Stripe
+            </button>
+            <button type="button" className={provider === 'paytr' ? 'btn-paytr btn-sm' : 'btn-secondary btn-sm'} onClick={() => setProvider('paytr')}>
+              <PaytrMark height={10} className="!rounded !px-1.5" /> PayTR
+            </button>
           </div>
           {provider === 'stripe' && !stripeConnected && (
             <p className="text-[11px] text-amber-400 mt-1.5">Connect Stripe in the card above before creating a Stripe integration.</p>
