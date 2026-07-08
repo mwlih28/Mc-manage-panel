@@ -5,10 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Kretase — Game Server Management Panel</title>
   <meta name="description" content="Open-source, self-hosted game server management panel. Deploy and manage Minecraft and other game servers with a single command." />
+  <meta property="og:type" content="website" />
   <meta property="og:title" content="Kretase — Game Server Management Panel" />
   <meta property="og:description" content="Open-source game server management panel. One command install." />
   <meta property="og:url" content="https://kretase.com" />
-  <meta property="og:image" content="https://kretase.com/assets/brand/kretase-logo-512.png" />
+  <meta property="og:image" content="https://kretase.com/assets/screenshots/kretase-dashboard.jpg" />
+  <meta property="og:image:width" content="3200" />
+  <meta property="og:image:height" content="1800" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Kretase — Game Server Management Panel" />
+  <meta name="twitter:description" content="Open-source game server management panel. One command install." />
+  <meta name="twitter:image" content="https://kretase.com/assets/screenshots/kretase-dashboard.jpg" />
   <link rel="icon" type="image/png" href="favicon-32.png" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -29,6 +36,7 @@
       <div class="nav-links">
         <a href="#about">About</a>
         <a href="#features">Features</a>
+        <a href="#screenshots">Screenshots</a>
         <a href="#how-it-works">How it works</a>
         <a href="#security">Security</a>
         <a href="#community">Community</a>
@@ -51,6 +59,7 @@
     <div class="mobile-menu" id="mobileMenu">
       <a href="#about">About</a>
       <a href="#features">Features</a>
+      <a href="#screenshots">Screenshots</a>
       <a href="#how-it-works">How it works</a>
       <a href="#security">Security</a>
       <a href="#community">Community</a>
@@ -291,6 +300,63 @@
           </div>
           <h3>AI Tools</h3>
           <p>Generate MOTDs and server logos for free with a built-in algorithm, or plug in your own OpenAI, Gemini, or Anthropic key for AI-powered results.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SCREENSHOTS -->
+  <section class="section section-alt" id="screenshots">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-tag">Screenshots</div>
+        <h2>See the panel<br/>before you install it</h2>
+        <p class="section-sub">Real screenshots from a live Kretase deployment — the same dark, dense UI you'll get on your own domain.</p>
+      </div>
+      <div class="screenshot-grid">
+        <div class="screenshot-card">
+          <div class="terminal-bar">
+            <span class="t-dot red"></span><span class="t-dot yellow"></span><span class="t-dot green"></span>
+            <span class="t-title">panel.yourdomain.com/dashboard</span>
+          </div>
+          <img src="assets/screenshots/kretase-dashboard.jpg" alt="Kretase game server management panel dashboard showing server list, RAM and disk usage" loading="lazy" width="3200" height="1800" />
+          <div class="screenshot-caption">
+            <h3>Dashboard</h3>
+            <p>Every server you own, its live status, and total resource usage at a glance.</p>
+          </div>
+        </div>
+        <div class="screenshot-card">
+          <div class="terminal-bar">
+            <span class="t-dot red"></span><span class="t-dot yellow"></span><span class="t-dot green"></span>
+            <span class="t-title">panel.yourdomain.com/server/console</span>
+          </div>
+          <img src="assets/screenshots/kretase-console.jpg" alt="Kretase Minecraft server console with live log output, CPU/RAM/disk stats, and online player list" loading="lazy" width="3200" height="1800" />
+          <div class="screenshot-caption">
+            <h3>Server Console</h3>
+            <p>Real-time console output over WebSocket, live resource graphs, and the online player list.</p>
+          </div>
+        </div>
+        <div class="screenshot-card">
+          <div class="terminal-bar">
+            <span class="t-dot red"></span><span class="t-dot yellow"></span><span class="t-dot green"></span>
+            <span class="t-title">panel.yourdomain.com/admin</span>
+          </div>
+          <img src="assets/screenshots/kretase-admin-panel.jpg" alt="Kretase admin panel overview showing total users, servers, active nodes, and recent activity log" loading="lazy" width="3200" height="1800" />
+          <div class="screenshot-caption">
+            <h3>Admin Overview</h3>
+            <p>Panel-wide stats, node health, and an audit trail of every admin action.</p>
+          </div>
+        </div>
+        <div class="screenshot-card">
+          <div class="terminal-bar">
+            <span class="t-dot red"></span><span class="t-dot yellow"></span><span class="t-dot green"></span>
+            <span class="t-title">console</span>
+          </div>
+          <img src="assets/screenshots/kretase-live-console.jpg" alt="Close-up of the Kretase live Minecraft console showing real-time TPS reporting and command input" loading="lazy" width="2030" height="900" />
+          <div class="screenshot-caption">
+            <h3>Live Console Output</h3>
+            <p>Command history replay on reconnect, with TPS reported straight from the server thread.</p>
+          </div>
         </div>
       </div>
     </div>
@@ -761,6 +827,7 @@
           <div class="footer-col">
             <h4>Product</h4>
             <a href="#features">Features</a>
+            <a href="#screenshots">Screenshots</a>
             <a href="#how-it-works">Installation</a>
             <a href="#games">Supported Games</a>
             <a href="#compare">vs Pterodactyl</a>

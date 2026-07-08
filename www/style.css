@@ -593,6 +593,47 @@ nav.scrolled {
 
 .feat-card p { font-size: 14px; color: var(--muted); line-height: 1.65; }
 
+/* ── SCREENSHOTS ──────────────────────────────────────────── */
+.screenshot-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 28px;
+}
+
+.screenshot-card {
+  background: #0d1117;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 24px 48px rgba(0,0,0,0.4);
+  transition: transform .25s, border-color .25s;
+}
+
+.screenshot-card:hover { transform: translateY(-4px); border-color: rgba(46, 111, 238, 0.35); }
+
+.screenshot-card img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  object-position: top;
+  background: #0a0d12;
+}
+
+.screenshot-caption {
+  padding: 14px 18px;
+  border-top: 1px solid var(--border);
+  background: #161b22;
+}
+
+.screenshot-caption h3 { font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 3px; }
+.screenshot-caption p { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+
+@media (max-width: 760px) {
+  .screenshot-grid { grid-template-columns: 1fr; }
+}
+
 .security-badges {
   margin-top: 48px;
   padding-top: 40px;
@@ -1328,8 +1369,32 @@ footer {
   transition: border-color .2s, box-shadow .2s;
 }
 
-.nl-field input::placeholder { color: #374151; }
-.nl-field input:focus { border-color: rgba(46, 111, 238, 0.4); box-shadow: 0 0 0 3px rgba(46, 111, 238, 0.08); }
+.nl-field input::placeholder, .nl-field textarea::placeholder { color: #374151; }
+.nl-field input:focus, .nl-field textarea:focus { border-color: rgba(46, 111, 238, 0.4); box-shadow: 0 0 0 3px rgba(46, 111, 238, 0.08); }
+
+.nl-field textarea {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 11px 14px;
+  font-size: 14px;
+  color: var(--text);
+  font-family: 'General Sans', sans-serif;
+  outline: none;
+  resize: vertical;
+  min-height: 90px;
+  transition: border-color .2s, box-shadow .2s;
+}
+
+.pa-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 640px) {
+  .pa-row { grid-template-columns: 1fr; }
+}
 
 .nl-btn {
   display: inline-flex;

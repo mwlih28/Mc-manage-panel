@@ -5,10 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Certified Partners — Kretase</title>
   <meta name="description" content="Hosting providers formally accredited by the Kretase Core Team as Approved and Certified Kretase Panel deployments." />
+  <meta property="og:type" content="website" />
   <meta property="og:title" content="Certified Partners — Kretase" />
   <meta property="og:description" content="Hosting providers formally accredited by the Kretase Core Team." />
   <meta property="og:url" content="https://kretase.com/partners.html" />
   <meta property="og:image" content="https://kretase.com/assets/brand/kretase-logo-512.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Certified Partners — Kretase" />
+  <meta name="twitter:description" content="Hosting providers formally accredited by the Kretase Core Team." />
+  <meta name="twitter:image" content="https://kretase.com/assets/brand/kretase-logo-512.png" />
   <link rel="icon" type="image/png" href="favicon-32.png" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -84,18 +89,6 @@
       margin: 0 auto;
     }
     .partners-empty svg { color: var(--muted); opacity: 0.4; margin-bottom: 14px; }
-
-    .partners-cta {
-      text-align: center;
-      padding: 0 0 100px;
-    }
-    .partners-cta a {
-      color: var(--accent);
-      text-decoration: none;
-      font-size: 14px;
-      font-weight: 500;
-    }
-    .partners-cta a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -110,6 +103,7 @@
       <div class="nav-links">
         <a href="/#about">About</a>
         <a href="/#features">Features</a>
+        <a href="/#screenshots">Screenshots</a>
         <a href="/#how-it-works">How it works</a>
         <a href="/#security">Security</a>
         <a href="/partners.html">Partners</a>
@@ -132,6 +126,7 @@
     <div class="mobile-menu" id="mobileMenu">
       <a href="/#about">About</a>
       <a href="/#features">Features</a>
+      <a href="/#screenshots">Screenshots</a>
       <a href="/#how-it-works">How it works</a>
       <a href="/#security">Security</a>
       <a href="/partners.html">Partners</a>
@@ -161,12 +156,55 @@
     </div>
   </section>
 
-  <!-- CTA -->
-  <div class="partners-cta">
-    <a href="mailto:contact@kretase.com">Run a hosting business on Kretase? Apply for certification &rarr;</a>
-    &nbsp;&middot;&nbsp;
-    <a href="/verify.html">Verify a certificate ID &rarr;</a>
-  </div>
+  <!-- APPLY -->
+  <section class="section section-alt" id="apply">
+    <div class="container" style="max-width:720px">
+      <div class="section-header">
+        <div class="section-tag">Apply</div>
+        <h2>Run a hosting business<br/>on Kretase?</h2>
+        <p class="section-sub">Apply for Kretase Certification — our team reviews your deployment's infrastructure, security, and configuration before issuing a Certificate ID.</p>
+      </div>
+      <form class="nl-form" id="partnerForm" onsubmit="submitPartnerApplication(event)" style="max-width:560px;margin:0 auto">
+        <div class="pa-row">
+          <div class="nl-field">
+            <label>Company / hosting business <span class="req">*</span></label>
+            <input type="text" id="paCompany" placeholder="Acme Hosting" required autocomplete="organization" />
+          </div>
+          <div class="nl-field">
+            <label>Contact name <span class="req">*</span></label>
+            <input type="text" id="paName" placeholder="Jane Doe" required autocomplete="name" />
+          </div>
+        </div>
+        <div class="pa-row">
+          <div class="nl-field">
+            <label>Email <span class="req">*</span></label>
+            <input type="email" id="paEmail" placeholder="you@acmehosting.com" required autocomplete="email" />
+          </div>
+          <div class="nl-field">
+            <label>Panel URL <span class="req">*</span></label>
+            <input type="url" id="paUrl" placeholder="https://panel.acmehosting.com" required />
+          </div>
+        </div>
+        <div class="nl-field">
+          <label>Why are you applying? <span class="req">*</span></label>
+          <textarea id="paWhy" rows="4" placeholder="Tell us about your hosting business, how many nodes you run, and why you'd like to be Kretase Certified." required></textarea>
+        </div>
+        <button type="submit" class="nl-btn" id="paBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+          Send Application
+        </button>
+        <p class="nl-note">Opens your email client, addressed to our team and pre-filled with your answers — hit send there to submit. Prefer plain email? Write to <a href="mailto:mwlih28@gmail.com">mwlih28@gmail.com</a> directly.</p>
+      </form>
+      <div class="nl-success" id="paSuccess" style="display:none">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M20 6L9 17l-5-5"/></svg>
+        <h3>Almost there</h3>
+        <p>Your email client should have opened with your application pre-filled — hit send to submit it. Didn't open? Email us directly at <a href="mailto:mwlih28@gmail.com">mwlih28@gmail.com</a>.</p>
+      </div>
+      <p style="text-align:center;margin-top:32px">
+        <a href="/verify.html" style="color:var(--accent);text-decoration:none;font-size:14px;font-weight:500">Verify a certificate ID &rarr;</a>
+      </p>
+    </div>
+  </section>
 
   <!-- FOOTER -->
   <footer>
@@ -191,6 +229,7 @@
           <div class="footer-col">
             <h4>Product</h4>
             <a href="/#features">Features</a>
+            <a href="/#screenshots">Screenshots</a>
             <a href="/#how-it-works">Installation</a>
             <a href="/#games">Supported Games</a>
             <a href="/#compare">vs Pterodactyl</a>
@@ -268,6 +307,40 @@
       .catch(() => {
         document.getElementById('partnersGrid').innerHTML = '<div class="partners-empty"><p>Could not load the partner registry — try again shortly.</p></div>';
       });
+
+    // No backend on this static site — the applicant's own mail client is
+    // the actual delivery mechanism, so mailto: is the one path guaranteed
+    // to reach mwlih28@gmail.com without depending on a third-party service
+    // being configured correctly. The webhook POST alongside it is
+    // best-effort only (same endpoint the newsletter form uses, tagged with
+    // a different `source`) so a review copy lands in that pipeline too.
+    function submitPartnerApplication(e) {
+      e.preventDefault();
+      const btn = document.getElementById('paBtn');
+      const company = document.getElementById('paCompany').value.trim();
+      const name = document.getElementById('paName').value.trim();
+      const email = document.getElementById('paEmail').value.trim();
+      const url = document.getElementById('paUrl').value.trim();
+      const why = document.getElementById('paWhy').value.trim();
+      if (!company || !name || !email || !url || !why) return;
+
+      btn.disabled = true;
+      btn.textContent = 'Opening your email client…';
+
+      fetch('https://mcpanel.app.n8n.cloud/webhook/mc-panel-register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, name, company, url, why, source: 'partner-application' }),
+      }).catch(() => {});
+
+      const subject = `Kretase Partner Application — ${company}`;
+      const body = `Company: ${company}\nContact: ${name}\nEmail: ${email}\nPanel URL: ${url}\n\nWhy applying:\n${why}`;
+      const mailto = `mailto:mwlih28@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+      document.getElementById('partnerForm').style.display = 'none';
+      document.getElementById('paSuccess').style.display = 'flex';
+      window.location.href = mailto;
+    }
   </script>
 </body>
 </html>

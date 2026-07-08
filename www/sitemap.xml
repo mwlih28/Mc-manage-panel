@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+  <url>
+    <loc>https://kretase.com/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+    <image:image>
+      <image:loc>https://kretase.com/assets/screenshots/kretase-dashboard.jpg</image:loc>
+      <image:title>Kretase panel dashboard</image:title>
+      <image:caption>Kretase game server management panel dashboard showing server list, RAM and disk usage</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://kretase.com/assets/screenshots/kretase-console.jpg</image:loc>
+      <image:title>Kretase server console</image:title>
+      <image:caption>Kretase Minecraft server console with live log output, CPU/RAM/disk stats, and online player list</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://kretase.com/assets/screenshots/kretase-admin-panel.jpg</image:loc>
+      <image:title>Kretase admin overview</image:title>
+      <image:caption>Kretase admin panel overview showing total users, servers, active nodes, and recent activity log</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://kretase.com/assets/screenshots/kretase-live-console.jpg</image:loc>
+      <image:title>Kretase live console output</image:title>
+      <image:caption>Close-up of the Kretase live Minecraft console showing real-time TPS reporting and command input</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://kretase.com/assets/brand/kretase-logo-512.png</image:loc>
+      <image:title>Kretase logo</image:title>
+    </image:image>
+    <image:image>
+      <image:loc>https://kretase.com/assets/games/cs2.jpg</image:loc>
+      <image:title>Counter-Strike 2 server hosting on Kretase</image:title>
+    </image:image>
+    <image:image>
+      <image:loc>https://kretase.com/assets/games/rust.jpg</image:loc>
+      <image:title>Rust server hosting on Kretase</image:title>
+    </image:image>
+    <image:image>
+      <image:loc>https://kretase.com/assets/games/ark.jpg</image:loc>
+      <image:title>ARK: Survival Evolved server hosting on Kretase</image:title>
+    </image:image>
+    <image:image>
+      <image:loc>https://kretase.com/assets/games/terraria.jpg</image:loc>
+      <image:title>Terraria server hosting on Kretase</image:title>
+    </image:image>
+    <image:image>
+      <image:loc>https://kretase.com/assets/games/valheim.jpg</image:loc>
+      <image:title>Valheim server hosting on Kretase</image:title>
+    </image:image>
+    <image:image>
+      <image:loc>https://kretase.com/assets/games/dayz.jpg</image:loc>
+      <image:title>DayZ server hosting on Kretase</image:title>
+    </image:image>
+    <image:image>
+      <image:loc>https://kretase.com/assets/games/gmod.jpg</image:loc>
+      <image:title>Garry's Mod server hosting on Kretase</image:title>
+    </image:image>
+    <image:image>
+      <image:loc>https://kretase.com/assets/games/l4d2.jpg</image:loc>
+      <image:title>Left 4 Dead 2 server hosting on Kretase</image:title>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://kretase.com/partners.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://kretase.com/verify.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+</urlset>
