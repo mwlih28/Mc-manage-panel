@@ -3,10 +3,9 @@
 // Sends the Certified Partner application form (partners.html) to
 // RESEND_TO (falls back to mwlih28@gmail.com) via Resend, server-side.
 // Requires a RESEND_API_KEY environment variable set on the Pages project
-// (Settings > Environment variables); RESEND_FROM is optional and defaults
-// to Resend's shared sandbox sender, which — until a custom domain is
-// verified at resend.com/domains — only delivers to the Resend account's
-// own signup email, so RESEND_TO must match that address for now.
+// (Settings > Environment variables) — updating that value alone doesn't
+// take effect until a new deployment ships, since each deployment binds
+// its own env snapshot.
 //
 // Every response here uses HTTP 200 with an {ok, error} envelope, even for
 // failures. Cloudflare's edge silently replaces any Worker-returned 5xx
