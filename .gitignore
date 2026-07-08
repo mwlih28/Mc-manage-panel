@@ -14,3 +14,5 @@ coverage/
 .claude/
 apps/api/scripts/.mock-wings-data*/
 apps/api/scripts/.mock-wings-backups*/
+www/.wrangler/
+www/.dev.vars

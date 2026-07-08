@@ -189,16 +189,19 @@
           <label>Why are you applying? <span class="req">*</span></label>
           <textarea id="paWhy" rows="4" placeholder="Tell us about your hosting business, how many nodes you run, and why you'd like to be Kretase Certified." required></textarea>
         </div>
+        <div style="position:absolute;left:-9999px;top:-9999px" aria-hidden="true">
+          <label>Website<input type="text" id="paWebsite" name="website" tabindex="-1" autocomplete="off" /></label>
+        </div>
         <button type="submit" class="nl-btn" id="paBtn">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
           Send Application
         </button>
-        <p class="nl-note">Opens your email client, addressed to our team and pre-filled with your answers — hit send there to submit. Prefer plain email? Write to <a href="mailto:mwlih28@gmail.com">mwlih28@gmail.com</a> directly.</p>
+        <p class="nl-note">Sent straight to our team's inbox. Prefer plain email? Write to <a href="mailto:mwlih28@gmail.com">mwlih28@gmail.com</a> directly.</p>
       </form>
       <div class="nl-success" id="paSuccess" style="display:none">
         <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M20 6L9 17l-5-5"/></svg>
-        <h3>Almost there</h3>
-        <p>Your email client should have opened with your application pre-filled — hit send to submit it. Didn't open? Email us directly at <a href="mailto:mwlih28@gmail.com">mwlih28@gmail.com</a>.</p>
+        <h3 id="paSuccessTitle">Application sent</h3>
+        <p id="paSuccessMsg">We've received your application and will review your deployment shortly.</p>
       </div>
       <p style="text-align:center;margin-top:32px">
         <a href="/verify.html" style="color:var(--accent);text-decoration:none;font-size:14px;font-weight:500">Verify a certificate ID &rarr;</a>
@@ -308,13 +311,13 @@
         document.getElementById('partnersGrid').innerHTML = '<div class="partners-empty"><p>Could not load the partner registry — try again shortly.</p></div>';
       });
 
-    // No backend on this static site — the applicant's own mail client is
-    // the actual delivery mechanism, so mailto: is the one path guaranteed
-    // to reach mwlih28@gmail.com without depending on a third-party service
-    // being configured correctly. The webhook POST alongside it is
-    // best-effort only (same endpoint the newsletter form uses, tagged with
-    // a different `source`) so a review copy lands in that pipeline too.
-    function submitPartnerApplication(e) {
+    // Real delivery: POST to the Cloudflare Pages Function at
+    // /api/partner-application, which sends the application to
+    // mwlih28@gmail.com via Resend (see www/functions/api/partner-application.js).
+    // mailto: is only a fallback — used if that request fails, e.g. the
+    // RESEND_API_KEY env var isn't set on this deployment yet — so an
+    // application is never silently lost.
+    async function submitPartnerApplication(e) {
       e.preventDefault();
       const btn = document.getElementById('paBtn');
       const company = document.getElementById('paCompany').value.trim();
@@ -322,24 +325,31 @@
       const email = document.getElementById('paEmail').value.trim();
       const url = document.getElementById('paUrl').value.trim();
       const why = document.getElementById('paWhy').value.trim();
+      const website = document.getElementById('paWebsite').value.trim();
       if (!company || !name || !email || !url || !why) return;
 
       btn.disabled = true;
-      btn.textContent = 'Opening your email client…';
+      btn.textContent = 'Sending…';
 
-      fetch('https://mcpanel.app.n8n.cloud/webhook/mc-panel-register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, name, company, url, why, source: 'partner-application' }),
-      }).catch(() => {});
-
-      const subject = `Kretase Partner Application — ${company}`;
-      const body = `Company: ${company}\nContact: ${name}\nEmail: ${email}\nPanel URL: ${url}\n\nWhy applying:\n${why}`;
-      const mailto = `mailto:mwlih28@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-
-      document.getElementById('partnerForm').style.display = 'none';
-      document.getElementById('paSuccess').style.display = 'flex';
-      window.location.href = mailto;
+      try {
+        const res = await fetch('/api/partner-application', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ company, name, email, url, why, website }),
+        });
+        if (!res.ok) throw new Error('request failed');
+        document.getElementById('partnerForm').style.display = 'none';
+        document.getElementById('paSuccess').style.display = 'flex';
+      } catch (err) {
+        const subject = `Kretase Partner Application — ${company}`;
+        const body = `Company: ${company}\nContact: ${name}\nEmail: ${email}\nPanel URL: ${url}\n\nWhy applying:\n${why}`;
+        const mailto = `mailto:mwlih28@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        document.getElementById('paSuccessTitle').textContent = 'Almost there';
+        document.getElementById('paSuccessMsg').innerHTML = 'Couldn\'t reach our server, so we opened your email client instead — hit send there to submit your application. Didn\'t open? Email us directly at <a href="mailto:mwlih28@gmail.com">mwlih28@gmail.com</a>.';
+        document.getElementById('partnerForm').style.display = 'none';
+        document.getElementById('paSuccess').style.display = 'flex';
+        window.location.href = mailto;
+      }
     }
   </script>
 </body>
