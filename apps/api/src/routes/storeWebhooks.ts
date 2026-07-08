@@ -40,7 +40,10 @@ router.post('/paytr', async (req: Request, res: Response) => {
   }
 
   if (body.status === 'success') {
-    handleStorePurchase(order.integrationId, order.packageId, null).catch((err) => {
+    // merchantOid is the right dedup key here, not this individual callback
+    // — PayTR retries the same notification until it gets "OK" back, and
+    // every retry carries the same merchant_oid for the same order.
+    handleStorePurchase(order.integrationId, order.packageId, null, order.merchantOid).catch((err) => {
       logger.error(`Store webhook handling failed for ${order.integrationId}: ${(err as Error).message}`);
     });
   }
@@ -77,7 +80,7 @@ router.post('/:id', async (req: Request, res: Response) => {
       const session = event.data.object as Stripe.Checkout.Session;
       const packageId = session.metadata?.packageId || null;
       const username = session.customer_details?.email || null;
-      handleStorePurchase(integration.id, packageId, username).catch((err) => {
+      handleStorePurchase(integration.id, packageId, username, event.id).catch((err) => {
         logger.error(`Store webhook handling failed for ${integration.id}: ${(err as Error).message}`);
       });
     }
@@ -91,8 +94,8 @@ router.post('/:id', async (req: Request, res: Response) => {
     return res.status(401).json({ message: 'Invalid signature' });
   }
 
-  const { packageId, username } = parseStorePayload(integration.provider, req.body || {});
-  handleStorePurchase(integration.id, packageId, username).catch((err) => {
+  const { packageId, username, eventId } = parseStorePayload(integration.provider, req.body || {});
+  handleStorePurchase(integration.id, packageId, username, eventId).catch((err) => {
     logger.error(`Store webhook handling failed for ${integration.id}: ${(err as Error).message}`);
   });
 

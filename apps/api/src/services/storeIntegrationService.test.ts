@@ -31,17 +31,17 @@ describe('verifyTebexSignature', () => {
 });
 
 describe('parseStorePayload', () => {
-  it('extracts package id and username from a Tebex-shaped payload', () => {
-    const result = parseStorePayload('tebex', { package: { id: 42 }, player: { username: 'Steve' } });
-    expect(result).toEqual({ packageId: '42', username: 'Steve' });
+  it('extracts package id, username and event id from a Tebex-shaped payload', () => {
+    const result = parseStorePayload('tebex', { id: 'evt_1', package: { id: 42 }, player: { username: 'Steve' } });
+    expect(result).toEqual({ packageId: '42', username: 'Steve', eventId: 'evt_1' });
   });
 
-  it('extracts package id and username from a CraftingStore-shaped payload', () => {
-    const result = parseStorePayload('craftingstore', { package_id: 7, username: 'Alex' });
-    expect(result).toEqual({ packageId: '7', username: 'Alex' });
+  it('extracts package id, username and event id from a CraftingStore-shaped payload', () => {
+    const result = parseStorePayload('craftingstore', { package_id: 7, username: 'Alex', transaction_id: 'tx_9' });
+    expect(result).toEqual({ packageId: '7', username: 'Alex', eventId: 'tx_9' });
   });
 
   it('returns nulls when fields are missing', () => {
-    expect(parseStorePayload('tebex', {})).toEqual({ packageId: null, username: null });
+    expect(parseStorePayload('tebex', {})).toEqual({ packageId: null, username: null, eventId: null });
   });
 });

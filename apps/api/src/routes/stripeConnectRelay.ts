@@ -27,11 +27,48 @@ function getPlatformStripe(): Stripe | null {
   return key ? new Stripe(key) : null;
 }
 
+function escapeHtml(s: string): string {
+  const map: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+  return s.replace(/[&<>"']/g, (c) => map[c]);
+}
+
+// The exchange_code query param this redirects with is redeemable for a
+// live Stripe access token (see /oauth/exchange below) — and returnUrl's
+// host is never verified against anything (see isSafeReturnUrl's comment).
+// Rather than silently 302'ing that code to whatever host an attacker
+// picked, this renders the real destination and requires an explicit click,
+// so a phished admin has a real chance to notice the domain is wrong before
+// the exchange code ever reaches it.
+function renderContinuePage(destination: string): string {
+  let host = destination;
+  try { host = new URL(destination).host; } catch { /* keep raw string as fallback */ }
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Connecting Stripe account…</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body{font-family:system-ui,sans-serif;background:#0B0C0E;color:#EDEDEF;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:24px;}
+  .card{max-width:440px;background:#131417;border:1px solid #1C1E22;border-radius:12px;padding:32px;text-align:center;}
+  .host{font-weight:600;color:#6B9BFF;word-break:break-all;}
+  a.btn{display:inline-block;margin-top:20px;padding:10px 20px;background:#2E6FEE;color:#fff;border-radius:8px;text-decoration:none;font-weight:500;}
+  p{line-height:1.5;color:#9A9CA3;}
+</style></head><body>
+<div class="card">
+  <h2>Finish connecting your Stripe account</h2>
+  <p>Your Stripe account was authorized. To finish, you'll be redirected back to:</p>
+  <p class="host">${escapeHtml(host)}</p>
+  <p>Only continue if this is your own Kretase panel's domain.</p>
+  <a class="btn" href="${escapeHtml(destination)}">Continue</a>
+</div>
+</body></html>`;
+}
+
 // Not a full domain allowlist (infeasible — installs live on unknown
 // domains), just enough to stop this relay being used as a generic
-// open-redirect/phishing gadget. Worst case if bypassed: an attacker's own
-// Stripe-approved connection gets handed to an attacker-controlled URL,
-// which gains them nothing they didn't already have.
+// open-redirect gadget for arbitrary protocols/paths. This does NOT stop a
+// phishing flow where an attacker gets a victim admin to authorize using a
+// `state` whose returnUrl the attacker chose (the relay has no registry of
+// legitimate install domains to check the host against) — that's why the
+// success path below never silently redirects a real Stripe access token;
+// see renderContinuePage.
 export function isSafeReturnUrl(url: string): boolean {
   try {
     const u = new URL(url);
@@ -79,7 +116,7 @@ router.get('/oauth/callback', async (req: Request, res: Response) => {
     const redirectUrl = new URL(returnUrl);
     redirectUrl.searchParams.set('exchange_code', exchangeCode);
     redirectUrl.searchParams.set('state', state);
-    return res.redirect(redirectUrl.toString());
+    return res.type('html').send(renderContinuePage(redirectUrl.toString()));
   } catch (err) {
     logger.warn(`Stripe Connect relay: token exchange failed: ${(err as Error).message}`);
     const redirectUrl = new URL(returnUrl);

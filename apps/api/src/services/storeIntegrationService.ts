@@ -196,22 +196,61 @@ export function verifyPaytrCallback(body: PaytrCallbackBody, merchantKey: string
   }
 }
 
-// Extracts { packageId, username } from a store's webhook payload. Both
-// providers nest this differently — kept isolated here so a real payload
-// shape mismatch only needs a fix in one place.
-export function parseStorePayload(provider: string, body: Record<string, unknown>): { packageId: string | null; username: string | null } {
+// Extracts { packageId, username, eventId } from a store's webhook payload.
+// Providers nest this differently — kept isolated here so a real payload
+// shape mismatch only needs a fix in one place. eventId feeds the dedup
+// check in handleStorePurchase below; when a provider's payload shape isn't
+// confirmed to carry one, this returns null rather than guessing, which
+// just means that call falls back to today's no-dedup behavior.
+export function parseStorePayload(provider: string, body: Record<string, unknown>): { packageId: string | null; username: string | null; eventId: string | null } {
   if (provider === 'tebex') {
-    const p = body as { package?: { id?: number | string }; player?: { username?: string } };
-    return { packageId: p.package?.id != null ? String(p.package.id) : null, username: p.player?.username || null };
+    const p = body as { id?: string | number; package?: { id?: number | string }; player?: { username?: string } };
+    return {
+      packageId: p.package?.id != null ? String(p.package.id) : null,
+      username: p.player?.username || null,
+      eventId: p.id != null ? String(p.id) : null,
+    };
   }
   // CraftingStore's actual field names should be confirmed against their
   // current webhook payload docs — this is a best-effort mapping.
-  const p = body as { package_id?: number | string; packageId?: number | string; username?: string; player_name?: string };
+  const p = body as {
+    id?: string | number; transaction_id?: string | number;
+    package_id?: number | string; packageId?: number | string;
+    username?: string; player_name?: string;
+  };
   const packageId = p.package_id ?? p.packageId;
-  return { packageId: packageId != null ? String(packageId) : null, username: p.username || p.player_name || null };
+  const eventId = p.transaction_id ?? p.id;
+  return {
+    packageId: packageId != null ? String(packageId) : null,
+    username: p.username || p.player_name || null,
+    eventId: eventId != null ? String(eventId) : null,
+  };
 }
 
-export async function handleStorePurchase(integrationId: string, packageId: string | null, username: string | null): Promise<void> {
+// Atomically claims a provider event for this integration so a redelivered
+// webhook (Stripe and PayTR both guarantee at-least-once delivery) can't run
+// fulfillment twice. Returns false if this event was already claimed
+// (either a genuine retry, or a concurrent duplicate delivery losing the
+// race against the unique constraint). eventId is null for providers/paths
+// where no stable per-event identifier is available — those fall back to
+// the pre-existing no-dedup behavior rather than blocking on it.
+async function claimStoreEvent(integrationId: string, eventId: string | null): Promise<boolean> {
+  if (!eventId) return true;
+  try {
+    await prisma.storeEventLog.create({ data: { integrationId, eventId } });
+    return true;
+  } catch (err) {
+    if ((err as { code?: string }).code === 'P2002') return false;
+    throw err;
+  }
+}
+
+export async function handleStorePurchase(integrationId: string, packageId: string | null, username: string | null, eventId: string | null = null): Promise<void> {
+  if (!(await claimStoreEvent(integrationId, eventId))) {
+    logger.warn(`Skipping duplicate store webhook event ${eventId} for integration ${integrationId}`);
+    return;
+  }
+
   const integration = await prisma.storeIntegration.findUnique({
     where: { id: integrationId },
     include: { server: { include: { node: true } } },

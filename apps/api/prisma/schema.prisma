@@ -511,3 +511,21 @@ model PayTrOrder {
   createdAt     DateTime @default(now())
   expiresAt     DateTime
 }
+
+// Dedup ledger for store webhook fulfillment — payment providers (Stripe,
+// PayTR) guarantee at-least-once delivery and can legitimately redeliver the
+// same event (timeouts, a transient non-2xx response, a manual dashboard
+// resend); PayTR's own documented contract explicitly retries until it gets
+// literal "OK" back. Without this, a redelivered webhook would re-run the
+// mapped console command or reapply a plan a second time. The unique
+// constraint is the actual dedup gate — claimed atomically via create()
+// before any fulfillment side effect runs, so two concurrent deliveries of
+// the same event can't both win the race either.
+model StoreEventLog {
+  id            String   @id @default(uuid())
+  integrationId String
+  eventId       String
+  createdAt     DateTime @default(now())
+
+  @@unique([integrationId, eventId])
+}
