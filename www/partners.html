@@ -370,10 +370,13 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ company, name, email, url, why, website }),
         });
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || 'Failed to send');
-        }
+        // The function always answers with HTTP 200 and an {ok, error}
+        // envelope, even on failure — Cloudflare's edge silently replaces
+        // any Worker-returned 4xx/5xx body with its own generic error page,
+        // so a real HTTP error status here would be indistinguishable from
+        // a routing outage. Check the envelope, not res.ok/res.status.
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || 'Failed to send');
         document.getElementById('partnerForm').style.display = 'none';
         document.getElementById('paSuccess').style.display = 'flex';
         animateSuccessTick();

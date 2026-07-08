@@ -1,17 +1,25 @@
 // Cloudflare Pages Function — POST /api/partner-application
 //
 // Sends the Certified Partner application form (partners.html) to
-// mwlih28@gmail.com via Resend, server-side. Requires a RESEND_API_KEY
-// environment variable set on the Pages project (Settings > Environment
-// variables); RESEND_FROM is optional and defaults to Resend's shared
-// sandbox sender, which delivers fine to a Resend account's own owner
-// email without needing a verified sending domain.
-const TO_EMAIL = 'mwlih28@gmail.com';
+// RESEND_TO (falls back to mwlih28@gmail.com) via Resend, server-side.
+// Requires a RESEND_API_KEY environment variable set on the Pages project
+// (Settings > Environment variables); RESEND_FROM is optional and defaults
+// to Resend's shared sandbox sender, which — until a custom domain is
+// verified at resend.com/domains — only delivers to the Resend account's
+// own signup email, so RESEND_TO must match that address for now.
+//
+// Every response here uses HTTP 200 with an {ok, error} envelope, even for
+// failures. Cloudflare's edge silently replaces any Worker-returned 5xx
+// response body with its own generic "error code: 5xx" page — confirmed by
+// testing a bare `return new Response(json, {status: 502})` with no logic
+// at all and getting the same stripped page back — so a real 4xx/5xx here
+// would make every failure indistinguishable from a routing outage.
+const TO_EMAIL_DEFAULT = 'mwlih28@gmail.com';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function json(data, status = 200) {
+function json(data) {
   return new Response(JSON.stringify(data), {
-    status,
+    status: 200,
     headers: { 'Content-Type': 'application/json' },
   });
 }
@@ -20,15 +28,11 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-// Top-level guard: any uncaught throw anywhere below turns into Cloudflare's
-// bare "error code: 502" edge page (no body, no way to tell it apart from a
-// routing problem) — wrapping the whole handler guarantees a real JSON
-// error comes back no matter what fails.
 export async function onRequestPost(context) {
   try {
     return await handlePost(context);
   } catch (err) {
-    return json({ error: 'Unexpected server error', detail: String(err && err.message || err) }, 500);
+    return json({ ok: false, error: 'Unexpected server error', detail: String(err && err.message || err) });
   }
 }
 
@@ -37,7 +41,7 @@ async function handlePost({ request, env }) {
   try {
     body = await request.json();
   } catch {
-    return json({ error: 'Invalid JSON body' }, 400);
+    return json({ ok: false, error: 'Invalid JSON body' });
   }
 
   const company = String(body.company || '').trim().slice(0, 200);
@@ -52,21 +56,16 @@ async function handlePost({ request, env }) {
   if (honeypot) return json({ ok: true });
 
   if (!company || !name || !email || !url || !why) {
-    return json({ error: 'Missing required fields' }, 400);
+    return json({ ok: false, error: 'Missing required fields' });
   }
   if (!EMAIL_RE.test(email)) {
-    return json({ error: 'Invalid email address' }, 400);
+    return json({ ok: false, error: 'Invalid email address' });
   }
 
   if (!env.RESEND_API_KEY) {
-    return json({ error: 'Email is not configured on this deployment' }, 500);
+    return json({ ok: false, error: 'Email is not configured on this deployment' });
   }
 
-  // The outbound fetch itself can throw (network/DNS/TLS failure, not just
-  // a non-2xx response) — left uncaught, that's an unhandled exception that
-  // Cloudflare turns into a bare "error code: 502" edge page with no body,
-  // which is indistinguishable from a Functions routing problem. Catch it
-  // explicitly so a real Resend failure always comes back as our own JSON.
   let resendResp;
   try {
     resendResp = await fetch('https://api.resend.com/emails', {
@@ -77,7 +76,7 @@ async function handlePost({ request, env }) {
       },
       body: JSON.stringify({
         from: env.RESEND_FROM || 'Kretase Partners <onboarding@resend.dev>',
-        to: [TO_EMAIL],
+        to: [env.RESEND_TO || TO_EMAIL_DEFAULT],
         reply_to: email,
         subject: `Kretase Partner Application — ${company}`,
         html: `
@@ -90,17 +89,17 @@ async function handlePost({ request, env }) {
       }),
     });
   } catch (err) {
-    return json({ error: 'Could not reach Resend', detail: String(err && err.message || err) }, 502);
+    return json({ ok: false, error: 'Could not reach Resend', detail: String(err && err.message || err) });
   }
 
   if (!resendResp.ok) {
     const detail = await resendResp.text().catch(() => '');
-    return json({ error: 'Failed to send email', detail }, 502);
+    return json({ ok: false, error: 'Failed to send email', detail });
   }
 
   return json({ ok: true });
 }
 
 export async function onRequestGet() {
-  return json({ error: 'Method not allowed' }, 405);
+  return json({ ok: false, error: 'Method not allowed' });
 }
