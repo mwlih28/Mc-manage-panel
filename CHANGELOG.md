@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.3.1
+
+### Added
+- **Stripe Connect billing** — connect your own Stripe account from Admin → Billing & Store ("Connect with Stripe") and sell resource upgrades or ranks through a real checkout. Payments go straight to your own Stripe account; Kretase never touches the money.
+- **PayTR billing** — Turkish payment processor support: paste your own PayTR merchant credentials to accept TL payments the same way, with a single account-wide notification URL.
+- **Certified Partners program** — a public `/partners.html` page listing hosting providers accredited by the Kretase Core Team, a `/verify.html` certificate-ID lookup, and a real application form (Admin → Billing & Store links to it) that emails the Core Team directly — no manual mailto: step.
+- **Real panel screenshots on kretase.com** — a Screenshots section with actual dashboard/console/admin/live-console shots, plus an image sitemap so they're indexable in Google Images.
+- Polished kretase.com with scroll animations, hover/tilt effects, and a Skyport-inspired floating sidebar shell with an animated active pill in the panel itself.
+
+### Fixed
+- The Pterodactyl migration wizard hanging forever when the source panel's SFTP transfer stalled mid-file instead of erroring out.
+- WHMCS/Blesta module downloads 404ing to the SPA fallback on real deployments instead of serving the actual file.
+- Deleted servers could leave orphaned Docker containers running forever on the node.
+- SFTP card on the server page showing an unreachable host in some configurations; added a password field.
+
 ## v1.3.0
 
 ### Added
