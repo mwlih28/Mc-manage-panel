@@ -20,7 +20,19 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-export async function onRequestPost({ request, env }) {
+// Top-level guard: any uncaught throw anywhere below turns into Cloudflare's
+// bare "error code: 502" edge page (no body, no way to tell it apart from a
+// routing problem) — wrapping the whole handler guarantees a real JSON
+// error comes back no matter what fails.
+export async function onRequestPost(context) {
+  try {
+    return await handlePost(context);
+  } catch (err) {
+    return json({ error: 'Unexpected server error', detail: String(err && err.message || err) }, 500);
+  }
+}
+
+async function handlePost({ request, env }) {
   let body;
   try {
     body = await request.json();
@@ -50,26 +62,36 @@ export async function onRequestPost({ request, env }) {
     return json({ error: 'Email is not configured on this deployment' }, 500);
   }
 
-  const resendResp = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${env.RESEND_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: env.RESEND_FROM || 'Kretase Partners <onboarding@resend.dev>',
-      to: [TO_EMAIL],
-      reply_to: email,
-      subject: `Kretase Partner Application — ${company}`,
-      html: `
-        <p><strong>Company:</strong> ${escapeHtml(company)}</p>
-        <p><strong>Contact:</strong> ${escapeHtml(name)}</p>
-        <p><strong>Email:</strong> ${escapeHtml(email)}</p>
-        <p><strong>Panel URL:</strong> ${escapeHtml(url)}</p>
-        <p><strong>Why applying:</strong><br>${escapeHtml(why).replace(/\n/g, '<br>')}</p>
-      `.trim(),
-    }),
-  });
+  // The outbound fetch itself can throw (network/DNS/TLS failure, not just
+  // a non-2xx response) — left uncaught, that's an unhandled exception that
+  // Cloudflare turns into a bare "error code: 502" edge page with no body,
+  // which is indistinguishable from a Functions routing problem. Catch it
+  // explicitly so a real Resend failure always comes back as our own JSON.
+  let resendResp;
+  try {
+    resendResp = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: env.RESEND_FROM || 'Kretase Partners <onboarding@resend.dev>',
+        to: [TO_EMAIL],
+        reply_to: email,
+        subject: `Kretase Partner Application — ${company}`,
+        html: `
+          <p><strong>Company:</strong> ${escapeHtml(company)}</p>
+          <p><strong>Contact:</strong> ${escapeHtml(name)}</p>
+          <p><strong>Email:</strong> ${escapeHtml(email)}</p>
+          <p><strong>Panel URL:</strong> ${escapeHtml(url)}</p>
+          <p><strong>Why applying:</strong><br>${escapeHtml(why).replace(/\n/g, '<br>')}</p>
+        `.trim(),
+      }),
+    });
+  } catch (err) {
+    return json({ error: 'Could not reach Resend', detail: String(err && err.message || err) }, 502);
+  }
 
   if (!resendResp.ok) {
     const detail = await resendResp.text().catch(() => '');
