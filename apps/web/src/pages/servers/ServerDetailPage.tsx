@@ -121,6 +121,28 @@ interface ConsoleLine {
   timestamp: number;
 }
 
+// Common Minecraft server console commands (vanilla + Paper/Spigot + the most
+// common Essentials/permissions extras), used to power the type-ahead
+// suggestion dropdown in the console. Matched by first-word prefix only, so a
+// server running a non-Minecraft egg simply gets no matches from this list —
+// its own command history still drives suggestions. Not exhaustive by design:
+// enough to cover what an operator reaches for daily.
+const COMMON_MC_COMMANDS = [
+  'help', 'list', 'stop', 'restart', 'reload', 'save-all', 'save-off', 'save-on',
+  'op', 'deop', 'ban', 'ban-ip', 'banlist', 'kick', 'pardon', 'pardon-ip',
+  'whitelist', 'gamemode', 'defaultgamemode', 'gamerule', 'give', 'clear',
+  'tp', 'teleport', 'spawnpoint', 'setworldspawn', 'worldborder',
+  'time', 'weather', 'difficulty', 'kill', 'effect', 'enchant', 'xp', 'experience',
+  'say', 'tell', 'msg', 'me', 'tellraw', 'title', 'seed', 'summon', 'setblock',
+  'fill', 'clone', 'particle', 'playsound', 'scoreboard', 'team', 'advancement',
+  'attribute', 'bossbar', 'data', 'datapack', 'function', 'loot', 'locate',
+  'recipe', 'schedule', 'spectate', 'trigger', 'spreadplayers',
+  'plugins', 'version', 'timings', 'tps', 'mspt', 'gc',
+  'fly', 'heal', 'feed', 'god', 'home', 'sethome', 'warp', 'setwarp', 'spawn',
+  'back', 'near', 'kit', 'tpa', 'tpaccept', 'tpahere', 'broadcast', 'vanish',
+  'invsee', 'enderchest', 'workbench', 'repair', 'speed', 'nick', 'mute',
+].sort();
+
 interface NbtItem { slot: number; id: string; count: number; }
 
 interface PlayerHistoryEntry {
@@ -201,6 +223,10 @@ export function ServerDetailPage() {
   // commands. Index is a ref so cycling doesn't trigger a re-render per key.
   const [cmdHistory, setCmdHistory] = useState<string[]>([]);
   const historyIndexRef = useRef<number>(-1);
+  // Type-ahead command suggestions (the "type h → help/heal" dropdown).
+  const commandInputRef = useRef<HTMLInputElement>(null);
+  const [suggestIndex, setSuggestIndex] = useState(0);
+  const [suggestDismissed, setSuggestDismissed] = useState(false);
 
   const isTransitional = currentStatus === 'STARTING' || currentStatus === 'STOPPING';
 
@@ -786,9 +812,52 @@ export function ServerDetailPage() {
     setCommand('');
   };
 
-  // ↑/↓ walk the command history like a real shell; ↓ past the newest clears
-  // back to an empty prompt.
+  // Type-ahead: commands (and prior history entries) whose name begins with
+  // what's been typed so far. Only fires for a bare, still-being-typed command
+  // word (no space yet) — once you're onto arguments there's nothing to
+  // complete. On a non-Minecraft egg the built-in list is skipped and only the
+  // server's own history drives suggestions.
+  const getCommandSuggestions = (raw: string): string[] => {
+    const token = raw.trimStart().toLowerCase();
+    if (!token || token.includes(' ')) return [];
+    const bare = token.startsWith('/') ? token.slice(1) : token;
+    if (!bare) return [];
+    const hist = cmdHistory.map((c) => c.trim()).filter((c) => { const l = c.toLowerCase(); return l.startsWith(bare) && l !== bare; });
+    const known = isMinecraftEgg ? COMMON_MC_COMMANDS.filter((c) => c.startsWith(bare) && c !== bare) : [];
+    return Array.from(new Set([...hist, ...known])).slice(0, 7);
+  };
+
+  const applySuggestion = (s: string) => {
+    setCommand(s + ' ');
+    setSuggestIndex(0);
+    setSuggestDismissed(true);
+    requestAnimationFrame(() => commandInputRef.current?.focus());
+  };
+
   const onCommandKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const suggestions = suggestDismissed ? [] : getCommandSuggestions(command);
+
+    // While the suggestion dropdown is open, the arrows/Tab drive it; Enter
+    // still falls through to actually run the typed command.
+    if (suggestions.length > 0) {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        applySuggestion(suggestions[Math.min(suggestIndex, suggestions.length - 1)]);
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSuggestIndex((i) => (i + 1) % suggestions.length);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSuggestIndex((i) => (i - 1 + suggestions.length) % suggestions.length);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        setSuggestDismissed(true);
+      }
+      return;
+    }
+
+    // No suggestions → ↑/↓ walk the command history like a real shell; ↓ past
+    // the newest clears back to an empty prompt.
     if (e.key === 'ArrowUp') {
       if (cmdHistory.length === 0) return;
       e.preventDefault();
@@ -1203,24 +1272,52 @@ export function ServerDetailPage() {
               )}
             </div>
 
-            {/* Command input */}
-            <form onSubmit={sendCommand} className="flex items-center gap-2 px-3 py-3 border-t border-dark-800" style={{ background: '#0e1116' }}>
-              <span className="flex items-center text-emerald-400 font-mono text-sm pl-1 select-none">$</span>
-              <input
-                type="text"
-                className="flex-1 bg-transparent outline-none font-mono text-sm text-slate-100 placeholder-slate-600 disabled:opacity-50"
-                placeholder={isRunning ? 'Type a command and press Enter…  (↑/↓ for history)' : 'Start the server to send commands'}
-                value={command}
-                onChange={(e) => setCommand(e.target.value)}
-                onKeyDown={onCommandKeyDown}
-                disabled={!isRunning}
-                autoComplete="off"
-                spellCheck={false}
-              />
-              <button type="submit" className="btn-primary btn-sm" disabled={!isRunning || !command.trim()}>
-                Send
-              </button>
-            </form>
+            {/* Command input + type-ahead suggestions */}
+            <div className="relative border-t border-dark-800" style={{ background: '#0e1116' }}>
+              {(() => {
+                const suggestions = suggestDismissed ? [] : getCommandSuggestions(command);
+                if (suggestions.length === 0) return null;
+                const active = Math.min(suggestIndex, suggestions.length - 1);
+                return (
+                  <div className="absolute bottom-full left-3 right-3 mb-1 rounded-lg border border-dark-700 overflow-hidden shadow-xl shadow-black/50" style={{ background: '#12161c' }}>
+                    {suggestions.map((s, i) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onMouseEnter={() => setSuggestIndex(i)}
+                        onClick={() => applySuggestion(s)}
+                        className={cn(
+                          'w-full flex items-center gap-2 px-3 py-1.5 text-left font-mono text-xs transition-colors',
+                          i === active ? 'bg-panel-500/15 text-panel-200' : 'text-slate-400 hover:bg-white/5'
+                        )}
+                      >
+                        <Terminal size={11} className="text-slate-600 shrink-0" />
+                        <span className="flex-1 truncate">{s}</span>
+                        {i === active && <kbd className="text-[9px] text-slate-600 border border-dark-700 rounded px-1">Tab</kbd>}
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
+              <form onSubmit={sendCommand} className="flex items-center gap-2 px-3 py-3">
+                <span className="flex items-center text-emerald-400 font-mono text-sm pl-1 select-none">$</span>
+                <input
+                  ref={commandInputRef}
+                  type="text"
+                  className="flex-1 bg-transparent outline-none font-mono text-sm text-slate-100 placeholder-slate-600 disabled:opacity-50"
+                  placeholder={isRunning ? 'Type a command…  (Tab to complete · ↑/↓ history)' : 'Start the server to send commands'}
+                  value={command}
+                  onChange={(e) => { setCommand(e.target.value); setSuggestDismissed(false); setSuggestIndex(0); historyIndexRef.current = -1; }}
+                  onKeyDown={onCommandKeyDown}
+                  disabled={!isRunning}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <button type="submit" className="btn-primary btn-sm" disabled={!isRunning || !command.trim()}>
+                  Send
+                </button>
+              </form>
+            </div>
           </div>
 
           {/* Players widget */}
