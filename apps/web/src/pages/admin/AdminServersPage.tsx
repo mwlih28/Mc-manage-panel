@@ -6,6 +6,7 @@ import api from '@/lib/axios';
 import { Server } from '@/types';
 import { getServerStatusBadge, getServerStatusDot, formatDate } from '@/lib/utils';
 import { Spinner } from '@/components/ui/Spinner';
+import { TableSkeleton } from '@/components/ui/Skeleton';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import toast from 'react-hot-toast';
@@ -67,7 +68,7 @@ export function AdminServersPage() {
 
       <div className="card">
         {isLoading ? (
-          <div className="flex justify-center py-12"><Spinner /></div>
+          <TableSkeleton rows={8} columns={5} />
         ) : (
           <div className="table-container">
             <table className="table">

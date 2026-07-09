@@ -3,10 +3,10 @@ import { Activity, CheckCircle, XCircle, Rocket, ExternalLink } from 'lucide-rea
 import api from '@/lib/axios';
 import { ActivityLog, ServerStatus } from '@/types';
 import { formatRelativeTime, getServerStatusDot } from '@/lib/utils';
-import { Spinner } from '@/components/ui/Spinner';
 import { useUpdateCheck } from '@/hooks/useUpdateCheck';
 import { MetricStrip, Metric } from '@/components/ui/MetricStrip';
 import { StatusBreakdown } from '@/components/ui/StatusBreakdown';
+import { MetricStripSkeleton, TableSkeleton, Skeleton } from '@/components/ui/Skeleton';
 
 export function AdminOverviewPage() {
   const { data, isLoading } = useQuery({
@@ -17,7 +17,25 @@ export function AdminOverviewPage() {
   const { data: updateCheck } = useUpdateCheck();
 
   if (isLoading) return (
-    <div className="flex justify-center py-20"><Spinner size="lg" /></div>
+    <div className="space-y-4 animate-fade-in">
+      <div>
+        <Skeleton className="h-6 w-48 mb-2" />
+        <Skeleton className="h-3 w-40" />
+      </div>
+      <MetricStripSkeleton cells={6} />
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div className="card xl:col-span-2">
+          <div className="card-header"><Skeleton className="h-3.5 w-32" /></div>
+          <TableSkeleton rows={7} columns={3} />
+        </div>
+        <div className="card">
+          <div className="card-header"><Skeleton className="h-3.5 w-28" /></div>
+          <div className="card-body space-y-3">
+            {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-3 w-full" />)}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 
   const totals = data?.totals || {};
