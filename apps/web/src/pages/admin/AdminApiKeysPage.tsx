@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { KeyRound, Plus, Trash2, Copy, Check, AlertTriangle } from 'lucide-react';
 import api from '@/lib/axios';
 import { Spinner } from '@/components/ui/Spinner';
+import { TableSkeleton } from '@/components/ui/Skeleton';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import toast from 'react-hot-toast';
@@ -71,16 +73,18 @@ export function AdminApiKeysPage() {
       </div>
 
       {isLoading ? (
-        <div className="flex justify-center py-12"><Spinner size="lg" /></div>
+        <div className="card"><TableSkeleton rows={5} columns={6} /></div>
       ) : keys.length === 0 ? (
-        <div className="card p-12 text-center">
-          <KeyRound size={48} className="mx-auto text-slate-600 mb-4" />
-          <p className="text-slate-300 font-medium">No API keys yet</p>
-          <p className="text-slate-500 text-sm mt-2">Create one to let a script or integration call the Kretase API</p>
-          <button className="btn-primary mt-4 mx-auto" onClick={() => setShowCreate(true)}>
-            <Plus size={16} /> Create First Key
-          </button>
-        </div>
+        <EmptyState
+          icon={KeyRound}
+          title="No API keys yet"
+          description="Create one to let a script or integration call the Kretase API"
+          action={
+            <button className="btn-primary" onClick={() => setShowCreate(true)}>
+              <Plus size={16} /> Create First Key
+            </button>
+          }
+        />
       ) : (
         <div className="card">
           <div className="table-container">

@@ -13,6 +13,8 @@ interface Allocation {
 }
 import { formatBytes } from '@/lib/utils';
 import { Spinner } from '@/components/ui/Spinner';
+import { CardSkeleton } from '@/components/ui/Skeleton';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import toast from 'react-hot-toast';
@@ -56,13 +58,16 @@ export function AdminNodesPage() {
       </div>
 
       {isLoading ? (
-        <div className="flex justify-center py-12"><Spinner size="lg" /></div>
-      ) : nodes.length === 0 ? (
-        <div className="card p-12 text-center">
-          <Cpu size={48} className="mx-auto text-slate-600 mb-4" />
-          <p className="text-slate-300 font-medium">No nodes configured</p>
-          <p className="text-slate-500 text-sm mt-1">Add a node to start hosting servers</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <CardSkeleton lines={4} />
+          <CardSkeleton lines={4} />
         </div>
+      ) : nodes.length === 0 ? (
+        <EmptyState
+          icon={Cpu}
+          title="No nodes configured"
+          description="Add a node to start hosting servers"
+        />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {nodes.map((node) => (

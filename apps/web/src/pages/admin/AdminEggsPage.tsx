@@ -5,6 +5,8 @@ import { Package, Plus, Pencil, Trash2, Zap, Upload, Download, Store, Search, Ch
 import api from '@/lib/axios';
 import { Egg } from '@/types';
 import { Spinner } from '@/components/ui/Spinner';
+import { TableSkeleton } from '@/components/ui/Skeleton';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import toast from 'react-hot-toast';
@@ -123,16 +125,18 @@ export function AdminEggsPage() {
       </div>
 
       {isLoading ? (
-        <div className="flex justify-center py-12"><Spinner size="lg" /></div>
+        <div className="card"><TableSkeleton rows={6} columns={4} /></div>
       ) : eggs.length === 0 ? (
-        <div className="card p-12 text-center">
-          <Package size={48} className="mx-auto text-slate-600 mb-4" />
-          <p className="text-slate-300 font-medium">No eggs configured</p>
-          <p className="text-slate-500 text-sm mt-2">Add a Minecraft Paper egg to get started</p>
-          <button className="btn-primary mt-4 mx-auto" onClick={() => setShowCreate(true)}>
-            <Plus size={16} /> Create First Egg
-          </button>
-        </div>
+        <EmptyState
+          icon={Package}
+          title="No eggs configured"
+          description="Add a Minecraft Paper egg to get started"
+          action={
+            <button className="btn-primary" onClick={() => setShowCreate(true)}>
+              <Plus size={16} /> Create First Egg
+            </button>
+          }
+        />
       ) : (
         <>
           <div className="relative max-w-sm">
