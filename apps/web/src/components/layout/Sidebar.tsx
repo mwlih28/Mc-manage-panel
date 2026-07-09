@@ -1,8 +1,9 @@
 import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Server, Settings, LogOut, Shield, Sparkles, Image } from 'lucide-react';
+import { LayoutDashboard, Server, Settings, LogOut, Shield, Sparkles, Image, Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/store/authStore';
+import { useCommandPalette } from '@/store/commandPaletteStore';
 import { cn } from '@/lib/utils';
 import api from '@/lib/axios';
 import toast from 'react-hot-toast';
@@ -44,6 +45,9 @@ export function Sidebar() {
   const isAdmin = user?.role === 'ADMIN';
   const navRef = useRef<HTMLElement>(null);
   const pill = useActiveNavPill(navRef);
+  const openPalette = useCommandPalette((s) => s.open);
+  // Show the platform-appropriate shortcut hint (⌘K on Mac, Ctrl K elsewhere).
+  const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
   const userNavItems = [
     { to: '/dashboard', icon: LayoutDashboard, label: t('sidebar.dashboard') },
@@ -96,6 +100,21 @@ export function Sidebar() {
           <p className="text-sm font-semibold text-white truncate leading-tight">{siteName}</p>
           <p className="text-[9px] text-zinc-600 font-mono">{formatPanelVersion(panelVersion)}</p>
         </div>
+      </div>
+
+      {/* Command palette trigger — keeps the ⌘K feature discoverable rather
+          than hidden behind a shortcut only power users would find. */}
+      <div className="px-2 pt-3">
+        <button
+          onClick={openPalette}
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-500 hover:text-zinc-200 border border-white/[0.06] hover:border-white/[0.12] bg-white/[0.02] hover:bg-white/[0.04] transition-colors"
+        >
+          <Search size={14} />
+          <span className="flex-1 text-left">{t('sidebar.search', 'Search…')}</span>
+          <kbd className="text-[10px] font-mono text-zinc-600 border border-zinc-800 rounded px-1.5 py-0.5">
+            {isMac ? '⌘K' : 'Ctrl K'}
+          </kbd>
+        </button>
       </div>
 
       {/* Navigation */}
