@@ -32,6 +32,7 @@ import archiver from 'archiver';
 import { logger } from './utils/logger';
 import { prisma } from './utils/prisma';
 import { errorHandler, notFound } from './middleware/errorHandler';
+import { requestContext } from './middleware/requestContext';
 import { initSocketServer } from './services/socketService';
 import { startScheduler } from './services/scheduler';
 import { startDiscordBot } from './services/discordBot';
@@ -122,7 +123,13 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-app.use(morgan('dev', { stream: { write: (msg) => logger.http(msg.trim()) } }));
+app.use(requestContext);
+// morgan stays on in development for its colorized at-a-glance line; the
+// structured requestContext logger above is what carries the request id,
+// duration, and acting user into the persisted logs in every environment.
+if (process.env.NODE_ENV !== 'production') {
+  app.use(morgan('dev', { stream: { write: (msg) => logger.http(msg.trim()) } }));
+}
 
 // ── Health & readiness ───────────────────────────────────────────────────
 // Split deliberately: liveness answers "is the process up?" and must stay
