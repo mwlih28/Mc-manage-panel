@@ -1,7 +1,10 @@
 import { Outlet } from 'react-router-dom';
 import { AdminSidebar } from './AdminSidebar';
+import { CommandPalette } from '@/components/CommandPalette';
+import { useCommandPaletteHotkey } from '@/hooks/useCommandPaletteHotkey';
 
 export function AdminLayout() {
+  useCommandPaletteHotkey();
   return (
     <div className="flex min-h-screen">
       <AdminSidebar />
@@ -10,6 +13,7 @@ export function AdminLayout() {
           <Outlet />
         </div>
       </main>
+      <CommandPalette />
     </div>
   );
 }

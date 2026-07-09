@@ -2,9 +2,10 @@ import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Server, Users, Cpu, Package,
-  Activity, Wrench, LogOut, ChevronLeft, KeyRound, Code2, Webhook, ArrowRightLeft, CreditCard
+  Activity, Wrench, LogOut, ChevronLeft, KeyRound, Code2, Webhook, ArrowRightLeft, CreditCard, Search
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
+import { useCommandPalette } from '@/store/commandPaletteStore';
 import { cn } from '@/lib/utils';
 import api from '@/lib/axios';
 import toast from 'react-hot-toast';
@@ -82,6 +83,8 @@ export function AdminSidebar() {
   const navigate = useNavigate();
   const navRef = useRef<HTMLElement>(null);
   const pill = useActiveNavPill(navRef);
+  const openPalette = useCommandPalette((s) => s.open);
+  const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
   const { data: settings } = useQuery({
     queryKey: ['site-settings'],
@@ -109,26 +112,40 @@ export function AdminSidebar() {
         <div className="relative shrink-0">
           <div
             className="absolute inset-0 rounded-lg blur-md opacity-50"
-            style={{ background: 'radial-gradient(circle, rgba(245,158,11,0.5) 0%, rgba(245,158,11,0) 70%)' }}
+            style={{ background: 'radial-gradient(circle, rgba(139,92,246,0.5) 0%, rgba(139,92,246,0) 70%)' }}
           />
           {logoUrl ? (
             <img src={logoUrl} alt="logo" className="relative h-8 w-8 rounded-lg object-contain bg-zinc-900 p-0.5" />
           ) : (
-            <div className="relative h-8 w-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
-              <Wrench size={14} className="text-amber-400" />
+            <div className="relative h-8 w-8 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
+              <Wrench size={14} className="text-violet-400" />
             </div>
           )}
         </div>
         <div className="min-w-0">
           <p className="text-sm font-semibold text-white truncate leading-tight">{siteName}</p>
-          <p className="text-[9px] text-amber-600 font-mono uppercase tracking-wider">Admin Panel</p>
+          <p className="text-[9px] text-violet-400 font-mono uppercase tracking-wider">Admin Panel</p>
         </div>
+      </div>
+
+      {/* Command palette trigger */}
+      <div className="px-2 pt-3">
+        <button
+          onClick={openPalette}
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-zinc-500 hover:text-zinc-200 border border-white/[0.06] hover:border-white/[0.12] bg-white/[0.02] hover:bg-white/[0.04] transition-colors"
+        >
+          <Search size={14} />
+          <span className="flex-1 text-left">Search…</span>
+          <kbd className="text-[10px] font-mono text-zinc-600 border border-zinc-800 rounded px-1.5 py-0.5">
+            {isMac ? '⌘K' : 'Ctrl K'}
+          </kbd>
+        </button>
       </div>
 
       {/* Navigation */}
       <nav ref={navRef} className="relative flex-1 overflow-y-auto px-2 py-4 space-y-5 scrollbar-none">
         <div
-          className="absolute left-2 right-2 rounded-lg bg-amber-500/[0.12] border-l-2 border-amber-400 pointer-events-none transition-all duration-300 ease-out"
+          className="absolute left-2 right-2 rounded-lg bg-violet-500/[0.14] border-l-2 border-violet-400 pointer-events-none transition-all duration-300 ease-out"
           style={{ top: pill.top, height: pill.height, opacity: pill.opacity }}
         />
         {adminNavGroups.map((group) => (
@@ -142,7 +159,7 @@ export function AdminSidebar() {
                     end={exact}
                     className={({ isActive }) => cn(
                       'relative z-10 flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-100',
-                      isActive ? 'text-amber-300' : 'text-zinc-500 hover:text-zinc-200'
+                      isActive ? 'text-violet-300' : 'text-zinc-500 hover:text-zinc-200'
                     )}
                   >
                     <Icon size={14} />
@@ -188,13 +205,13 @@ export function AdminSidebar() {
           <img
             src={user?.avatarUrl || `https://api.dicebear.com/9.x/thumbs/svg?seed=${encodeURIComponent(user?.username || user?.email || 'admin')}`}
             alt=""
-            className="h-7 w-7 rounded-lg bg-amber-500/10 border border-amber-500/20 shrink-0 object-cover"
+            className="h-7 w-7 rounded-lg bg-violet-500/10 border border-violet-500/20 shrink-0 object-cover"
           />
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-zinc-200 truncate leading-tight">
               {user?.firstName} {user?.lastName}
             </p>
-            <p className="text-[9px] text-amber-700 truncate font-mono">Administrator</p>
+            <p className="text-[9px] text-violet-400/70 truncate font-mono">Administrator</p>
           </div>
           <button
             onClick={handleLogout}

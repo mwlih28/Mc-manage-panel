@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Search, LayoutDashboard, Server as ServerIcon, Settings as SettingsIcon, Shield,
@@ -56,6 +56,11 @@ export function fuzzyScore(query: string, target: string): number {
 export function CommandPalette() {
   const { isOpen, close } = useCommandPalette();
   const navigate = useNavigate();
+  const location = useLocation();
+  // When the palette is opened from inside the admin shell, admin pages should
+  // navigate in the same tab (you're already there); from the user panel they
+  // open in a new tab, since admin is a separate surface reached that way.
+  const inAdmin = location.pathname.startsWith('/admin');
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
   const isAdmin = user?.role === 'ADMIN';
@@ -93,7 +98,12 @@ export function CommandPalette() {
 
   const commands: Command[] = useMemo(() => {
     const go = (to: string) => () => { close(); navigate(to); };
-    const openTab = (href: string) => () => { close(); window.open(href, '_blank', 'noopener,noreferrer'); };
+    // Admin destinations: navigate in-tab when already inside the admin shell,
+    // otherwise open in a new tab (the user panel treats admin as a separate
+    // surface). One helper so every admin command picks the right behavior.
+    const goAdmin = (to: string) => (inAdmin
+      ? () => { close(); navigate(to); }
+      : () => { close(); window.open(to, '_blank', 'noopener,noreferrer'); });
 
     const nav: Command[] = [
       { id: 'nav-dashboard', title: 'Dashboard', group: 'Navigation', icon: LayoutDashboard, keywords: 'home overview', perform: go('/dashboard') },
@@ -104,18 +114,18 @@ export function CommandPalette() {
     ];
 
     const admin: Command[] = isAdmin ? [
-      { id: 'adm-overview', title: 'Admin · Overview', group: 'Admin', icon: Shield, keywords: 'admin panel stats', perform: openTab('/admin') },
-      { id: 'adm-servers', title: 'Admin · Servers', group: 'Admin', icon: ServerIcon, keywords: 'all servers manage', perform: openTab('/admin/servers') },
-      { id: 'adm-users', title: 'Admin · Users', group: 'Admin', icon: Users, keywords: 'accounts members roles', perform: openTab('/admin/users') },
-      { id: 'adm-nodes', title: 'Admin · Nodes', group: 'Admin', icon: Network, keywords: 'wings host machine daemon', perform: openTab('/admin/nodes') },
-      { id: 'adm-eggs', title: 'Admin · Eggs', group: 'Admin', icon: Boxes, keywords: 'templates games startup', perform: openTab('/admin/eggs') },
-      { id: 'adm-eggstore', title: 'Admin · Egg Store', group: 'Admin', icon: Store, keywords: 'community import templates', perform: openTab('/admin/egg-store') },
-      { id: 'adm-webhooks', title: 'Admin · Webhooks', group: 'Admin', icon: Webhook, keywords: 'discord notifications events', perform: openTab('/admin/webhooks') },
-      { id: 'adm-integrations', title: 'Admin · Billing & Store', group: 'Admin', icon: CreditCard, keywords: 'stripe paytr tebex payments money', perform: openTab('/admin/integrations') },
-      { id: 'adm-migration', title: 'Admin · Migration', group: 'Admin', icon: ArrowRightLeft, keywords: 'pterodactyl import move', perform: openTab('/admin/migration') },
-      { id: 'adm-apikeys', title: 'Admin · API Keys', group: 'Admin', icon: KeyRound, keywords: 'tokens automation access', perform: openTab('/admin/api-keys') },
-      { id: 'adm-activity', title: 'Admin · Activity Log', group: 'Admin', icon: Activity, keywords: 'audit history events', perform: openTab('/admin/activity') },
-      { id: 'adm-settings', title: 'Admin · Settings', group: 'Admin', icon: SettingsIcon, keywords: 'smtp branding config storage', perform: openTab('/admin/settings') },
+      { id: 'adm-overview', title: 'Admin · Overview', group: 'Admin', icon: Shield, keywords: 'admin panel stats', perform: goAdmin('/admin') },
+      { id: 'adm-servers', title: 'Admin · Servers', group: 'Admin', icon: ServerIcon, keywords: 'all servers manage', perform: goAdmin('/admin/servers') },
+      { id: 'adm-users', title: 'Admin · Users', group: 'Admin', icon: Users, keywords: 'accounts members roles', perform: goAdmin('/admin/users') },
+      { id: 'adm-nodes', title: 'Admin · Nodes', group: 'Admin', icon: Network, keywords: 'wings host machine daemon', perform: goAdmin('/admin/nodes') },
+      { id: 'adm-eggs', title: 'Admin · Eggs', group: 'Admin', icon: Boxes, keywords: 'templates games startup', perform: goAdmin('/admin/eggs') },
+      { id: 'adm-eggstore', title: 'Admin · Egg Store', group: 'Admin', icon: Store, keywords: 'community import templates', perform: goAdmin('/admin/eggs/store') },
+      { id: 'adm-webhooks', title: 'Admin · Webhooks', group: 'Admin', icon: Webhook, keywords: 'discord notifications events', perform: goAdmin('/admin/webhooks') },
+      { id: 'adm-integrations', title: 'Admin · Billing & Store', group: 'Admin', icon: CreditCard, keywords: 'stripe paytr tebex payments money', perform: goAdmin('/admin/integrations') },
+      { id: 'adm-migration', title: 'Admin · Migration', group: 'Admin', icon: ArrowRightLeft, keywords: 'pterodactyl import move', perform: goAdmin('/admin/migration') },
+      { id: 'adm-apikeys', title: 'Admin · API Keys', group: 'Admin', icon: KeyRound, keywords: 'tokens automation access', perform: goAdmin('/admin/api-keys') },
+      { id: 'adm-activity', title: 'Admin · Activity Log', group: 'Admin', icon: Activity, keywords: 'audit history events', perform: goAdmin('/admin/activity') },
+      { id: 'adm-settings', title: 'Admin · Settings', group: 'Admin', icon: SettingsIcon, keywords: 'smtp branding config storage', perform: goAdmin('/admin/settings') },
     ] : [];
 
     const serverCmds: Command[] = servers.flatMap((s) => {
@@ -145,7 +155,7 @@ export function CommandPalette() {
 
     return [...nav, ...admin, ...serverCmds];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [servers, isAdmin, navigate, close]);
+  }, [servers, isAdmin, inAdmin, navigate, close]);
 
   // Rank all commands by fuzzy score against the query, keep only matches,
   // then re-group for display. Sorting is stable within a group by score.
