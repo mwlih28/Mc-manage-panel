@@ -30,6 +30,7 @@ import archiver from 'archiver';
 };
 
 import { logger } from './utils/logger';
+import { prisma } from './utils/prisma';
 import { errorHandler, notFound } from './middleware/errorHandler';
 import { initSocketServer } from './services/socketService';
 import { startScheduler } from './services/scheduler';
@@ -123,9 +124,42 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(morgan('dev', { stream: { write: (msg) => logger.http(msg.trim()) } }));
 
-// Health check
+// ── Health & readiness ───────────────────────────────────────────────────
+// Split deliberately: liveness answers "is the process up?" and must stay
+// cheap and dependency-free (a crash-looping container should still fail it
+// only when the process is actually down); readiness answers "can it serve
+// real traffic?" and actually touches the database, so an uptime monitor or
+// load balancer can pull this instance out of rotation during a DB outage
+// instead of serving 500s. process.uptime()/memoryUsage() give an at-a-
+// glance operational snapshot without needing a full metrics stack.
+const bootTime = Date.now();
+
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', version: process.env.PANEL_VERSION || '1.0.0', timestamp: new Date().toISOString() });
+  const mem = process.memoryUsage();
+  res.json({
+    status: 'ok',
+    version: process.env.PANEL_VERSION || '1.0.0',
+    uptimeSeconds: Math.floor(process.uptime()),
+    startedAt: new Date(bootTime).toISOString(),
+    memory: {
+      rssMb: Math.round(mem.rss / 1048576),
+      heapUsedMb: Math.round(mem.heapUsed / 1048576),
+      heapTotalMb: Math.round(mem.heapTotal / 1048576),
+    },
+    timestamp: new Date().toISOString(),
+  });
+});
+
+app.get('/health/ready', async (_req, res) => {
+  const started = Date.now();
+  try {
+    // Cheapest possible round-trip that proves the connection pool is alive.
+    await prisma.$queryRaw`SELECT 1`;
+    return res.json({ status: 'ready', database: { ok: true, latencyMs: Date.now() - started } });
+  } catch (err) {
+    logger.error(`Readiness check failed: ${(err as Error).message}`);
+    return res.status(503).json({ status: 'unavailable', database: { ok: false } });
+  }
 });
 
 // Branded install-script endpoints — serves the same scripts/*.sh files from

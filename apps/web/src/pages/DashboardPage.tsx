@@ -5,9 +5,9 @@ import api from '@/lib/axios';
 import { useAuthStore } from '@/store/authStore';
 import { Server as ServerType, ServerStatus } from '@/types';
 import { getServerStatusDot, getServerStatusBadge, formatBytes } from '@/lib/utils';
-import { Spinner } from '@/components/ui/Spinner';
 import { MetricStrip, Metric } from '@/components/ui/MetricStrip';
 import { StatusBreakdown } from '@/components/ui/StatusBreakdown';
+import { MetricStripSkeleton, TableSkeleton, Skeleton } from '@/components/ui/Skeleton';
 
 export function DashboardPage() {
   const { user } = useAuthStore();
@@ -18,7 +18,30 @@ export function DashboardPage() {
   });
 
   if (isLoading) return (
-    <div className="flex items-center justify-center py-20"><Spinner size="lg" /></div>
+    <div className="space-y-4 animate-fade-in">
+      {/* Header placeholder keeps the page's top-line layout stable while
+          the real greeting/metrics resolve. */}
+      <div className="flex items-start justify-between">
+        <div>
+          <Skeleton className="h-6 w-56 mb-2" />
+          <Skeleton className="h-3 w-32" />
+        </div>
+        <Skeleton className="h-8 w-32 rounded-lg" />
+      </div>
+      <MetricStripSkeleton cells={5} />
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div className="card xl:col-span-2">
+          <div className="card-header"><Skeleton className="h-3.5 w-28" /></div>
+          <TableSkeleton rows={6} columns={4} />
+        </div>
+        <div className="card">
+          <div className="card-header"><Skeleton className="h-3.5 w-32" /></div>
+          <div className="card-body space-y-3">
+            {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-3 w-full" />)}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 
   const servers: ServerType[] = overview?.servers || [];

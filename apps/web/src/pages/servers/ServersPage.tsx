@@ -5,7 +5,7 @@ import { Server, Search, ChevronRight } from 'lucide-react';
 import api from '@/lib/axios';
 import { Server as ServerType } from '@/types';
 import { getServerStatusDot, getServerStatusBadge } from '@/lib/utils';
-import { Spinner } from '@/components/ui/Spinner';
+import { TableSkeleton } from '@/components/ui/Skeleton';
 
 export function ServersPage() {
   const [search, setSearch] = useState('');
@@ -45,7 +45,7 @@ export function ServersPage() {
       {/* Servers table */}
       <div className="card">
         {isLoading ? (
-          <div className="flex justify-center py-12"><Spinner size="lg" /></div>
+          <TableSkeleton rows={8} columns={5} />
         ) : servers.length === 0 ? (
           <div className="p-12 text-center">
             <Server size={40} className="mx-auto text-slate-600 mb-3 opacity-40" />

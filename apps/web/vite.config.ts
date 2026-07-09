@@ -50,6 +50,15 @@ export default defineConfig({
         manualChunks: {
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
           'vendor-query': ['@tanstack/react-query', 'axios'],
+          // recharts (with its d3 deps) is the single heaviest dependency and
+          // is only used on a couple of chart-bearing pages — carving it into
+          // its own chunk keeps it out of the ServerDetailPage bundle and lets
+          // it stay cached across deploys that don't touch charting.
+          'vendor-charts': ['recharts'],
+          // socket.io-client is likewise only needed on the live-console page;
+          // its own chunk means the rest of the app never pays for it.
+          'vendor-socket': ['socket.io-client'],
+          'vendor-i18n': ['i18next', 'react-i18next', 'i18next-browser-languagedetector'],
         },
       },
     },

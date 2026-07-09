@@ -186,6 +186,24 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* Skeleton shimmer — a sweeping highlight across a neutral surface, the
+   modern "content is loading" affordance used instead of a bare spinner so
+   the page's real shape is visible before data arrives (less layout shift,
+   reads as a faster, more finished product). */
+@keyframes shimmer {
+  0%   { background-position: -180% 0; }
+  100% { background-position: 180% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #17191D 0%, #232529 50%, #17191D 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: 6px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+}
+
 /* Console */
 .console-output {
   background: #09090b;
