@@ -9,7 +9,7 @@ import {
   MapPin, Clock, Sword, Hammer, Footprints, Ban, LogOut, Wifi, Navigation,
   StickyNote, CalendarClock, UserCog, Save, Copy, CheckCircle2, Globe2, Boxes,
   Settings as SettingsIcon, Gauge, RotateCw, Trophy, Map as MapIcon,
-  ExternalLink, Palette, Bot, KeyRound
+  ExternalLink, Palette, Bot, KeyRound, ArrowDown, Eraser
 } from 'lucide-react';
 import { io as ioClient, Socket } from 'socket.io-client';
 import api from '@/lib/axios';
@@ -190,6 +190,17 @@ export function ServerDetailPage() {
   const { data: siteSettings } = useSettings();
   const socketRef = useRef<Socket | null>(null);
   const consoleEndRef = useRef<HTMLDivElement>(null);
+  const consoleScrollRef = useRef<HTMLDivElement>(null);
+  // Only auto-follow new output while the user is parked at the bottom — if
+  // they've scrolled up to read something, don't yank the view back down on
+  // every incoming line (the old behavior, which made reading scrollback
+  // impossible on a chatty server).
+  const [autoScroll, setAutoScroll] = useState(true);
+  const [showTimestamps, setShowTimestamps] = useState(false);
+  // Shell-style command history: ↑/↓ in the input cycle previously sent
+  // commands. Index is a ref so cycling doesn't trigger a re-render per key.
+  const [cmdHistory, setCmdHistory] = useState<string[]>([]);
+  const historyIndexRef = useRef<number>(-1);
 
   const isTransitional = currentStatus === 'STARTING' || currentStatus === 'STOPPING';
 
@@ -569,8 +580,8 @@ export function ServerDetailPage() {
   }, [id, accessToken, queryClient]);
 
   useEffect(() => {
-    consoleEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [consoleLines]);
+    if (autoScroll) consoleEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [consoleLines, autoScroll]);
 
   const openPlayerDetail = async (player: PlayerHistoryEntry) => {
     if (!player.uuid) { setSelectedPlayer(player); setPlayerDetails(null); return; }
@@ -766,9 +777,54 @@ export function ServerDetailPage() {
 
   const sendCommand = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!command.trim() || !socketRef.current) return;
-    socketRef.current.emit('server:command', { serverId: id, command: command.trim() });
+    const cmd = command.trim();
+    if (!cmd || !socketRef.current) return;
+    socketRef.current.emit('server:command', { serverId: id, command: cmd });
+    // Record for ↑/↓ recall (dedupe consecutive repeats, cap at 50).
+    setCmdHistory((h) => (h[h.length - 1] === cmd ? h : [...h, cmd]).slice(-50));
+    historyIndexRef.current = -1;
     setCommand('');
+  };
+
+  // ↑/↓ walk the command history like a real shell; ↓ past the newest clears
+  // back to an empty prompt.
+  const onCommandKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'ArrowUp') {
+      if (cmdHistory.length === 0) return;
+      e.preventDefault();
+      const idx = historyIndexRef.current === -1 ? cmdHistory.length - 1 : Math.max(0, historyIndexRef.current - 1);
+      historyIndexRef.current = idx;
+      setCommand(cmdHistory[idx]);
+    } else if (e.key === 'ArrowDown') {
+      if (historyIndexRef.current === -1) return;
+      e.preventDefault();
+      const idx = historyIndexRef.current + 1;
+      if (idx >= cmdHistory.length) { historyIndexRef.current = -1; setCommand(''); }
+      else { historyIndexRef.current = idx; setCommand(cmdHistory[idx]); }
+    }
+  };
+
+  // Strip ANSI escapes the same way the render does, so a copied log is clean
+  // plain text rather than raw terminal control codes.
+  const stripAnsi = (s: string) => (s || '').replace(/\x1b\[[0-9;]*[mGKHF]/g, '').replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
+
+  const copyConsole = () => {
+    if (consoleLines.length === 0) return;
+    navigator.clipboard.writeText(consoleLines.map((l) => stripAnsi(l.data)).join('\n'));
+    toast.success('Console output copied');
+  };
+
+  const onConsoleScroll = () => {
+    const el = consoleScrollRef.current;
+    if (!el) return;
+    // Consider "at bottom" with a small slack so a line's own height doesn't
+    // register as "scrolled up".
+    setAutoScroll(el.scrollHeight - el.scrollTop - el.clientHeight < 48);
+  };
+
+  const jumpToLatest = () => {
+    setAutoScroll(true);
+    consoleEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   const sendPower = (action: string) => {
@@ -1042,58 +1098,124 @@ export function ServerDetailPage() {
       {/* Console Tab */}
       {activeTab === 'console' && (
         <div className="flex gap-4">
-          <div className="card flex-1 min-w-0 overflow-hidden">
+          <div className="card flex-1 min-w-0 overflow-hidden flex flex-col" style={{ background: '#0a0d12' }}>
+            {/* Terminal title bar */}
             <div className="flex items-center gap-1.5 px-4 py-2.5 border-b border-dark-800" style={{ background: '#0e1116' }}>
               <span className="w-2.5 h-2.5 rounded-full bg-red-500/70" />
               <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/70" />
               <span className="w-2.5 h-2.5 rounded-full bg-green-500/70" />
-              <span className="ml-2 text-[11px] font-mono text-slate-500">console</span>
-              <span className={`ml-auto h-1.5 w-1.5 rounded-full ${getServerStatusDot(currentStatus)}`} />
+              <div className="ml-2 flex items-center gap-1.5">
+                <Terminal size={12} className="text-slate-600" />
+                <span className="text-[11px] font-mono text-slate-500">{data?.name || 'console'}</span>
+              </div>
+              {/* Live/offline pill */}
+              <span
+                className={cn(
+                  'ml-3 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium',
+                  isRunning ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-500/10 text-slate-500'
+                )}
+              >
+                <span className={cn('h-1.5 w-1.5 rounded-full', getServerStatusDot(currentStatus), isRunning && 'animate-pulse')} />
+                {isRunning ? 'Live' : currentStatus.charAt(0) + currentStatus.slice(1).toLowerCase()}
+              </span>
+
+              {/* Toolbar */}
+              <div className="ml-auto flex items-center gap-1">
+                <button
+                  onClick={() => setShowTimestamps((v) => !v)}
+                  title="Toggle timestamps"
+                  className={cn('p-1.5 rounded-md transition-colors', showTimestamps ? 'text-panel-400 bg-panel-500/10' : 'text-slate-600 hover:text-slate-300 hover:bg-white/5')}
+                >
+                  <Clock size={13} />
+                </button>
+                <button
+                  onClick={copyConsole}
+                  title="Copy console output"
+                  className="p-1.5 rounded-md text-slate-600 hover:text-slate-300 hover:bg-white/5 transition-colors"
+                >
+                  <Copy size={13} />
+                </button>
+                <button
+                  onClick={() => setConsoleLines([])}
+                  title="Clear console"
+                  className="p-1.5 rounded-md text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                >
+                  <Eraser size={13} />
+                </button>
+                <span className="ml-1 text-[10px] font-mono text-slate-700 tabular-nums">{consoleLines.length}</span>
+              </div>
             </div>
-            <div
-              className="p-4 h-96 overflow-y-auto font-mono text-xs scrollbar-none"
-              style={{ background: '#0b0f14' }}
-            >
-              {consoleLines.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-slate-700 gap-2">
-                  <Terminal size={28} className="opacity-40" />
-                  <p className="italic">Waiting for output...</p>
-                </div>
-              ) : (
-                consoleLines.map((line, i) => {
-                  const text = (line.data || '').replace(/\x1b\[[0-9;]*[mGKHF]/g, '').replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
-                  const isError = /\b(error|exception|fatal|severe)\b/i.test(text);
-                  const isWarn = /\b(warn|warning)\b/i.test(text);
-                  return (
-                    <p
-                      key={i}
-                      className={cn(
-                        'leading-relaxed whitespace-pre-wrap break-all',
-                        line.type === 'input'
-                          ? 'text-yellow-300/90'
-                          : isError
-                            ? 'text-red-400/90'
-                            : isWarn
-                              ? 'text-yellow-400/80'
-                              : 'text-emerald-300/80'
-                      )}
-                    >
-                      {text}
-                    </p>
-                  );
-                })
+
+            {/* Output */}
+            <div className="relative flex-1">
+              <div
+                ref={consoleScrollRef}
+                onScroll={onConsoleScroll}
+                className="p-4 h-96 overflow-y-auto font-mono text-xs scrollbar-none leading-relaxed"
+              >
+                {consoleLines.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-slate-700 gap-2">
+                    <Terminal size={28} className="opacity-40" />
+                    <p className="italic">{isRunning ? 'Waiting for output…' : 'Server is offline — start it to see live output'}</p>
+                  </div>
+                ) : (
+                  consoleLines.map((line, i) => {
+                    const text = stripAnsi(line.data);
+                    const isError = /\b(error|exception|fatal|severe)\b/i.test(text);
+                    const isWarn = /\b(warn|warning)\b/i.test(text);
+                    return (
+                      <div key={i} className="group flex gap-2 -mx-1 px-1 rounded hover:bg-white/[0.025]">
+                        {showTimestamps && (
+                          <span className="shrink-0 text-slate-700 tabular-nums select-none">
+                            {new Date(line.timestamp).toLocaleTimeString([], { hour12: false })}
+                          </span>
+                        )}
+                        <span
+                          className={cn(
+                            'whitespace-pre-wrap break-all min-w-0',
+                            line.type === 'input'
+                              ? 'text-yellow-300/90'
+                              : isError
+                                ? 'text-red-400/90'
+                                : isWarn
+                                  ? 'text-amber-400/85'
+                                  : 'text-emerald-300/80'
+                          )}
+                        >
+                          {line.type === 'input' && <span className="text-slate-600 select-none">&gt; </span>}
+                          {text}
+                        </span>
+                      </div>
+                    );
+                  })
+                )}
+                <div ref={consoleEndRef} />
+              </div>
+
+              {/* Jump-to-latest — only while scrolled up */}
+              {!autoScroll && consoleLines.length > 0 && (
+                <button
+                  onClick={jumpToLatest}
+                  className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium bg-panel-500 text-white shadow-lg shadow-black/40 hover:bg-panel-400 transition-colors"
+                >
+                  <ArrowDown size={12} /> Latest
+                </button>
               )}
-              <div ref={consoleEndRef} />
             </div>
-            <form onSubmit={sendCommand} className="flex gap-2 p-3 border-t border-dark-800">
-              <span className="flex items-center text-green-400 font-mono text-sm px-2">$</span>
+
+            {/* Command input */}
+            <form onSubmit={sendCommand} className="flex items-center gap-2 px-3 py-3 border-t border-dark-800" style={{ background: '#0e1116' }}>
+              <span className="flex items-center text-emerald-400 font-mono text-sm pl-1 select-none">$</span>
               <input
                 type="text"
-                className="input flex-1 font-mono text-sm"
-                placeholder="Enter command..."
+                className="flex-1 bg-transparent outline-none font-mono text-sm text-slate-100 placeholder-slate-600 disabled:opacity-50"
+                placeholder={isRunning ? 'Type a command and press Enter…  (↑/↓ for history)' : 'Start the server to send commands'}
                 value={command}
                 onChange={(e) => setCommand(e.target.value)}
+                onKeyDown={onCommandKeyDown}
                 disabled={!isRunning}
+                autoComplete="off"
+                spellCheck={false}
               />
               <button type="submit" className="btn-primary btn-sm" disabled={!isRunning || !command.trim()}>
                 Send
