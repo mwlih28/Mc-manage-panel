@@ -150,6 +150,9 @@ export interface Server {
   egg?: Pick<Egg, 'id' | 'name'> & { variables?: EggVariable[]; nest?: Nest };
   allocation?: Allocation;
   _count?: { backups: number; databases: number };
+  // Downsampled last-24h CPU history, attached by GET /stats/overview so the
+  // dashboard can draw a per-row sparkline. Absent on other endpoints.
+  cpuTrend?: number[];
 }
 
 export interface Backup {

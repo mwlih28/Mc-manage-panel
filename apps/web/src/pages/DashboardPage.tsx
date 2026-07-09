@@ -8,6 +8,7 @@ import { getServerStatusDot, getServerStatusBadge, formatBytes } from '@/lib/uti
 import { MetricStrip, Metric } from '@/components/ui/MetricStrip';
 import { StatusBreakdown } from '@/components/ui/StatusBreakdown';
 import { MetricStripSkeleton, TableSkeleton, Skeleton } from '@/components/ui/Skeleton';
+import { Sparkline } from '@/components/ui/Sparkline';
 
 export function DashboardPage() {
   const { user } = useAuthStore();
@@ -102,6 +103,7 @@ export function DashboardPage() {
                   <tr>
                     <th>Server</th>
                     <th>Status</th>
+                    <th className="hidden md:table-cell">CPU 24h</th>
                     <th className="text-right">RAM</th>
                     <th className="text-right hidden sm:table-cell">Disk</th>
                     <th className="text-right hidden sm:table-cell">CPU</th>
@@ -123,6 +125,17 @@ export function DashboardPage() {
                         </Link>
                       </td>
                       <td><span className={getServerStatusBadge(server.status)}>{server.status}</span></td>
+                      <td className="hidden md:table-cell">
+                        {server.cpuTrend && server.cpuTrend.length >= 2 ? (
+                          <Sparkline
+                            data={server.cpuTrend}
+                            max={server.cpu > 0 ? server.cpu : undefined}
+                            color={server.status === 'RUNNING' ? '#4C8DFF' : '#4A4D54'}
+                          />
+                        ) : (
+                          <span className="text-[11px] text-slate-700 font-mono">no data</span>
+                        )}
+                      </td>
                       <td className="text-right font-mono text-xs text-slate-400">{server.memory} MB</td>
                       <td className="text-right hidden sm:table-cell font-mono text-xs text-slate-400">{server.disk} MB</td>
                       <td className="text-right hidden sm:table-cell font-mono text-xs text-slate-400">{server.cpu > 0 ? `${server.cpu}%` : '∞'}</td>
