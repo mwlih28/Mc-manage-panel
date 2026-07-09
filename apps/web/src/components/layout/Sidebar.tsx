@@ -30,12 +30,14 @@ function useActiveNavPill(navRef: RefObject<HTMLElement>) {
   return style;
 }
 
-// PANEL_VERSION is the release tag install/update-panel.sh resolved at
-// deploy time (e.g. "v1.2.0"), or "main" when running an untagged checkout
-// — only prefix with "v" when it actually looks like a version number.
+// PANEL_VERSION is whatever install/update-panel.sh wrote at deploy time —
+// a release tag like "v1.2.0" on a released install, but the raw git branch
+// name (e.g. "main" or a feature branch) on a branch-tracking install. Only
+// show a label when it actually looks like a release version; a branch name
+// isn't meaningful to an end user and just clutters the corner, so hide it.
 function formatPanelVersion(version?: string): string {
   if (!version) return '';
-  return /^v?\d/.test(version) ? `v${version.replace(/^v/, '')}` : version;
+  return /^v?\d/.test(version) ? `v${version.replace(/^v/, '')}` : '';
 }
 
 export function Sidebar() {

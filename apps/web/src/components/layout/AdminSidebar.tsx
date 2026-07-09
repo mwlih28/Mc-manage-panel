@@ -39,19 +39,42 @@ function DiscordIcon({ size = 14 }: { size?: number }) {
   );
 }
 
-const adminNavItems = [
-  { to: '/admin',          icon: LayoutDashboard, label: 'Overview',  exact: true },
-  { to: '/admin/servers',  icon: Server,          label: 'Servers' },
-  { to: '/admin/users',    icon: Users,           label: 'Users' },
-  { to: '/admin/nodes',    icon: Cpu,             label: 'Nodes' },
-  { to: '/admin/eggs',     icon: Package,         label: 'Eggs' },
-  { to: '/admin/activity',   icon: Activity,  label: 'Activity' },
-  { to: '/admin/webhooks',   icon: Webhook,   label: 'Webhooks' },
-  { to: '/admin/migration',  icon: ArrowRightLeft, label: 'Migration' },
-  { to: '/admin/integrations', icon: CreditCard, label: 'Billing & Store' },
-  { to: '/admin/api-keys',   icon: KeyRound,  label: 'API Keys' },
-  { to: '/admin/api-docs',   icon: Code2,     label: 'API Reference' },
-  { to: '/admin/settings',   icon: Wrench,    label: 'Settings' },
+// Grouped into labelled sections instead of one long flat list — a dozen
+// undifferentiated links is hard to scan, whereas "where do I manage billing"
+// vs "where are the developer tools" becomes obvious at a glance.
+const adminNavGroups: { label: string; items: { to: string; icon: typeof Server; label: string; exact?: boolean }[] }[] = [
+  {
+    label: 'Management',
+    items: [
+      { to: '/admin',         icon: LayoutDashboard, label: 'Overview', exact: true },
+      { to: '/admin/servers', icon: Server,          label: 'Servers' },
+      { to: '/admin/users',   icon: Users,           label: 'Users' },
+      { to: '/admin/nodes',   icon: Cpu,             label: 'Nodes' },
+      { to: '/admin/eggs',    icon: Package,         label: 'Eggs' },
+      { to: '/admin/activity', icon: Activity,       label: 'Activity' },
+    ],
+  },
+  {
+    label: 'Commerce',
+    items: [
+      { to: '/admin/integrations', icon: CreditCard, label: 'Billing & Store' },
+      { to: '/admin/webhooks',     icon: Webhook,    label: 'Webhooks' },
+    ],
+  },
+  {
+    label: 'Developer',
+    items: [
+      { to: '/admin/api-keys', icon: KeyRound, label: 'API Keys' },
+      { to: '/admin/api-docs', icon: Code2,    label: 'API Reference' },
+    ],
+  },
+  {
+    label: 'System',
+    items: [
+      { to: '/admin/migration', icon: ArrowRightLeft, label: 'Migration' },
+      { to: '/admin/settings',  icon: Wrench,         label: 'Settings' },
+    ],
+  },
 ];
 
 export function AdminSidebar() {
@@ -83,13 +106,19 @@ export function AdminSidebar() {
       >
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 py-4" style={{ borderBottom: '1px solid #1a1f25' }}>
-        {logoUrl ? (
-          <img src={logoUrl} alt="logo" className="h-8 w-8 rounded-lg object-contain bg-zinc-900 p-0.5" />
-        ) : (
-          <div className="h-8 w-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
-            <Wrench size={14} className="text-amber-400" />
-          </div>
-        )}
+        <div className="relative shrink-0">
+          <div
+            className="absolute inset-0 rounded-lg blur-md opacity-50"
+            style={{ background: 'radial-gradient(circle, rgba(245,158,11,0.5) 0%, rgba(245,158,11,0) 70%)' }}
+          />
+          {logoUrl ? (
+            <img src={logoUrl} alt="logo" className="relative h-8 w-8 rounded-lg object-contain bg-zinc-900 p-0.5" />
+          ) : (
+            <div className="relative h-8 w-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+              <Wrench size={14} className="text-amber-400" />
+            </div>
+          )}
+        </div>
         <div className="min-w-0">
           <p className="text-sm font-semibold text-white truncate leading-tight">{siteName}</p>
           <p className="text-[9px] text-amber-600 font-mono uppercase tracking-wider">Admin Panel</p>
@@ -97,32 +126,36 @@ export function AdminSidebar() {
       </div>
 
       {/* Navigation */}
-      <nav ref={navRef} className="relative flex-1 overflow-y-auto px-2 py-4 scrollbar-none">
+      <nav ref={navRef} className="relative flex-1 overflow-y-auto px-2 py-4 space-y-5 scrollbar-none">
         <div
-          className="absolute left-2 right-2 rounded-lg bg-amber-500/10 border-l-2 border-amber-400 pointer-events-none transition-all duration-300 ease-out"
+          className="absolute left-2 right-2 rounded-lg bg-amber-500/[0.12] border-l-2 border-amber-400 pointer-events-none transition-all duration-300 ease-out"
           style={{ top: pill.top, height: pill.height, opacity: pill.opacity }}
         />
-        <p className="px-3 mb-1.5 text-[9px] font-bold uppercase tracking-widest text-zinc-700">Management</p>
-        <ul className="space-y-0.5">
-          {adminNavItems.map(({ to, icon: Icon, label, exact }) => (
-            <li key={to}>
-              <NavLink
-                to={to}
-                end={exact}
-                className={({ isActive }) => cn(
-                  'relative z-10 flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-100',
-                  isActive ? 'text-amber-300' : 'text-zinc-500 hover:text-zinc-200'
-                )}
-              >
-                <Icon size={14} />
-                <span>{label}</span>
-              </NavLink>
-            </li>
-          ))}
-        </ul>
+        {adminNavGroups.map((group) => (
+          <div key={group.label}>
+            <p className="px-3 mb-1.5 text-[9px] font-bold uppercase tracking-widest text-zinc-700">{group.label}</p>
+            <ul className="space-y-0.5">
+              {group.items.map(({ to, icon: Icon, label, exact }) => (
+                <li key={to}>
+                  <NavLink
+                    to={to}
+                    end={exact}
+                    className={({ isActive }) => cn(
+                      'relative z-10 flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-100',
+                      isActive ? 'text-amber-300' : 'text-zinc-500 hover:text-zinc-200'
+                    )}
+                  >
+                    <Icon size={14} />
+                    <span>{label}</span>
+                  </NavLink>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
 
         {/* Back to user panel */}
-        <div className="mt-6">
+        <div>
           <p className="px-3 mb-1.5 text-[9px] font-bold uppercase tracking-widest text-zinc-700">Navigation</p>
           <ul className="space-y-0.5">
             <li>
