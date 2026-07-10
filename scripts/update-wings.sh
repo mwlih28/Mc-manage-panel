@@ -74,7 +74,12 @@ for attempt in 1 2 3; do
   sleep 10
 done
 $NPM_OK || error "npm install failed after 3 attempts."
-npm run build
+# Build ONLY the Wings workspace. The repo-root `build` script compiles
+# apps/api + apps/web (needed on the panel host, not here) — running it on a
+# Wings-only node pointlessly tries to typecheck the API against a Prisma
+# client that was never generated on this box and fails the whole update.
+# Wings has no dependency on apps/api, so its own tsc build is self-contained.
+npm run build --workspace=apps/wings
 success "Wings built → ${WINGS_DIR}/apps/wings/dist"
 
 # ── Fix permissions & restart ──────────────────────────────────────────
