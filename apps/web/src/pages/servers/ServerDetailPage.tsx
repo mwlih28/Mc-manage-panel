@@ -219,6 +219,7 @@ export function ServerDetailPage() {
   // impossible on a chatty server).
   const [autoScroll, setAutoScroll] = useState(true);
   const [showTimestamps, setShowTimestamps] = useState(false);
+  const [consoleSearch, setConsoleSearch] = useState('');
   // Shell-style command history: ↑/↓ in the input cycle previously sent
   // commands. Index is a ref so cycling doesn't trigger a re-render per key.
   const [cmdHistory, setCmdHistory] = useState<string[]>([]);
@@ -883,6 +884,19 @@ export function ServerDetailPage() {
     toast.success('Console output copied');
   };
 
+  const downloadConsole = () => {
+    if (consoleLines.length === 0) return;
+    const blob = new Blob([consoleLines.map((l) => stripAnsi(l.data)).join('\n')], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${data?.uuidShort || 'server'}-console-${new Date().toISOString().slice(0, 10)}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const onConsoleScroll = () => {
     const el = consoleScrollRef.current;
     if (!el) return;
@@ -1132,6 +1146,36 @@ export function ServerDetailPage() {
         </div>
       )}
 
+      {/* Install / reinstall progress banner — Pterodactyl-style. While Wings
+          runs the egg's install script the server can't be used yet; make that
+          state obvious (the install log itself streams into the console tab
+          below). The page already polls every 3s in this state, so it flips to
+          the normal view automatically once the install finishes. */}
+      {(currentStatus === 'INSTALLING' || currentStatus === 'REINSTALLING') && (
+        <div className="flex items-center gap-3 rounded-xl border border-panel-500/30 bg-panel-500/[0.07] px-4 py-3">
+          <Spinner size="sm" className="text-panel-400 shrink-0" />
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-white">
+              {currentStatus === 'REINSTALLING' ? 'Reinstalling your server…' : 'Your server is being installed…'}
+            </p>
+            <p className="text-xs text-slate-400 mt-0.5">
+              This can take a few minutes. You can watch the progress in the console below — the panel will unlock automatically when it's done.
+            </p>
+          </div>
+        </div>
+      )}
+      {currentStatus === 'INSTALL_FAILED' && (
+        <div className="flex items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/[0.07] px-4 py-3">
+          <AlertTriangle size={18} className="text-red-400 shrink-0" />
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-white">Installation failed</p>
+            <p className="text-xs text-slate-400 mt-0.5">
+              The install script didn't finish cleanly. Check the console output below, then ask an admin to reinstall the server.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="border-b border-dark-800 overflow-x-auto">
         <div className="flex items-center gap-1 min-w-max">
@@ -1190,6 +1234,16 @@ export function ServerDetailPage() {
 
               {/* Toolbar */}
               <div className="ml-auto flex items-center gap-1">
+                {/* Filter box — narrows the output to matching lines. */}
+                <div className="relative mr-1 hidden sm:block">
+                  <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-600 pointer-events-none" />
+                  <input
+                    value={consoleSearch}
+                    onChange={(e) => setConsoleSearch(e.target.value)}
+                    placeholder="Filter…"
+                    className="w-28 focus:w-40 transition-all bg-black/30 border border-dark-700 rounded-md pl-6 pr-2 py-1 text-[11px] font-mono text-slate-200 placeholder-slate-600 outline-none focus:border-panel-500/50"
+                  />
+                </div>
                 <button
                   onClick={() => setShowTimestamps((v) => !v)}
                   title="Toggle timestamps"
@@ -1205,6 +1259,13 @@ export function ServerDetailPage() {
                   <Copy size={13} />
                 </button>
                 <button
+                  onClick={downloadConsole}
+                  title="Download log as .txt"
+                  className="p-1.5 rounded-md text-slate-600 hover:text-slate-300 hover:bg-white/5 transition-colors"
+                >
+                  <Download size={13} />
+                </button>
+                <button
                   onClick={() => setConsoleLines([])}
                   title="Clear console"
                   className="p-1.5 rounded-md text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
@@ -1213,6 +1274,30 @@ export function ServerDetailPage() {
                 </button>
                 <span className="ml-1 text-[10px] font-mono text-slate-700 tabular-nums">{consoleLines.length}</span>
               </div>
+            </div>
+
+            {/* Live resource strip — real-time CPU/RAM/disk/network/uptime/
+                players from the socket stats feed. Dashes until the first
+                sample arrives (or while the server is offline). */}
+            <div className="flex items-stretch divide-x divide-dark-800 border-b border-dark-800" style={{ background: '#0c1015' }}>
+              {[
+                { icon: Cpu, label: 'CPU', value: stats ? `${stats.cpuAbsolute.toFixed(1)}%` : '—', sub: (data?.cpu || 0) > 0 ? `/ ${data?.cpu}%` : '' },
+                { icon: MemoryStick, label: 'RAM', value: stats ? formatBytes(stats.memoryBytes) : '—', sub: `/ ${formatBytes((data?.memory || 0) * 1048576)}` },
+                { icon: HardDrive, label: 'Disk', value: stats ? formatBytes(stats.diskBytes) : '—', sub: (data?.disk || 0) > 0 ? `/ ${formatBytes((data?.disk || 0) * 1048576)}` : '' },
+                { icon: Wifi, label: 'Network', value: stats ? `↓ ${formatBytes(stats.networkRxBytes)}` : '—', sub: stats ? `↑ ${formatBytes(stats.networkTxBytes)}` : '' },
+                { icon: Clock, label: 'Uptime', value: stats && stats.uptime > 0 ? formatUptime(Math.floor(stats.uptime / 1000)) : '—', sub: '' },
+                { icon: Users, label: 'Players', value: `${onlinePlayers.length}`, sub: players.max ? `/ ${players.max}` : '' },
+              ].map(({ icon: Icon, label, value, sub }) => (
+                <div key={label} className="flex-1 min-w-0 px-3 py-2">
+                  <div className="flex items-center gap-1.5 text-slate-600 mb-1">
+                    <Icon size={11} />
+                    <span className="text-[9px] uppercase tracking-wider">{label}</span>
+                  </div>
+                  <div className="font-mono text-[11px] text-slate-200 truncate">
+                    {value} {sub && <span className="text-slate-600">{sub}</span>}
+                  </div>
+                </div>
+              ))}
             </div>
 
             {/* Output */}
@@ -1227,8 +1312,13 @@ export function ServerDetailPage() {
                     <Terminal size={28} className="opacity-40" />
                     <p className="italic">{isRunning ? 'Waiting for output…' : 'Server is offline — start it to see live output'}</p>
                   </div>
-                ) : (
-                  consoleLines.map((line, i) => {
+                ) : (() => {
+                  const q = consoleSearch.trim().toLowerCase();
+                  const shown = q ? consoleLines.filter((l) => stripAnsi(l.data).toLowerCase().includes(q)) : consoleLines;
+                  if (shown.length === 0) {
+                    return <div className="h-full flex items-center justify-center text-slate-700 italic">No lines match “{consoleSearch}”</div>;
+                  }
+                  return shown.map((line, i) => {
                     const text = stripAnsi(line.data);
                     const isError = /\b(error|exception|fatal|severe)\b/i.test(text);
                     const isWarn = /\b(warn|warning)\b/i.test(text);
@@ -1256,8 +1346,8 @@ export function ServerDetailPage() {
                         </span>
                       </div>
                     );
-                  })
-                )}
+                  });
+                })()}
                 <div ref={consoleEndRef} />
               </div>
 
