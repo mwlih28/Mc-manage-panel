@@ -2511,7 +2511,7 @@ export function ServerDetailPage() {
               <p className="text-slate-500 text-sm text-center py-8">Could not read inventory.</p>
             ) : (
               <div className="space-y-6">
-                <MCInventoryGrid items={playerInventory.inventory} onItemClick={item => copyGiveCommand(inventoryPlayer.name, item)} />
+                <MCInventoryGrid items={playerInventory.inventory} playerName={inventoryPlayer.name} onItemClick={item => copyGiveCommand(inventoryPlayer.name, item)} />
                 <MCInventoryGrid items={playerInventory.enderChest} isEnderChest onItemClick={item => copyGiveCommand(inventoryPlayer.name, item)} />
               </div>
             )}
@@ -2664,6 +2664,7 @@ export function ServerDetailPage() {
 
                       <MCInventoryGrid
                         items={playerDetails.inventory}
+                        playerName={selectedPlayer.name}
                         onDelete={slot => deleteInventoryItem(selectedPlayer, slot, false)}
                         onItemClick={item => copyGiveCommand(selectedPlayer.name, item)}
                       />
@@ -2834,17 +2835,48 @@ function MCItemIcon({ id, size = 28 }: { id: string; size?: number }) {
   );
 }
 
-function MCSlot({ item, onDelete, onItemClick, emptyIcon }: { item?: NbtItem; onDelete?: (slot: number) => void; onItemClick?: (item: NbtItem) => void; emptyIcon?: string }) {
+// Clean inline-SVG ghost silhouettes for empty armor / offhand slots. These
+// never 404 (unlike Mojang's texture-atlas empty-slot sprites), and read
+// instantly as helmet / chestplate / leggings / boots / shield.
+const ARMOR_GHOST_PATHS: Record<string, string> = {
+  helmet: 'M12 3.5c-4.4 0-7 3.2-7 7.3V16h3.2v-3h1.2v3h5.2v-3h1.2v3H20v-5.2c0-4.1-2.6-7.3-8-7.3z',
+  chestplate: 'M8.2 4 4.5 6.1v4.6l2.7 1V20h9.6v-8.3l2.7-1V6.1L15.8 4l-3.8 1.9L8.2 4z',
+  leggings: 'M7.2 3.5h9.6l-.8 7.2-1 9.8h-3.3l-.7-7.4-.7 7.4H6.9l-1-9.8-.5-7.2z',
+  boots: 'M7.5 3.5h3.8v10.6h3.6c1.6 0 2.9 1.3 2.9 2.9v3H7.5z',
+  shield: 'M12 3.2 5 6v6.2c0 4.8 3 6.9 7 8.6 4-1.7 7-3.8 7-8.6V6z',
+};
+function ArmorGhost({ type, size = 22 }: { type: keyof typeof ARMOR_GHOST_PATHS; size?: number }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor" className="select-none pointer-events-none">
+      <path d={ARMOR_GHOST_PATHS[type]} />
+    </svg>
+  );
+}
+
+function MCSlot({ item, onDelete, onItemClick, ghost, hotbarNum }: {
+  item?: NbtItem;
+  onDelete?: (slot: number) => void;
+  onItemClick?: (item: NbtItem) => void;
+  ghost?: React.ReactNode;
+  hotbarNum?: number;
+}) {
+  const slotStyle: React.CSSProperties = {
+    background: 'linear-gradient(155deg,#1e2740,#131a2b)',
+    border: '1px solid #2c3a5c',
+    boxShadow: 'inset 1.5px 1.5px 0 rgba(255,255,255,0.06), inset -1.5px -1.5px 0 rgba(0,0,0,0.55)',
+  };
   if (!item) {
     return (
-      <div
-        className="w-10 h-10 rounded-sm flex-shrink-0 flex items-center justify-center"
-        style={{ background: '#1a2030', border: '1px solid #0d1520', boxShadow: 'inset 1px 1px 0 rgba(0,0,0,0.6), inset -1px -1px 0 rgba(255,255,255,0.04)' }}
-      >
-        {emptyIcon && <div className="w-6 h-6 opacity-30"><MCItemIcon id={emptyIcon} size={24} /></div>}
+      <div className="w-11 h-11 rounded-[3px] flex-shrink-0 flex items-center justify-center relative" style={slotStyle}>
+        {ghost && <div className="text-slate-400/50">{ghost}</div>}
+        {hotbarNum != null && (
+          <span className="absolute top-0.5 left-1 text-[8px] font-bold text-slate-600 select-none leading-none">{hotbarNum}</span>
+        )}
       </div>
     );
   }
+  const { fg } = getItemStyle(item.id);
+  const rare = /netherite|enchanted|diamond|nether_star|elytra|totem|beacon|dragon|trident|end_crystal/.test(item.id);
   return (
     <div
       className={cn('relative group flex-shrink-0', onItemClick ? 'cursor-pointer' : 'cursor-default')}
@@ -2852,12 +2884,15 @@ function MCSlot({ item, onDelete, onItemClick, emptyIcon }: { item?: NbtItem; on
       onClick={onItemClick ? () => onItemClick(item) : undefined}
     >
       <div
-        className="w-10 h-10 rounded-sm flex items-center justify-center relative overflow-hidden transition-all duration-100 group-hover:brightness-125 group-hover:ring-1 group-hover:ring-white/25"
-        style={{ background: '#1a2030', border: '1px solid #2a3550', boxShadow: 'inset 1px 1px 0 rgba(255,255,255,0.07), inset -1px -1px 0 rgba(0,0,0,0.5)' }}
+        className="w-11 h-11 rounded-[3px] flex items-center justify-center relative overflow-hidden transition-all duration-100 group-hover:brightness-125 group-hover:ring-2 group-hover:ring-white/30 group-hover:z-10"
+        style={{ ...slotStyle, ...(rare ? { boxShadow: `${slotStyle.boxShadow}, inset 0 0 8px ${fg}55` } : {}) }}
       >
-        <MCItemIcon id={item.id} size={28} />
+        <MCItemIcon id={item.id} size={30} />
+        {hotbarNum != null && (
+          <span className="absolute top-0.5 left-1 text-[8px] font-bold text-slate-500 select-none leading-none">{hotbarNum}</span>
+        )}
         {item.count > 1 && (
-          <span className="absolute bottom-0 right-0.5 text-[9px] font-bold leading-none select-none"
+          <span className="absolute bottom-0 right-0.5 text-[10px] font-bold leading-none select-none"
             style={{ color: '#fff', textShadow: '1px 1px 0 #000, -0.5px -0.5px 0 #000' }}>
             {item.count}
           </span>
@@ -2866,7 +2901,7 @@ function MCSlot({ item, onDelete, onItemClick, emptyIcon }: { item?: NbtItem; on
       {onDelete && (
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(item.slot); }}
-          className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 hover:bg-red-400 text-white rounded-full hidden group-hover:flex items-center justify-center shadow z-10"
+          className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 hover:bg-red-400 text-white rounded-full hidden group-hover:flex items-center justify-center shadow z-20"
           title="Remove"
         ><X size={7} /></button>
       )}
@@ -2874,70 +2909,118 @@ function MCSlot({ item, onDelete, onItemClick, emptyIcon }: { item?: NbtItem; on
   );
 }
 
-function MCInventoryGrid({ items, isEnderChest = false, onDelete, onItemClick }: {
+function MCInventoryGrid({ items, isEnderChest = false, onDelete, onItemClick, playerName }: {
   items: NbtItem[];
   isEnderChest?: boolean;
   onDelete?: (slot: number) => void;
   onItemClick?: (item: NbtItem) => void;
+  playerName?: string;
 }) {
   const slotMap = new Map(items.map(i => [i.slot, i]));
 
-  const row = (slots: number[]) => (
-    <div className="flex gap-0.5">
-      {slots.map(s => <MCSlot key={s} item={slotMap.get(s)} onDelete={onDelete} onItemClick={onItemClick} />)}
+  const row = (slots: number[], numbered = false) => (
+    <div className="flex gap-1">
+      {slots.map((s, i) => (
+        <MCSlot key={s} item={slotMap.get(s)} onDelete={onDelete} onItemClick={onItemClick} hotbarNum={numbered ? i + 1 : undefined} />
+      ))}
     </div>
   );
 
+  // ── Ender chest ──────────────────────────────────────────────────────
   if (isEnderChest) {
     const used = items.filter(i => i.slot >= 0 && i.slot <= 26).length;
     return (
       <div>
-        <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-2">
-          Ender Chest
-          <span className="text-slate-600 font-normal">{used}/27 slots</span>
-        </p>
-        <div className="inline-flex flex-col gap-0.5 p-1.5 rounded"
-          style={{ background: '#130a1e', border: '2px solid #3d1a5e' }}>
+        <div className="flex items-center gap-2 mb-2">
+          <p className="text-xs font-semibold text-fuchsia-300/90 flex items-center gap-1.5">
+            <Package size={13} /> Ender Chest
+          </p>
+          <span className="text-[11px] text-slate-600 tabular-nums">{used}/27</span>
+          <div className="flex-1 h-1 rounded-full bg-dark-700 overflow-hidden ml-1 max-w-[7rem]">
+            <div className="h-full rounded-full bg-fuchsia-500/70 transition-all" style={{ width: `${(used / 27) * 100}%` }} />
+          </div>
+        </div>
+        <div className="relative inline-flex flex-col gap-1 p-2 rounded-lg"
+          style={{ background: 'linear-gradient(160deg,#1a0f2b,#100819)', border: '1px solid #45256b', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 24px -12px rgba(120,40,180,0.5)' }}>
           {row(Array.from({ length: 9 }, (_, i) => i))}
           {row(Array.from({ length: 9 }, (_, i) => 9 + i))}
           {row(Array.from({ length: 9 }, (_, i) => 18 + i))}
+          {used === 0 && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <span className="text-[11px] text-fuchsia-200/40 font-medium tracking-wide uppercase">Empty</span>
+            </div>
+          )}
         </div>
       </div>
     );
   }
 
-  // Main inventory: armor (36-39) + main (9-35) + hotbar (0-8)
-  const armorSlots = [39, 38, 37, 36]; // helmet → boots
-  const armorEmptyIcons = ['empty_armor_slot_helmet', 'empty_armor_slot_chestplate', 'empty_armor_slot_leggings', 'empty_armor_slot_boots'];
-  const usedMain = items.filter(i => i.slot >= 0 && i.slot <= 39).length;
+  // ── Main inventory: armor (36-39) · main (9-35) · hotbar (0-8) · offhand (40) ──
+  const armor: Array<{ slot: number; ghost: keyof typeof ARMOR_GHOST_PATHS }> = [
+    { slot: 39, ghost: 'helmet' }, { slot: 38, ghost: 'chestplate' },
+    { slot: 37, ghost: 'leggings' }, { slot: 36, ghost: 'boots' },
+  ];
+  const used = items.filter(i => i.slot >= 0 && i.slot <= 40).length;
+  const isEmpty = used === 0;
 
   return (
     <div>
-      <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-2">
-        Inventory
-        <span className="text-slate-600 font-normal">{usedMain}/40 slots</span>
-      </p>
-      <div className="inline-flex flex-col gap-1 p-1.5 rounded"
-        style={{ background: '#0d1520', border: '2px solid #1e3050' }}>
+      <div className="flex items-center gap-2 mb-2">
+        <p className="text-xs font-semibold text-sky-300/90 flex items-center gap-1.5">
+          <Package size={13} /> Inventory
+        </p>
+        <span className="text-[11px] text-slate-600 tabular-nums">{used}/41</span>
+        <div className="flex-1 h-1 rounded-full bg-dark-700 overflow-hidden ml-1 max-w-[7rem]">
+          <div className="h-full rounded-full bg-sky-500/70 transition-all" style={{ width: `${(used / 41) * 100}%` }} />
+        </div>
+      </div>
+      <div className="inline-flex flex-col gap-2.5 p-3 rounded-lg"
+        style={{ background: 'linear-gradient(160deg,#141c30,#0b1120)', border: '1px solid #22355c', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 24px -12px rgba(40,90,180,0.5)' }}>
 
-        {/* Armor column */}
-        <div className="flex gap-0.5 mb-0.5 items-center">
-          {armorSlots.map((s, i) => (
-            <MCSlot key={s} item={slotMap.get(s)} onDelete={onDelete} onItemClick={onItemClick} emptyIcon={armorEmptyIcons[i]} />
-          ))}
-          <div className="ml-1 text-[9px] text-slate-600 self-center leading-tight">armor</div>
+        {/* Character panel: armor column · body render · offhand */}
+        <div className="flex items-stretch gap-3">
+          <div className="flex flex-col gap-1">
+            {armor.map(a => (
+              <MCSlot key={a.slot} item={slotMap.get(a.slot)} onDelete={onDelete} onItemClick={onItemClick} ghost={<ArmorGhost type={a.ghost} />} />
+            ))}
+          </div>
+
+          {/* Player body render */}
+          <div className="flex-1 flex items-end justify-center min-w-[5.5rem] rounded-md"
+            style={{ background: 'radial-gradient(ellipse at 50% 30%, rgba(120,160,255,0.10), transparent 70%)' }}>
+            {playerName ? (
+              <img
+                src={`https://mc-heads.net/body/${playerName}/right`}
+                alt=""
+                className="h-[9.5rem] w-auto pixelated drop-shadow-[0_6px_10px_rgba(0,0,0,0.5)]"
+                onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+              />
+            ) : null}
+          </div>
+
+          {/* Offhand */}
+          <div className="flex flex-col justify-end">
+            <MCSlot item={slotMap.get(40)} onDelete={onDelete} onItemClick={onItemClick} ghost={<ArmorGhost type="shield" />} />
+            <span className="text-[8px] text-slate-600 text-center mt-1 uppercase tracking-wide">off</span>
+          </div>
         </div>
 
-        {/* Main inventory (slots 9–35) */}
-        {row(Array.from({ length: 9 }, (_, i) => 9 + i))}
-        {row(Array.from({ length: 9 }, (_, i) => 18 + i))}
-        {row(Array.from({ length: 9 }, (_, i) => 27 + i))}
+        {/* Main storage (slots 9–35) */}
+        <div className="relative flex flex-col gap-1">
+          {row(Array.from({ length: 9 }, (_, i) => 9 + i))}
+          {row(Array.from({ length: 9 }, (_, i) => 18 + i))}
+          {row(Array.from({ length: 9 }, (_, i) => 27 + i))}
+          {isEmpty && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <span className="text-[11px] text-sky-200/40 font-medium tracking-wide uppercase">Inventory is empty</span>
+            </div>
+          )}
+        </div>
 
-        {/* Hotbar separator */}
-        <div className="my-0.5 border-t" style={{ borderColor: '#1e3050' }} />
-
-        {/* Hotbar (slots 0–8) */}
-        {row(Array.from({ length: 9 }, (_, i) => i))}
+        {/* Hotbar (slots 0–8) — numbered 1–9 */}
+        <div className="pt-2 border-t border-white/[0.06]">
+          {row(Array.from({ length: 9 }, (_, i) => i), true)}
+        </div>
       </div>
     </div>
   );
