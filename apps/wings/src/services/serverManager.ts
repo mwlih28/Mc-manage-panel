@@ -356,6 +356,44 @@ class ServerManager extends EventEmitter {
         } catch { /* ignore */ }
       }
 
+      // Reclaim the target host port from any *stale Kretase container* still
+      // squatting on it. The panel guarantees one server per allocation
+      // (unique host port), so a different mc_<uuid> container bound to this
+      // port is a leftover from a deleted/failed server — without this, Docker
+      // rejects the start with "port is already allocated" and the server is
+      // stuck offline with no way to recover from the panel. Only ever touches
+      // Kretase-managed (mc_-prefixed) containers, never anything else on the
+      // host.
+      const targetPort = parseInt(
+        config.environment['SERVER_PORT'] || config.environment['PORT'] || (isBedrock ? '19132' : '25565'),
+        10
+      );
+      try {
+        const d = getDocker();
+        const candidates = await d.listContainers({ all: true, filters: { name: ['mc_'] } });
+        for (const c of candidates) {
+          const name = (c.Names?.[0] || '').replace(/^\//, '');
+          if (name === `mc_${uuid}`) continue; // our own — already removed above
+          let holdsPort = (c.Ports || []).some((p) => p.PublicPort === targetPort);
+          if (!holdsPort) {
+            // Stopped containers don't report Ports — inspect their bindings.
+            try {
+              const info = await d.getContainer(c.Id).inspect();
+              const bindings = info.HostConfig?.PortBindings || {};
+              holdsPort = Object.values(bindings).some((arr) =>
+                (arr as { HostPort?: string }[] | null || []).some((b) => b.HostPort === String(targetPort))
+              );
+            } catch { /* ignore */ }
+          }
+          if (holdsPort) {
+            this.sendConsole(uuid, `[Wings] Reclaiming port ${targetPort} from a stale container (${name})…`);
+            await d.getContainer(c.Id).remove({ force: true }).catch(() => { /* best-effort */ });
+          }
+        }
+      } catch (err) {
+        logger.warn(`Port-conflict cleanup failed for ${uuid}: ${(err as Error).message}`);
+      }
+
       // Create new container
       this.sendConsole(uuid, '[Wings] Creating container...');
       const container = await createContainer(
