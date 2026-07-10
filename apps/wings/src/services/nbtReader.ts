@@ -144,7 +144,16 @@ class TypedWriter {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function parseItemList(list: NbtAny | undefined): NbtItem[] {
+// Minecraft stores worn armour and the off-hand item in the same `Inventory`
+// list as the rest of the items, but at out-of-band slot numbers: boots=100,
+// leggings=101, chestplate=102, helmet=103, off-hand=-106. The panel UI
+// addresses those as 36 (boots) → 39 (helmet) and 40 (off-hand), so remap on
+// read. Main inventory / hotbar (0-35) and ender-chest slots (0-26) are left
+// untouched.
+const RAW_TO_DISPLAY: Record<number, number> = { 100: 36, 101: 37, 102: 38, 103: 39, [-106]: 40 };
+const DISPLAY_TO_RAW: Record<number, number> = { 36: 100, 37: 101, 38: 102, 39: 103, 40: -106 };
+
+function parseItemList(list: NbtAny | undefined, remapArmor = false): NbtItem[] {
   if (!list || list.t !== 9) return [];
   return (list as NbtList).v
     .filter((item): item is NbtCompound => item.t === 10)
@@ -152,8 +161,10 @@ function parseItemList(list: NbtAny | undefined): NbtItem[] {
       const slotTag  = item.v.get('Slot');
       const idTag    = item.v.get('id');
       const countTag = item.v.get('Count');
+      const rawSlot  = slotTag && (slotTag.t === 1 || slotTag.t === 3) ? (slotTag.v as number) : 0;
+      const slot     = remapArmor && rawSlot in RAW_TO_DISPLAY ? RAW_TO_DISPLAY[rawSlot] : Math.abs(rawSlot);
       return {
-        slot:  slotTag  && (slotTag.t  === 1 || slotTag.t  === 3) ? Math.abs(slotTag.v  as number) : 0,
+        slot,
         id:    idTag    &&  idTag.t    === 8                       ? (idTag.v    as string).replace('minecraft:', '') : '',
         count: countTag && (countTag.t === 1 || countTag.t === 3) ? Math.abs(countTag.v as number) : 1,
       };
@@ -194,7 +205,7 @@ export function readPlayerDat(filePath: string): { inventory: NbtItem[]; enderCh
   try {
     const root = new TypedReader(gunzipSync(fs.readFileSync(filePath))).readRoot();
     return {
-      inventory:  parseItemList(root.v.get('Inventory')),
+      inventory:  parseItemList(root.v.get('Inventory'), true),
       enderChest: parseItemList(root.v.get('EnderItems')),
     };
   } catch { return { inventory: [], enderChest: [] }; }
@@ -248,10 +259,15 @@ export function removeInventoryItem(filePath: string, slot: number, fromEnderChe
     if (!list || list.t !== 9) return false;
     const l = list as NbtList;
     const before = l.v.length;
+    // The UI addresses armour/off-hand as 36-40; translate back to the raw
+    // NBT slot (100-103 / -106) so the right stored entry is matched.
+    const rawSlot = !fromEnderChest && slot in DISPLAY_TO_RAW ? DISPLAY_TO_RAW[slot] : slot;
     l.v = l.v.filter(item => {
       if (item.t !== 10) return true;
       const s = (item as NbtCompound).v.get('Slot');
-      return !s || Math.abs(Number(s.v)) !== slot;
+      if (!s) return true;
+      const stored = Number(s.v);
+      return stored !== rawSlot && Math.abs(stored) !== slot;
     });
     if (l.v.length === before) return false;
     const writer = new TypedWriter();

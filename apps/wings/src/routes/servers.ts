@@ -164,12 +164,21 @@ router.get('/:uuid/players/all', (req: Request, res: Response) => {
 });
 
 // Get full player details: stats, location, inventory, ban status
-router.get('/:uuid/players/:playerUuid/details', (req: Request, res: Response) => {
+router.get('/:uuid/players/:playerUuid/details', async (req: Request, res: Response) => {
   const { uuid, playerUuid } = req.params;
   const cfg = getConfig();
   const dataPath = path.join(cfg.system.data, uuid);
   const datFile = path.join(dataPath, 'world', 'playerdata', `${playerUuid}.dat`);
   const statsFile = path.join(dataPath, 'world', 'stats', `${playerUuid}.json`);
+
+  // Minecraft keeps an online player's inventory/stats in memory and only
+  // writes <uuid>.dat on autosave (~5 min), logout, or an explicit save. For
+  // a running server, force a flush and give the game thread a moment to write
+  // so the panel shows current gear/stats instead of a stale snapshot.
+  if (serverManager.getStatus(uuid) === 'running') {
+    await serverManager.sendCommand(uuid, 'save-all flush').catch(() => {});
+    await new Promise(r => setTimeout(r, 800));
+  }
 
   const stats    = readPlayerStats(statsFile);
   const location = readPlayerLocation(datFile);
@@ -517,11 +526,16 @@ router.post('/:uuid/version', async (req: Request, res: Response) => {
 });
 
 // Get player inventory / ender chest (NBT reader)
-router.get('/:uuid/players/:playerUuid/inventory', (req: Request, res: Response) => {
+router.get('/:uuid/players/:playerUuid/inventory', async (req: Request, res: Response) => {
   const { uuid, playerUuid } = req.params;
   const cfg = getConfig();
   const dataPath = path.join(cfg.system.data, uuid);
   try {
+    // Flush an online player's in-memory data to disk first (see details route).
+    if (serverManager.getStatus(uuid) === 'running') {
+      await serverManager.sendCommand(uuid, 'save-all flush').catch(() => {});
+      await new Promise(r => setTimeout(r, 800));
+    }
     const result = readPlayerDat(path.join(dataPath, 'world', 'playerdata', `${playerUuid}.dat`));
     return res.json(result);
   } catch (err) {
