@@ -269,6 +269,12 @@ export function ServerDetailPage() {
   const [kickReason, setKickReason] = useState('');
   const [playerActionLoading, setPlayerActionLoading] = useState<string | null>(null);
   const [tpAdminName, setTpAdminName] = useState(() => localStorage.getItem('mcAdminName') || '');
+  // Inventory management (give item / clear) — runs through the same console
+  // command endpoint the TP action already uses, so it needs the server
+  // running and the player online.
+  const [giveItemId, setGiveItemId] = useState('');
+  const [giveItemCount, setGiveItemCount] = useState('1');
+  const [clearArmed, setClearArmed] = useState(false);
 
   // ── Notes tab state ──────────────────────────────────────────────────────────
   const [notesContent, setNotesContent] = useState('');
@@ -653,6 +659,46 @@ export function ServerDetailPage() {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? `${action} failed`;
       toast.error(msg);
     } finally { setPlayerActionLoading(null); }
+  };
+
+  const refreshPlayerDetails = async (player: PlayerHistoryEntry) => {
+    if (!player.uuid) return;
+    try {
+      const { data } = await api.get(`/servers/${id}/players/${player.uuid}/details`);
+      setPlayerDetails(data);
+    } catch { /* leave stale */ }
+  };
+
+  const giveItem = async (player: PlayerHistoryEntry) => {
+    const item = giveItemId.trim().toLowerCase().replace(/\s+/g, '_').replace(/^minecraft:/, '');
+    if (!item) { toast.error('Enter an item id, e.g. diamond_sword'); return; }
+    const count = Math.max(1, Math.min(6400, parseInt(giveItemCount, 10) || 1));
+    setPlayerActionLoading('give');
+    try {
+      await api.post(`/servers/${id}/command`, { command: `give ${player.name} minecraft:${item} ${count}` });
+      toast.success(`Gave ${count}× ${item.replace(/_/g, ' ')} to ${player.name}`);
+      setGiveItemId('');
+      setTimeout(() => refreshPlayerDetails(player), 700);
+    } catch {
+      toast.error('Give failed — the server must be running and the player online');
+    } finally { setPlayerActionLoading(null); }
+  };
+
+  const clearPlayerInventory = async (player: PlayerHistoryEntry) => {
+    setPlayerActionLoading('clear');
+    try {
+      await api.post(`/servers/${id}/command`, { command: `clear ${player.name}` });
+      toast.success(`Cleared ${player.name}'s inventory`);
+      setClearArmed(false);
+      setTimeout(() => refreshPlayerDetails(player), 700);
+    } catch {
+      toast.error('Clear failed — the server must be running and the player online');
+    } finally { setPlayerActionLoading(null); }
+  };
+
+  const copyGiveCommand = (playerName: string, item: NbtItem) => {
+    navigator.clipboard.writeText(`/give ${playerName} minecraft:${item.id} ${item.count}`);
+    toast.success(`Copied /give for ${item.id.replace(/_/g, ' ')}`);
   };
 
   const deleteInventoryItem = async (player: PlayerHistoryEntry, slot: number, fromEnder = false) => {
@@ -2465,8 +2511,8 @@ export function ServerDetailPage() {
               <p className="text-slate-500 text-sm text-center py-8">Could not read inventory.</p>
             ) : (
               <div className="space-y-6">
-                <MCInventoryGrid items={playerInventory.inventory} />
-                <MCInventoryGrid items={playerInventory.enderChest} isEnderChest />
+                <MCInventoryGrid items={playerInventory.inventory} onItemClick={item => copyGiveCommand(inventoryPlayer.name, item)} />
+                <MCInventoryGrid items={playerInventory.enderChest} isEnderChest onItemClick={item => copyGiveCommand(inventoryPlayer.name, item)} />
               </div>
             )}
           </div>
@@ -2569,11 +2615,72 @@ export function ServerDetailPage() {
                   {/* Inventory — Java Edition only (Bedrock uses different data formats) */}
                   {!isBedrock && playerDetails && (
                     <section>
-                      <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Inventory</h3>
-                      <MCInventoryGrid items={playerDetails.inventory} onDelete={slot => deleteInventoryItem(selectedPlayer, slot, false)} />
-                      <div className="mt-6">
-                        <MCInventoryGrid items={playerDetails.enderChest} isEnderChest onDelete={slot => deleteInventoryItem(selectedPlayer, slot, true)} />
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                          Inventory
+                          <span className="ml-2 text-slate-600 normal-case font-normal tracking-normal">
+                            {playerDetails.inventory.length} item{playerDetails.inventory.length === 1 ? '' : 's'}
+                          </span>
+                        </h3>
+                        <span className="text-[11px] text-slate-600">Click an item to copy its /give · hover to remove</span>
                       </div>
+
+                      {/* Give / clear toolbar — only useful while the player is online and the server is up */}
+                      {selectedPlayer.online && isRunning && (
+                        <div className="flex flex-wrap items-center gap-2 mb-3 p-2.5 rounded-lg bg-dark-900/60 border border-dark-700">
+                          <input
+                            list="mc-common-items"
+                            className="input flex-1 min-w-[10rem] text-sm"
+                            placeholder="Item id, e.g. diamond_sword"
+                            value={giveItemId}
+                            onChange={e => setGiveItemId(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') giveItem(selectedPlayer); }}
+                          />
+                          <input
+                            type="number"
+                            min={1}
+                            max={6400}
+                            className="input w-20 text-sm"
+                            value={giveItemCount}
+                            onChange={e => setGiveItemCount(e.target.value)}
+                          />
+                          <button
+                            className="btn-primary btn-sm shrink-0"
+                            disabled={playerActionLoading === 'give'}
+                            onClick={() => giveItem(selectedPlayer)}
+                          >
+                            {playerActionLoading === 'give' ? <Spinner size="sm" /> : <><Plus size={13} />Give</>}
+                          </button>
+                          <button
+                            className={cn('btn-sm shrink-0', clearArmed ? 'btn-danger' : 'btn-secondary')}
+                            disabled={playerActionLoading === 'clear'}
+                            onClick={() => { if (clearArmed) clearPlayerInventory(selectedPlayer); else setClearArmed(true); }}
+                            onMouseLeave={() => setClearArmed(false)}
+                          >
+                            {playerActionLoading === 'clear' ? <Spinner size="sm" /> : <><Trash2 size={13} />{clearArmed ? 'Confirm clear' : 'Clear all'}</>}
+                          </button>
+                        </div>
+                      )}
+
+                      <MCInventoryGrid
+                        items={playerDetails.inventory}
+                        onDelete={slot => deleteInventoryItem(selectedPlayer, slot, false)}
+                        onItemClick={item => copyGiveCommand(selectedPlayer.name, item)}
+                      />
+                      <div className="mt-6">
+                        <MCInventoryGrid
+                          items={playerDetails.enderChest}
+                          isEnderChest
+                          onDelete={slot => deleteInventoryItem(selectedPlayer, slot, true)}
+                          onItemClick={item => copyGiveCommand(selectedPlayer.name, item)}
+                        />
+                      </div>
+
+                      <datalist id="mc-common-items">
+                        {['diamond','diamond_block','diamond_sword','diamond_pickaxe','diamond_axe','diamond_helmet','diamond_chestplate','diamond_leggings','diamond_boots','netherite_ingot','netherite_sword','netherite_pickaxe','netherite_block','ancient_debris','iron_ingot','iron_block','iron_sword','iron_pickaxe','gold_ingot','gold_block','emerald','emerald_block','elytra','totem_of_undying','enchanted_golden_apple','golden_apple','ender_pearl','ender_chest','shulker_box','experience_bottle','trident','bow','crossbow','arrow','spectral_arrow','shield','cooked_beef','bread','oak_log','cobblestone','obsidian','tnt','beacon','nether_star','end_crystal','firework_rocket','name_tag','saddle','lead','bucket','water_bucket','lava_bucket'].map(i => (
+                          <option key={i} value={i} />
+                        ))}
+                      </datalist>
                     </section>
                   )}
 
@@ -2727,7 +2834,7 @@ function MCItemIcon({ id, size = 28 }: { id: string; size?: number }) {
   );
 }
 
-function MCSlot({ item, onDelete, emptyIcon }: { item?: NbtItem; onDelete?: (slot: number) => void; emptyIcon?: string }) {
+function MCSlot({ item, onDelete, onItemClick, emptyIcon }: { item?: NbtItem; onDelete?: (slot: number) => void; onItemClick?: (item: NbtItem) => void; emptyIcon?: string }) {
   if (!item) {
     return (
       <div
@@ -2740,11 +2847,12 @@ function MCSlot({ item, onDelete, emptyIcon }: { item?: NbtItem; onDelete?: (slo
   }
   return (
     <div
-      className="relative group flex-shrink-0 cursor-default"
-      title={`${item.id.replace(/_/g, ' ')} ×${item.count}  [slot ${item.slot}]`}
+      className={cn('relative group flex-shrink-0', onItemClick ? 'cursor-pointer' : 'cursor-default')}
+      title={`${item.id.replace(/_/g, ' ')} ×${item.count}  ·  slot ${item.slot}${onItemClick ? '  ·  click to copy /give' : ''}`}
+      onClick={onItemClick ? () => onItemClick(item) : undefined}
     >
       <div
-        className="w-10 h-10 rounded-sm flex items-center justify-center relative overflow-hidden transition-colors group-hover:bg-white/[0.08]"
+        className="w-10 h-10 rounded-sm flex items-center justify-center relative overflow-hidden transition-all duration-100 group-hover:brightness-125 group-hover:ring-1 group-hover:ring-white/25"
         style={{ background: '#1a2030', border: '1px solid #2a3550', boxShadow: 'inset 1px 1px 0 rgba(255,255,255,0.07), inset -1px -1px 0 rgba(0,0,0,0.5)' }}
       >
         <MCItemIcon id={item.id} size={28} />
@@ -2757,7 +2865,7 @@ function MCSlot({ item, onDelete, emptyIcon }: { item?: NbtItem; onDelete?: (slo
       </div>
       {onDelete && (
         <button
-          onClick={() => onDelete(item.slot)}
+          onClick={(e) => { e.stopPropagation(); onDelete(item.slot); }}
           className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 hover:bg-red-400 text-white rounded-full hidden group-hover:flex items-center justify-center shadow z-10"
           title="Remove"
         ><X size={7} /></button>
@@ -2766,16 +2874,17 @@ function MCSlot({ item, onDelete, emptyIcon }: { item?: NbtItem; onDelete?: (slo
   );
 }
 
-function MCInventoryGrid({ items, isEnderChest = false, onDelete }: {
+function MCInventoryGrid({ items, isEnderChest = false, onDelete, onItemClick }: {
   items: NbtItem[];
   isEnderChest?: boolean;
   onDelete?: (slot: number) => void;
+  onItemClick?: (item: NbtItem) => void;
 }) {
   const slotMap = new Map(items.map(i => [i.slot, i]));
 
   const row = (slots: number[]) => (
     <div className="flex gap-0.5">
-      {slots.map(s => <MCSlot key={s} item={slotMap.get(s)} onDelete={onDelete} />)}
+      {slots.map(s => <MCSlot key={s} item={slotMap.get(s)} onDelete={onDelete} onItemClick={onItemClick} />)}
     </div>
   );
 
@@ -2814,7 +2923,7 @@ function MCInventoryGrid({ items, isEnderChest = false, onDelete }: {
         {/* Armor column */}
         <div className="flex gap-0.5 mb-0.5 items-center">
           {armorSlots.map((s, i) => (
-            <MCSlot key={s} item={slotMap.get(s)} onDelete={onDelete} emptyIcon={armorEmptyIcons[i]} />
+            <MCSlot key={s} item={slotMap.get(s)} onDelete={onDelete} onItemClick={onItemClick} emptyIcon={armorEmptyIcons[i]} />
           ))}
           <div className="ml-1 text-[9px] text-slate-600 self-center leading-tight">armor</div>
         </div>
