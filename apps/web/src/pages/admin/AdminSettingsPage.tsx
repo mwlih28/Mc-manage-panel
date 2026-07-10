@@ -753,9 +753,10 @@ export function AdminSettingsPage() {
           )}
 
           <div className="text-xs text-zinc-600 space-y-1">
-            <p>Once invited, a server owner (or admin) generates a bind code from a server's Settings tab in Kretase, then runs:</p>
-            <code className="block bg-zinc-950 rounded px-2 py-1 text-zinc-400">/bind &lt;code&gt;</code>
-            <p>in the Discord channel that should control that server. <code className="text-zinc-400">/unbind</code> removes the link.</p>
+            <p>Once invited, anyone who has signed in to Kretase with <span className="text-zinc-400">“Continue with Discord”</span> can run:</p>
+            <code className="block bg-zinc-950 rounded px-2 py-1 text-zinc-400">/start · /stop · /restart · /status</code>
+            <p>and pick one of <span className="text-zinc-400">their own</span> servers from the autocomplete list — no setup, works in any channel or DM. <code className="text-zinc-400">/servers</code> lists what they can control.</p>
+            <p className="pt-1">Optional: to lock a shared channel to a single server, generate a bind code from that server's Settings tab and run <code className="text-zinc-400">/bind &lt;code&gt;</code> in the channel (<code className="text-zinc-400">/unbind</code> removes it).</p>
           </div>
         </div>
       </div>
