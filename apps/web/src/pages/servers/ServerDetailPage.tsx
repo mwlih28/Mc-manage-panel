@@ -1282,30 +1282,6 @@ export function ServerDetailPage() {
               </div>
             </div>
 
-            {/* Live resource strip — real-time CPU/RAM/disk/network/uptime/
-                players from the socket stats feed. Dashes until the first
-                sample arrives (or while the server is offline). */}
-            <div className="flex items-stretch divide-x divide-dark-800 border-b border-dark-800" style={{ background: '#0c1015' }}>
-              {[
-                { icon: Cpu, label: 'CPU', value: stats ? `${stats.cpuAbsolute.toFixed(0)}%` : '—', sub: (data?.cpu || 0) > 0 ? `/ ${data?.cpu}%` : (stats ? '/ ∞' : '') },
-                { icon: MemoryStick, label: 'RAM', value: stats ? formatBytes(stats.memoryBytes) : '—', sub: `/ ${formatBytes((data?.memory || 0) * 1048576)}` },
-                { icon: HardDrive, label: 'Disk', value: stats ? formatBytes(stats.diskBytes) : '—', sub: (data?.disk || 0) > 0 ? `/ ${formatBytes((data?.disk || 0) * 1048576)}` : '' },
-                { icon: Wifi, label: 'Network', value: stats ? `↓ ${formatBytes(stats.networkRxBytes)}` : '—', sub: stats ? `↑ ${formatBytes(stats.networkTxBytes)}` : '' },
-                { icon: Clock, label: 'Uptime', value: stats && stats.uptime > 0 ? formatUptime(Math.floor(stats.uptime / 1000)) : '—', sub: '' },
-                { icon: Users, label: 'Players', value: `${onlinePlayers.length}`, sub: players.max ? `/ ${players.max}` : '' },
-              ].map(({ icon: Icon, label, value, sub }) => (
-                <div key={label} className="flex-1 min-w-0 px-3 py-2">
-                  <div className="flex items-center gap-1.5 text-slate-600 mb-1">
-                    <Icon size={11} />
-                    <span className="text-[9px] uppercase tracking-wider">{label}</span>
-                  </div>
-                  <div className="font-mono text-[11px] text-slate-200 truncate">
-                    {value} {sub && <span className="text-slate-600">{sub}</span>}
-                  </div>
-                </div>
-              ))}
-            </div>
-
             {/* Output */}
             <div className="relative flex-1">
               <div
