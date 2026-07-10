@@ -1,7 +1,8 @@
 import {
   Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder,
   PermissionFlagsBits, Events, ChatInputCommandInteraction, AutocompleteInteraction,
-  SlashCommandStringOption,
+  SlashCommandStringOption, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
+  StringSelectMenuBuilder, ButtonInteraction, StringSelectMenuInteraction,
 } from 'discord.js';
 import { prisma } from '../utils/prisma';
 import { logger } from '../utils/logger';
@@ -19,6 +20,9 @@ const SERVER_OPTION = (opt: SlashCommandStringOption) =>
   opt.setName('server').setDescription('Which server (leave empty to use this channel’s bound server)').setAutocomplete(true).setRequired(false);
 
 const COMMANDS = [
+  new SlashCommandBuilder()
+    .setName('panel')
+    .setDescription('Open a private control panel with Start/Stop/Restart buttons for your servers'),
   new SlashCommandBuilder()
     .setName('servers')
     .setDescription('List the Kretase servers you can control'),
@@ -195,6 +199,102 @@ async function handlePower(interaction: ChatInputCommandInteraction, action: 'st
   return interaction.editReply(`✅ ${result.message}`);
 }
 
+// ── Button control panel (private / ephemeral, per user) ─────────────────────
+type PanelServer = Awaited<ReturnType<typeof getControllableServers>>[number];
+
+// Build the ephemeral message body for one server: a live-status embed + a row
+// of action buttons, plus a "switch server" dropdown when the caller has more
+// than one. Everything here is only ever shown to the caller (ephemeral), and
+// every button/select re-checks authorization before acting.
+async function renderPanel(server: PanelServer, all: PanelServer[], note?: string) {
+  const status = await getLiveServerStatus(server);
+  const embed = new EmbedBuilder()
+    .setTitle(server.name)
+    .setColor(status.online ? 0x3ec896 : 0x6b7280)
+    .addFields(
+      { name: 'Status', value: status.online ? '🟢 Online' : '🔴 Offline', inline: true },
+      ...(status.online ? [{ name: 'Players', value: `${status.playerCount}${status.maxPlayers ? `/${status.maxPlayers}` : ''}`, inline: true }] : []),
+      ...(status.address ? [{ name: 'Address', value: `\`${status.address}\``, inline: false }] : []),
+    );
+  if (note) embed.setFooter({ text: note });
+
+  const buttons = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder().setCustomId(`panel:start:${server.id}`).setLabel('Start').setEmoji('▶️').setStyle(ButtonStyle.Success).setDisabled(status.online),
+    new ButtonBuilder().setCustomId(`panel:stop:${server.id}`).setLabel('Stop').setEmoji('⏹️').setStyle(ButtonStyle.Danger).setDisabled(!status.online),
+    new ButtonBuilder().setCustomId(`panel:restart:${server.id}`).setLabel('Restart').setEmoji('🔄').setStyle(ButtonStyle.Secondary).setDisabled(!status.online),
+    new ButtonBuilder().setCustomId(`panel:refresh:${server.id}`).setLabel('Refresh').setEmoji('🔃').setStyle(ButtonStyle.Secondary),
+  );
+
+  const rows: (ActionRowBuilder<ButtonBuilder> | ActionRowBuilder<StringSelectMenuBuilder>)[] = [buttons];
+  if (all.length > 1) {
+    const select = new StringSelectMenuBuilder()
+      .setCustomId('panel:select')
+      .setPlaceholder('Switch to another server…')
+      .addOptions(all.slice(0, 25).map((s) => ({ label: s.name.slice(0, 100), value: s.id, default: s.id === server.id })));
+    rows.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select));
+  }
+  return { embeds: [embed], components: rows };
+}
+
+// Shared guard for panel interactions: resolve the caller, confirm they may
+// control the server named in the customId/select value.
+async function authorizePanel(interaction: ButtonInteraction | StringSelectMenuInteraction, serverId: string) {
+  const user = await resolveUser(interaction.user.id);
+  if (!user) {
+    await interaction.reply({ content: 'Your Discord account isn’t linked to Kretase. Sign in once with **“Continue with Discord”**, then run `/panel`.', ephemeral: true });
+    return null;
+  }
+  const servers = await getControllableServers(user);
+  const server = servers.find((s) => s.id === serverId);
+  if (!server) {
+    await interaction.reply({ content: 'You don’t have access to that server.', ephemeral: true });
+    return null;
+  }
+  return { user, server, servers };
+}
+
+async function handlePanelCommand(interaction: ChatInputCommandInteraction) {
+  const user = await resolveUser(interaction.user.id);
+  if (!user) {
+    return interaction.reply({ content: 'Your Discord account isn’t linked to Kretase yet. Sign in to the panel once with **“Continue with Discord”**, then run `/panel` again.', ephemeral: true });
+  }
+  const servers = await getControllableServers(user);
+  if (servers.length === 0) {
+    return interaction.reply({ content: 'You don’t have any servers you can control yet.', ephemeral: true });
+  }
+  await interaction.deferReply({ ephemeral: true });
+  return interaction.editReply(await renderPanel(servers[0], servers));
+}
+
+async function handlePanelSelect(interaction: StringSelectMenuInteraction) {
+  const ctx = await authorizePanel(interaction, interaction.values[0]);
+  if (!ctx) return;
+  await interaction.deferUpdate();
+  return interaction.editReply(await renderPanel(ctx.server, ctx.servers));
+}
+
+async function handlePanelButton(interaction: ButtonInteraction) {
+  const [, action, serverId] = interaction.customId.split(':');
+  const ctx = await authorizePanel(interaction, serverId);
+  if (!ctx) return;
+  await interaction.deferUpdate();
+
+  let note: string | undefined;
+  if (action === 'start' || action === 'stop' || action === 'restart') {
+    const result = await performPowerAction(ctx.server, action, { userId: ctx.user.id, label: 'discord', ip: undefined });
+    if (!result.ok) {
+      note = result.code === 'EULA_NOT_ACCEPTED'
+        ? '❌ Accept the Minecraft EULA in the panel first.'
+        : `❌ ${result.message}`;
+    } else {
+      note = `✅ ${action} sent — status updates in a few seconds (hit Refresh).`;
+      // Give Wings a moment so the refreshed panel is more likely to reflect it.
+      await new Promise((r) => setTimeout(r, 1200));
+    }
+  }
+  return interaction.editReply(await renderPanel(ctx.server, ctx.servers, note));
+}
+
 export async function startDiscordBot(): Promise<void> {
   const setting = await prisma.setting.findUnique({ where: { key: 'discord.botToken' } });
   const token = setting?.value;
@@ -223,9 +323,20 @@ export async function startDiscordBot(): Promise<void> {
       try { await handleAutocomplete(interaction); } catch { await interaction.respond([]).catch(() => {}); }
       return;
     }
+    if (interaction.isButton() && interaction.customId.startsWith('panel:')) {
+      try { await handlePanelButton(interaction); }
+      catch (err) { logger.error(`Discord panel button failed: ${(err as Error).message}`); }
+      return;
+    }
+    if (interaction.isStringSelectMenu() && interaction.customId === 'panel:select') {
+      try { await handlePanelSelect(interaction); }
+      catch (err) { logger.error(`Discord panel select failed: ${(err as Error).message}`); }
+      return;
+    }
     if (!interaction.isChatInputCommand()) return;
     try {
       switch (interaction.commandName) {
+        case 'panel': return await handlePanelCommand(interaction);
         case 'servers': return await handleServers(interaction);
         case 'bind': return await handleBind(interaction);
         case 'unbind': return await handleUnbind(interaction);
