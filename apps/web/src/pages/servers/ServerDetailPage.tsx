@@ -1018,7 +1018,13 @@ export function ServerDetailPage() {
     ];
   })();
 
-  const cpuUsage = stats && !isNaN(stats.cpuAbsolute) ? Math.min(stats.cpuAbsolute, 100) : 0;
+  // Raw CPU %, NOT capped at 100 — Docker's convention is 100% = one full core,
+  // so a server allowed 2 cores can legitimately read up to 200%. Capping at
+  // 100 was making every server look pinned at "100% / 1 core" regardless of
+  // its real usage or limit.
+  const cpuUsage = stats && !isNaN(stats.cpuAbsolute) ? stats.cpuAbsolute : 0;
+  // The server's CPU allowance, same "100% = 1 core" unit; 0 means unlimited.
+  const cpuLimit = data?.cpu && data.cpu > 0 ? data.cpu : 0;
   const memUsage = stats && stats.memoryLimitBytes > 0
     ? Math.min((stats.memoryBytes / stats.memoryLimitBytes) * 100, 100)
     : 0;
@@ -1117,8 +1123,8 @@ export function ServerDetailPage() {
           <MiniStat
             icon={<Cpu size={14} />}
             label="CPU"
-            value={`${cpuUsage.toFixed(1)}%`}
-            percent={cpuUsage}
+            value={cpuLimit > 0 ? `${cpuUsage.toFixed(0)}% / ${cpuLimit}%` : `${cpuUsage.toFixed(0)}%`}
+            percent={cpuLimit > 0 ? (cpuUsage / cpuLimit) * 100 : Math.min(cpuUsage, 100)}
             color="panel"
           />
           <MiniStat
@@ -1281,7 +1287,7 @@ export function ServerDetailPage() {
                 sample arrives (or while the server is offline). */}
             <div className="flex items-stretch divide-x divide-dark-800 border-b border-dark-800" style={{ background: '#0c1015' }}>
               {[
-                { icon: Cpu, label: 'CPU', value: stats ? `${stats.cpuAbsolute.toFixed(1)}%` : '—', sub: (data?.cpu || 0) > 0 ? `/ ${data?.cpu}%` : '' },
+                { icon: Cpu, label: 'CPU', value: stats ? `${stats.cpuAbsolute.toFixed(0)}%` : '—', sub: (data?.cpu || 0) > 0 ? `/ ${data?.cpu}%` : (stats ? '/ ∞' : '') },
                 { icon: MemoryStick, label: 'RAM', value: stats ? formatBytes(stats.memoryBytes) : '—', sub: `/ ${formatBytes((data?.memory || 0) * 1048576)}` },
                 { icon: HardDrive, label: 'Disk', value: stats ? formatBytes(stats.diskBytes) : '—', sub: (data?.disk || 0) > 0 ? `/ ${formatBytes((data?.disk || 0) * 1048576)}` : '' },
                 { icon: Wifi, label: 'Network', value: stats ? `↓ ${formatBytes(stats.networkRxBytes)}` : '—', sub: stats ? `↑ ${formatBytes(stats.networkTxBytes)}` : '' },
@@ -2955,6 +2961,12 @@ function StatsHistoryChart({ history }: { history: StatsHistoryPoint[] }) {
     ramPct: p.memoryLimitBytes > 0 ? Math.min((p.memoryBytes / p.memoryLimitBytes) * 100, 100) : 0,
   }));
 
+  // Let the axis grow past 100 so a multi-core server (CPU can read 200%+ since
+  // 100% = one core) isn't clipped; rounds up to the next whole core.
+  const peakCpu = Math.max(100, ...points.map((p) => p.cpu));
+  const yMax = Math.ceil(peakCpu / 100) * 100;
+  const yTicks = Array.from({ length: yMax / 100 + 1 }, (_, i) => i * 100);
+
   const span = points[points.length - 1].time - points[0].time;
   const formatTick = (t: number) =>
     span > 20 * 60 * 60 * 1000
@@ -2979,7 +2991,7 @@ function StatsHistoryChart({ history }: { history: StatsHistoryPoint[] }) {
           dataKey="time" type="number" domain={['dataMin', 'dataMax']}
           tickFormatter={formatTick} stroke="#475569" fontSize={10} tickLine={false} axisLine={false}
         />
-        <YAxis domain={[0, 100]} ticks={[0, 25, 50, 75, 100]} stroke="#475569" fontSize={10} tickLine={false} axisLine={false} width={40} tickFormatter={(v) => `${v}%`} />
+        <YAxis domain={[0, yMax]} ticks={yTicks} stroke="#475569" fontSize={10} tickLine={false} axisLine={false} width={40} tickFormatter={(v) => `${v}%`} />
         <Tooltip
           contentStyle={{ background: '#0f1520', border: '1px solid #1e293b', borderRadius: 8, fontSize: 12 }}
           labelStyle={{ color: '#94a3b8' }}
@@ -3013,7 +3025,11 @@ function StatsSparklines({ history }: { history: StatsHistoryPoint[] }) {
 
   const n = history.length;
 
-  const cpuVals = history.map((p) => Math.min(p.cpuAbsolute ?? 0, 100));
+  // Scale CPU to its own peak-core ceiling (100% = one core) so a multi-core
+  // server's line fits the 0–100 plot area and keeps its true shape, instead
+  // of flat-lining at a hard 100% cap.
+  const cpuScaleMax = Math.ceil(Math.max(100, ...history.map((p) => p.cpuAbsolute ?? 0)) / 100) * 100;
+  const cpuVals = history.map((p) => ((p.cpuAbsolute ?? 0) / cpuScaleMax) * 100);
   const ramVals = history.map((p) =>
     p.memoryLimitBytes > 0 ? Math.min((p.memoryBytes / p.memoryLimitBytes) * 100, 100) : 0
   );
