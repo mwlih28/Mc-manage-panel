@@ -18,7 +18,7 @@
     "@aws-sdk/client-s3": "^3.1079.0",
     "@aws-sdk/lib-storage": "^3.1079.0",
     "@prisma/client": "^5.7.0",
-    "adm-zip": "^0.5.16",
+    "adm-zip": "^0.6.0",
     "archiver": "^6.0.2",
     "axios": "^1.6.2",
     "bcryptjs": "^2.4.3",
