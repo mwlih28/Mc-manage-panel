@@ -39,6 +39,37 @@ export async function getVapidPublicKey(): Promise<string> {
   return (await getVapidKeys()).publicKey;
 }
 
+// For alerts that belong to the infrastructure itself rather than one
+// server/owner (e.g. a node's disk filling up) — notifies every admin's
+// push subscriptions directly instead of resolving from a serverId.
+export async function dispatchAdminPush(title: string, body: string): Promise<void> {
+  const admins = await prisma.user.findMany({ where: { role: 'ADMIN' }, select: { id: true } });
+  if (admins.length === 0) return;
+
+  const subscriptions = await prisma.pushSubscription.findMany({ where: { userId: { in: admins.map((a) => a.id) } } });
+  if (subscriptions.length === 0) return;
+
+  const { publicKey, privateKey } = await getVapidKeys();
+  const payload = JSON.stringify({ title, body });
+
+  for (const sub of subscriptions) {
+    try {
+      await webpush.sendNotification(
+        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+        payload,
+        { vapidDetails: { subject: 'mailto:admin@kretase.local', publicKey, privateKey } }
+      );
+    } catch (err) {
+      const status = (err as { statusCode?: number }).statusCode;
+      if (status === 404 || status === 410) {
+        await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
+      } else {
+        logger.warn(`Admin push delivery failed for subscription ${sub.id}: ${(err as Error).message}`);
+      }
+    }
+  }
+}
+
 // Notifies the server's owner, resolved from serverId — not the caller's own
 // userId, which for some events (e.g. an admin suspending someone else's
 // server) is the actor, not the person who actually needs to know.

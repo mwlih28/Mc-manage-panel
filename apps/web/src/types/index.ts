@@ -52,6 +52,10 @@ export interface Node {
   maintenanceMode: boolean;
   token: string;
   status: NodeStatus;
+  diskUsedBytes?: number | null;
+  diskTotalBytes?: number | null;
+  diskCheckedAt?: string | null;
+  diskAlertLevel?: 'ok' | 'warning' | 'critical';
   setupToken?: string | null;
   setupTokenExpiresAt?: string | null;
   createdAt: string;

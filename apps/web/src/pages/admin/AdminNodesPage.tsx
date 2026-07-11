@@ -11,7 +11,7 @@ interface Allocation {
   assigned: boolean;
   server?: { id: string; name: string };
 }
-import { formatBytes } from '@/lib/utils';
+import { formatBytes, formatRelativeTime } from '@/lib/utils';
 import { Spinner } from '@/components/ui/Spinner';
 import { CardSkeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -96,6 +96,8 @@ export function AdminNodesPage() {
                 <ResourceBox label="Servers" value={String(node._count?.servers || 0)} />
               </div>
 
+              <DiskUsageBar node={node} />
+
               {node.maintenanceMode && (
                 <div className="px-3 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-xs text-center">
                   Maintenance mode active
@@ -150,6 +152,35 @@ export function AdminNodesPage() {
         confirmLabel="Delete Node"
         isLoading={deleteMutation.isPending}
       />
+    </div>
+  );
+}
+
+// Real host disk usage (the filesystem holding server data), refreshed
+// every ~5 min by the API's background node monitor — distinct from the
+// "Disk" ResourceBox above, which is just the admin-configured allocatable
+// amount, not what's actually used on the host.
+function DiskUsageBar({ node }: { node: Node }) {
+  if (node.diskTotalBytes == null || node.diskUsedBytes == null) return null;
+  const pct = node.diskTotalBytes > 0 ? (node.diskUsedBytes / node.diskTotalBytes) * 100 : 0;
+  const level = node.diskAlertLevel || 'ok';
+  const barColor = level === 'critical' ? 'bg-red-500' : level === 'warning' ? 'bg-yellow-500' : 'bg-panel-500';
+  const textColor = level === 'critical' ? 'text-red-400' : level === 'warning' ? 'text-yellow-400' : 'text-slate-400';
+
+  return (
+    <div>
+      <div className="flex items-center justify-between text-[11px] mb-1">
+        <span className="text-slate-500">Host disk usage</span>
+        <span className={textColor}>
+          {formatBytes(node.diskUsedBytes)} / {formatBytes(node.diskTotalBytes)} ({pct.toFixed(0)}%)
+        </span>
+      </div>
+      <div className="h-1.5 rounded-full bg-dark-800 overflow-hidden">
+        <div className={`h-full rounded-full ${barColor} transition-all`} style={{ width: `${Math.min(100, pct)}%` }} />
+      </div>
+      {node.diskCheckedAt && (
+        <p className="text-[10px] text-slate-600 mt-1">Checked {formatRelativeTime(node.diskCheckedAt)}</p>
+      )}
     </div>
   );
 }

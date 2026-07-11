@@ -35,6 +35,7 @@ import { errorHandler, notFound } from './middleware/errorHandler';
 import { requestContext } from './middleware/requestContext';
 import { initSocketServer } from './services/socketService';
 import { startScheduler } from './services/scheduler';
+import { startNodeMonitor } from './services/nodeMonitor';
 import { startDiscordBot } from './services/discordBot';
 
 import authRoutes from './routes/auth';
@@ -285,6 +286,7 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   logger.info(`Environment: ${process.env.NODE_ENV}`);
   logger.info(`CORS Origin: ${CORS_ORIGIN}`);
   startScheduler();
+  startNodeMonitor();
   startDiscordBot().catch((err) => logger.warn(`Discord bot startup failed: ${err.message}`));
 });
 

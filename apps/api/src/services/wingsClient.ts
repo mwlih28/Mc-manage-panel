@@ -163,6 +163,14 @@ export async function deleteServerFromNode(
   await client.delete(`/servers/${server.uuid}`);
 }
 
+export async function getNodeSystemInfo(
+  fqdn: string, port: number, scheme: string, token: string
+): Promise<{ primaryDisk: { size: number; used: number; available: number; usedPercent: number } | null }> {
+  const client = getNodeClient(fqdn, port, scheme, token);
+  const { data } = await client.get('/system');
+  return { primaryDisk: data.primaryDisk ?? null };
+}
+
 export async function checkNodeHealth(
   fqdn: string, port: number, scheme: string, token: string
 ): Promise<boolean> {

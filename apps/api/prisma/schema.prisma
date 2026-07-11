@@ -58,6 +58,15 @@ model Node {
   token               String    @unique
   gameSubdomain       String?
   status              String    @default("OFFLINE")
+  // Cached host disk usage (the filesystem holding server data), refreshed
+  // by the background node monitor — read on the admin Nodes page without a
+  // live Wings round-trip on every page load. diskAlertLevel tracks the last
+  // level a push notification was sent for, so alerts fire once per
+  // threshold crossing instead of on every poll tick.
+  diskUsedBytes       BigInt?
+  diskTotalBytes      BigInt?
+  diskCheckedAt       DateTime?
+  diskAlertLevel      String    @default("ok")
   // One-time bootstrap code for the install-wings.sh --panel/--code
   // auto-activation flow — separate from the long-lived `token` above,
   // which is what Wings actually authenticates with after setup.
